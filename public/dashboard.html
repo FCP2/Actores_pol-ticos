@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard - Superadmin</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+
+  <!-- tabulador-->
+
+  <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
+
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <!-- Tu css -->
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    body { visibility: hidden; }
+    /* Para evitar que las cards se desborden */
+    .min-w-0 { min-width: 0; }
+  </style>
+</head>
+
+<body class="bg-light">
+
+  <!-- NAVBAR (usa el tuyo si ya lo tienes) 
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <span class="navbar-brand">Actores Políticos | Dashboard</span>
+
+      <div class="ms-auto d-flex align-items-center gap-3">
+        <div class="text-end">
+          <div class="fw-semibold text-white" id="lblUsuario">Usuario</div>
+          <div class="small text-white-50" id="lblRol">Rol</div>
+        </div>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btnLogout">Salir</button>
+      </div>
+    </div>
+  </nav>-->
+  <!-- NAVBAR -->
+  <nav class="navbar navbar-expand-lg shadow-sm mb-2" 
+      style="background:#ffffff; border-bottom:3px solid #8b2136;">
+
+    <div class="container-fluid d-flex align-items-center">
+
+      <!-- LOGO -->
+      <div class="me-3 d-flex align-items-center">
+        <img 
+          src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550" 
+          alt="Logo Gobierno del Estado de México"
+          class="navbar-logo"
+        >
+      </div>
+      <!-- ESPACIADOR -->
+      <div class="ms-auto"></div>
+
+      <!-- USUARIO -->
+        <div class="ms-auto d-flex align-items-center gap-3">
+          <div class="text-end">
+            <span class="me-3 text-muted small">
+              <i class="bi bi-person-circle"></i> Sesión activa
+            </span>
+            <div class="fw-semibold text-black" id="lblUsuario">Usuario</div>
+            <div class="small text-white-50" id="lblRol">Rol</div>
+          </div>
+          <button type="button" class="btn btn-outline-danger btn-sm" id="btnLogout">Salir</button>
+        </div>
+    </div>
+  </nav>
+
+  <!-- ALERTS -->
+  <div class="container-fluid mt-3">
+    <div id="alertBox" class="alert d-none" role="alert"></div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="container-fluid pb-3">
+    <div class="row g-3">
+
+      <!-- MAPA -->
+      <div class="col-12 col-lg-7">
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <div id="map" style="height: calc(100vh - 160px); min-height: 360px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL -->
+      <div class="col-12 col-lg-5">
+        <div class="card shadow-lg border-0" style="border-top: 4px solid #8b2136;">
+          <div class="card-body p-4">
+            <!-- Título con badge institucional -->
+            <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between">
+              <div class="min-w-0">
+                <h5 class="mb-1 text-truncate d-flex align-items-center gap-2">
+                  <i class="bi bi-building text-primary fs-5"></i>
+                  <span id="munTitle">Municipio</span>
+                  <span class="badge bg-custom-primary rounded-pill px-2 py-1 ms-auto" id="countBadge">0</span>
+                </h5>
+                <div class="text-muted small">Selecciona un polígono o elige del listado</div>
+              </div>
+            </div>
+
+            <!-- Tabs con icons y colores institucionales -->
+            <ul class="nav nav-tabs mt-4 border-0 bg-light rounded-pill shadow-sm" role="tablist" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active border-0 px-4 py-2 text-custom-primary fw-semibold" 
+                        data-bs-toggle="tab" data-bs-target="#pane-cards" type="button" role="tab" 
+                        style="color: #8b2136 !important;">
+                  <i class="bi bi-card-list me-1"></i> Tarjetas
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link border-0 px-4 py-2 text-custom-secondary fw-semibold" 
+                        id="tab-grid" data-bs-toggle="tab" data-bs-target="#pane-grid" type="button" role="tab" 
+                        style="color: #b89056 !important;">
+                  <i class="bi bi-grid-3x3-gap me-1"></i> Grid
+                </button>
+              </li>
+            </ul>
+
+            <div class="tab-content pt-4 bg-white rounded-bottom shadow-inner">
+              <!-- ===================== TARJETAS ===================== -->
+              <div class="tab-pane fade show active" id="pane-cards" role="tabpanel">
+                <div class="mt-0">
+                  <label class="form-label fw-semibold text-custom-primary">Municipio</label>
+                  <select class="form-select form-select-solid border-custom-primary" id="selMunicipio" disabled style="border-color: #8b2136; box-shadow: 0 0 0 0.1rem rgba(139,33,54,0.15);">
+                    <option selected disabled>Cargando municipios...</option>
+                  </select>
+                </div>
+
+                <div class="mt-3">
+                  <label class="form-label fw-semibold text-custom-primary">Buscar persona</label>
+                  <input class="form-control form-control-solid border-custom-secondary" id="searchInput" placeholder="Escribe un nombre..." style="border-color: #b89056; box-shadow: 0 0 0 0.1rem rgba(184,144,86,0.15);">
+                  <div class="form-text">Filtra las tarjetas por nombre (solo dentro del municipio seleccionado).</div>
+                </div>
+
+                <hr class="my-3 border-custom-primary" style="border-color: #8b2136 !important; opacity: 0.3;">
+
+                <!-- CONTENEDOR DE TARJETAS -->
+                <div id="cardsContainer" style="max-height: calc(100vh - 360px); overflow:auto; border-radius: 0.5rem; border: 1px solid #dee2e6;"></div>
+              </div>
+
+              <!-- ===================== GRID (SUPERADMIN) ===================== -->
+              <div class="tab-pane fade" id="pane-grid" role="tabpanel">
+                <!-- Filtros Grid con badges y colores -->
+                <div class="row g-3 align-items-end">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold text-custom-primary">
+                      <i class="bi bi-person-badge me-1"></i> Usuario (capturista)
+                    </label>
+                    <select class="form-select form-select-solid" id="filtroUsuario">
+                      <option value="">Cargando...</option>
+                    </select>
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold text-custom-primary">
+                      <i class="bi bi-search me-1"></i> Buscar
+                    </label>
+                    <input class="form-control form-control-solid border-custom-secondary" id="gridSearch" placeholder="Nombre, CURP, RFC, clave...">
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold text-custom-primary">
+                      <i class="bi bi-list-numbers me-1"></i> Registros por página
+                    </label>
+                    <select class="form-select form-select-solid" id="gridPageSize">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold text-custom-primary">
+                      <i class="bi bi-geo-alt me-1"></i> Municipio (opcional)
+                    </label>
+                    <select class="form-select form-select-solid" id="gridMunicipio">
+                      <option value="">Todos</option>
+                    </select>
+                    <div class="form-text">Opcional: filtra el grid por municipio de trabajo político.</div>
+                  </div>
+                </div>
+
+                <hr class="my-3 border-custom-primary" style="border-color: #8b2136 !important; opacity: 0.3;">
+
+                <!-- Contenedor Tabulator -->
+                <div id="gridPersonas" class="border rounded-3 shadow-sm border-custom-primary" 
+                    style="min-height:420px; border-color: #8b2136 !important;"></div>
+
+                <div class="small text-muted mt-3 px-2">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Tip: da clic en <strong>Ver</strong> para abrir el perfil completo.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================== MODAL PERFIL PERSONA ===================== -->
+ <div class="modal fade perfil-modal-enhanced" id="perfilModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content shadow-lg border-0">
+      <div class="modal-header bg-gradient-perfil border-0">
+        <div class="d-flex align-items-center min-w-0">
+          <i class="bi bi-person-circle fs-3 text-white me-2"></i>
+          <div>
+            <h5 class="modal-title mb-0 text-white fw-bold text-truncate" id="perfilModalTitle">Perfil</h5>
+            <div class="small text-white-50" id="perfilModalSubtitle"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body p-0">
+        <!-- Loader mejorado -->
+        <div id="perfilLoader" class="py-5 text-center bg-light">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Cargando...</span>
+          </div>
+          <div class="mt-2 h6 text-muted fw-semibold">Cargando perfil completo <i class="bi bi-hourglass-split"></i></div>
+        </div>
+
+        <!-- Contenido principal -->
+        <div id="perfilContent" class="d-none">
+          <!-- Badges con iconos -->
+          <div class="bg-light border-bottom px-4 py-3">
+            <div class="d-flex flex-wrap gap-2" id="perfilBadges"></div>
+          </div>
+
+          <!-- Tabs con iconos -->
+          <div class="nav-tabs-custom" id="perfilTabs">
+            <ul class="nav nav-tabs nav-fill mb-0 shadow-sm">
+              <li class="nav-item"><button class="nav-link active px-3 py-2" id="tab-general" data-bs-toggle="tab" data-bs-target="#pane-general" type="button"><i class="bi bi-person-gear me-1"></i>General</button></li>
+              <li class="nav-item"><button class="nav-link px-3 py-2" id="tab-contacto" data-bs-toggle="tab" data-bs-target="#pane-contacto" type="button"><i class="bi bi-telephone me-1"></i>Contacto</button></li>
+              <li class="nav-item"><button class="nav-link px-3 py-2" id="tab-formacion" data-bs-toggle="tab" data-bs-target="#pane-formacion" type="button"><i class="bi bi-mortarboard me-1"></i>Formación</button></li>
+              <li class="nav-item"><button class="nav-link px-3 py-2" id="tab-familia" data-bs-toggle="tab" data-bs-target="#pane-familia" type="button"><i class="bi bi-people me-1"></i>Familia</button></li>
+              <li class="nav-item"><button class="nav-link px-3 py-2" id="tab-trayectoria" data-bs-toggle="tab" data-bs-target="#pane-trayectoria" type="button"><i class="bi bi-graph-up me-1"></i>Trayectoria</button></li>
+              <li class="nav-item"><button class="nav-link px-3 py-2" id="tab-organizacion" data-bs-toggle="tab" data-bs-target="#pane-organizacion" type="button"><i class="bi bi-diagram-3 me-1"></i>Organización</button></li>
+              <li class="nav-item"><button class="nav-link px-3 py-2" id="tab-redes" data-bs-toggle="tab" data-bs-target="#pane-redes" type="button"><i class="bi bi-share me-1"></i>Redes</button></li>
+              <li class="nav-item"><button class="nav-link px-3 py-2" id="tab-participacion" data-bs-toggle="tab" data-bs-target="#pane-participacion" type="button"><i class="bi bi-hand-thumbs-up me-1"></i>Participación</button></li>
+              <li class="nav-item"><button class="nav-link px-3 py-2" id="tab-controversias" data-bs-toggle="tab" data-bs-target="#pane-controversias" type="button"><i class="bi bi-exclamation-triangle me-1"></i>Controversias</button></li>
+            </ul>
+          </div>
+
+          <!-- Contenido de tabs -->
+          <div class="tab-content p-4 bg-light">
+            <!-- GENERAL - Estilo formulario consistente -->
+            <div class="tab-pane fade show active" id="pane-general" role="tabpanel">
+              <div class="row g-4">
+                <div class="col-lg-6">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-primary text-white fw-bold">
+                      <i class="bi bi-id-badge me-2"></i>Identificación
+                    </div>
+                    <div class="card-body p-3">
+                      <dl class="row mb-0">
+                        <dt class="col-5 text-muted small fw-semibold">CURP</dt><dd class="col-7 small fw-medium" id="v_curp">—</dd>
+                        <dt class="col-5 text-muted small fw-semibold">RFC</dt><dd class="col-7 small fw-medium" id="v_rfc">—</dd>
+                        <dt class="col-5 text-muted small fw-semibold">Clave elector</dt><dd class="col-7 small fw-medium" id="v_clave">—</dd>
+                        <dt class="col-5 text-muted small fw-semibold">Estado civil</dt><dd class="col-7 small fw-medium" id="v_ecivil">—</dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-6">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-info text-white fw-bold">
+                      <i class="bi bi-geo-alt me-2"></i>Municipios
+                    </div>
+                    <div class="card-body p-3">
+                      <dl class="row mb-0">
+                        <dt class="col-5 text-muted small fw-semibold">Residencia legal</dt><dd class="col-7 small fw-medium" id="v_mun_legal">—</dd>
+                        <dt class="col-5 text-muted small fw-semibold">Residencia real</dt><dd class="col-7 small fw-medium" id="v_mun_real">—</dd>
+                        <dt class="col-5 text-muted small fw-semibold">Trabajo político</dt><dd class="col-7 small fw-medium" id="v_mun_trab">—</dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="card card-perfil shadow-sm border-0">
+                    <div class="card-header bg-warning text-dark fw-bold">
+                      <i class="bi bi-flag me-2"></i>Flags
+                    </div>
+                    <div class="card-body p-3">
+                      <div class="d-flex flex-wrap gap-2 small" id="v_flags"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CONTACTO - Similar estilo -->
+            <div class="tab-pane fade" id="pane-contacto" role="tabpanel">
+              <div class="row g-4">
+                <div class="col-lg-6">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-success text-white fw-bold">
+                      <i class="bi bi-telephone-fill me-2"></i>Teléfonos
+                    </div>
+                    <div class="card-body p-3">
+                      <div id="v_telefonos" class="list-group list-group-flush"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-6">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-secondary text-white fw-bold">
+                      <i class="bi bi-credit-card me-2"></i>Datos INE
+                    </div>
+                    <div class="card-body p-3">
+                      <dl class="row mb-0">
+                        <dt class="col-6 text-muted small fw-semibold">Sección electoral</dt><dd class="col-6 small fw-medium" id="v_ine_seccion">—</dd>
+                        <dt class="col-6 text-muted small fw-semibold">Distrito federal</dt><dd class="col-6 small fw-medium" id="v_ine_df">—</dd>
+                        <dt class="col-6 text-muted small fw-semibold">Distrito local</dt><dd class="col-6 small fw-medium" id="v_ine_dl">—</dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Resto de tabs con patrón similar - cards con iconos en header -->
+            <!-- FORMACIÓN -->
+            <div class="tab-pane fade" id="pane-formacion" role="tabpanel">
+              <div class="card card-perfil shadow-sm border-0">
+                <div class="card-header bg-primary text-white fw-bold">
+                  <i class="bi bi-mortarboard-fill me-2"></i>Formación académica
+                </div>
+                <div class="card-body p-3">
+                  <div id="v_formacion"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- FAMILIA -->
+            <div class="tab-pane fade" id="pane-familia" role="tabpanel">
+              <div class="row g-4">
+                <div class="col-lg-7">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-pink text-white fw-bold">
+                      <i class="bi bi-heart-fill me-2"></i>Parejas e hijos
+                    </div>
+                    <div class="card-body p-3"><div id="v_parejas"></div></div>
+                  </div>
+                </div>
+                <div class="col-lg-5">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-info text-white fw-bold">
+                      <i class="bi bi-diagram-2 me-2"></i>Familiares en política
+                    </div>
+                    <div class="card-body p-3"><div id="v_familiares"></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TRAYECTORIA -->
+            <div class="tab-pane fade" id="pane-trayectoria" role="tabpanel">
+              <div class="row g-4">
+                <div class="col-lg-6">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-success text-white fw-bold">
+                      <i class="bi bi-building-government me-2"></i>Servicio público
+                    </div>
+                    <div class="card-body p-3"><div id="v_servicio_publico"></div></div>
+                  </div>
+                </div>
+                <div class="col-lg-6">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-warning text-dark fw-bold">
+                      <i class="bi bi-bar-chart me-2"></i>Elecciones contendidas
+                    </div>
+                    <div class="card-body p-3"><div id="v_elecciones"></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ORGANIZACIÓN -->
+            <div class="tab-pane fade" id="pane-organizacion" role="tabpanel">
+              <div class="row g-4">
+                <div class="col-lg-4">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-secondary text-white fw-bold">
+                      <i class="bi bi-people-fill me-2">
+                      </i>Capacidad</div><div class="card-body p-3">
+                        <div id="v_capacidad">
+
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                <div class="col-lg-4">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-info text-white fw-bold">
+                      <i class="bi bi-collection me-2">
+
+                      </i>Equipos
+                    </div>
+                    <div class="card-body p-3">
+                      <div id="v_equipos">
+
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <div class="card card-perfil shadow-sm border-0 h-100">
+                    <div class="card-header bg-primary text-white fw-bold">
+                      <i class="bi bi-star me-2"></i>Referentes</div>
+                      <div class="card-body p-3">
+                        <div id="v_referentes">
+
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+              </div>
+            </div>
+
+            <!-- REDES, PARTICIPACIÓN, CONTROVERSIAS - patrón repetido -->
+            <div class="tab-pane fade" id="pane-redes" role="tabpanel">
+              <div class="card card-perfil shadow-sm border-0">
+                <div class="card-header bg-primary text-white fw-bold">
+                  <i class="bi bi-globe me-2"></i>Redes sociales
+                </div>
+                <div class="card-body p-3"><div id="v_redes"></div></div>
+              </div>
+            </div>
+            <div class="tab-pane fade" id="pane-participacion" role="tabpanel">
+              <div class="card card-perfil shadow-sm border-0">
+                <div class="card-header bg-success text-white fw-bold">
+                  <i class="bi bi-hand-thumbs-up-fill me-2"></i>Participación
+                </div>
+                <div class="card-body p-3"><div id="v_participacion"></div></div>
+              </div>
+            </div>
+            <div class="tab-pane fade" id="pane-controversias" role="tabpanel">
+              <div class="card card-perfil shadow-sm border-0">
+                <div class="card-header bg-danger text-white fw-bold">
+                  <i class="bi bi-exclamation-octagon me-2"></i>Controversias
+                </div>
+                <div class="card-body p-3"><div id="v_controversias"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error estilizado -->
+        <div id="perfilError" class="alert alert-danger border-0 shadow-sm d-none mb-0 mx-4 mt-3">
+          <i class="bi bi-x-circle me-2"></i><strong>Error:</strong> No se pudo cargar el perfil.
+        </div>
+      </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+  <!-- Vendor -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/wellknown@0.5.0/wellknown.js"></script>
+
+  <!-- ✅ TU API HELPERS (ANTES de dashboard.js) -->
+  <script src="/static/js/api.js"></script>
+
+  <!-- (si tienes otros helpers) -->
+  <script src="/static/js/map.js"></script>
+
+  <!-- ✅ Tabulator (si lo usas) -->
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- ✅ DASHBOARD AL FINAL -->
+  <script src="/static/js/dashboard.js"></script>
+
+<script>
+  (async function bootUser() {
+    const token = localStorage.getItem("token");
+    if (!token) return (window.location.href = "/");
+
+    try {
+      const r = await fetch("/api/auth/me", {
+        headers: { Authorization: "Bearer " + token }
+      });
+
+      // Token inválido/expirado
+      if (r.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        return (window.location.href = "/");
+      }
+
+      const data = await r.json();
+      const user = data?.user || data?.user?.user || data?.user; // por si cambias estructura
+      const roles = user?.roles || [];
+
+      // Si no es superadmin, fuera
+      if (!roles.includes("superadmin")) {
+        return (window.location.href = "/captura");
+      }
+
+      // Pintar UI con info confiable
+      document.getElementById("lblUsuario").textContent = user.nombre || user.email || "Usuario";
+      document.getElementById("lblRol").textContent = roles.join(", ");
+
+      // Mantén user cacheado si quieres
+      localStorage.setItem("user", JSON.stringify(user));
+      document.body.style.visibility = "visible";
+      // Logout
+      document.getElementById("btnLogout").addEventListener("click", () => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/";
+      });
+
+    } catch (e) {
+      // Si falla la API (red/Render), mejor mandar al login
+      console.error("bootUser error:", e);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/";
+    }
+  })();
+</script>
+
+
+</body>
+</html>

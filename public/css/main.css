@@ -1,0 +1,242 @@
+#map {
+  height: 100vh;
+}
+
+/* Quita el borde/rectángulo de focus al interactuar con el mapa */
+.leaflet-container:focus,
+.leaflet-interactive:focus {
+  outline: none !important;
+}
+
+.navbar {
+  background: #1f2937;
+  color: white;
+  padding: 10px;
+}
+.navbar-brand {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+#lblUsuario {
+  line-height: 1.1;
+}
+
+#lblRol {
+  font-size: 0.75rem;
+}
+
+:root{
+      --inst-prim: #8b2136;
+      --inst-sec: #b89056;
+    }
+    body{
+      min-height: 100dvh;
+      background: radial-gradient(1200px 600px at 20% 10%, rgba(184,144,86,.15), transparent 60%),
+                  radial-gradient(1200px 600px at 80% 90%, rgba(139,33,54,.12), transparent 60%),
+                  #f8f9fa;
+    }
+    .brand-badge{
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #8b2136, #6f1527);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden; /* 🔑 recorta la imagen */
+    }
+
+    .brand-logo{
+      max-width: 70%;
+      max-height: 70%;
+      object-fit: contain;
+    }
+    .btn-inst{
+      --bs-btn-bg: var(--inst-prim);
+      --bs-btn-border-color: var(--inst-prim);
+      --bs-btn-hover-bg: #7a1c2f;
+      --bs-btn-hover-border-color: #7a1c2f;
+      --bs-btn-active-bg: #6f1527;
+      --bs-btn-active-border-color: #6f1527;
+    }
+    .link-inst{ color: var(--inst-prim); }
+    .link-inst:hover{ color:#6f1527; }
+    .form-control:focus{
+      border-color: rgba(139,33,54,.45);
+      box-shadow: 0 0 0 .25rem rgba(139,33,54,.15);
+    }
+    .card{
+      border: 0;
+      border-radius: 18px;
+    }
+
+    /*index*/
+    .card { border:0; box-shadow: 0 6px 18px rgba(0,0,0,.06); }
+    .small-muted { font-size:.9rem; color:#6c757d; }
+    .required::after { content:" *"; color:#dc3545; }
+    code { font-size:.9em; }
+
+    /* Bloques dinámicos */
+.list-item{
+  padding: .75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: .75rem;
+  margin-bottom: .75rem;
+  background: #fff;
+}
+
+/* Botones eliminar más tocables en móvil */
+.list-item .btnRemove{
+  min-width: 38px;
+}
+
+/* Ajuste móvil */
+@media (max-width: 576px){
+  .list-item .row > div{
+    margin-bottom: .25rem;
+  }
+}
+
+
+/* ===== Bootstrap theme overrides (sin recompilar) ===== */
+.btn-primary{
+  background-color: var(--inst-prim) !important;
+  border-color: var(--inst-prim) !important;
+  color: #fff !important;
+}
+.btn-primary:hover,
+.btn-primary:focus{
+  background-color: #7a1c2f !important;
+  border-color: #7a1c2f !important;
+}
+
+.btn-outline-primary{
+  color: var(--inst-prim) !important;
+  border-color: var(--inst-prim) !important;
+}
+.btn-outline-primary:hover,
+.btn-outline-primary:focus{
+  background-color: var(--inst-prim) !important;
+  border-color: var(--inst-prim) !important;
+  color: #fff !important;
+}
+
+.btn-outline-secondary{
+  color: var(--inst-sec) !important;
+  border-color: var(--inst-sec) !important;
+}
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus{
+  background-color: var(--inst-sec) !important;
+  border-color: var(--inst-sec) !important;
+  color: #1b1b1b !important;
+}
+
+/* Inputs: enfoque institucional */
+.form-control:focus,
+.form-select:focus{
+  border-color: rgba(139,33,54,.45) !important;
+  box-shadow: 0 0 0 .25rem rgba(139,33,54,.15) !important;
+}
+
+/* Links */
+a{ color: var(--inst-prim); }
+a:hover{ color: #6f1527; }
+
+.navbar.bg-dark{
+  background-color: #8b2136 !important;
+  border-bottom: 3px solid var(--inst-sec);
+}
+.navbar-dark .navbar-brand{
+  color: #fff !important;
+}
+
+/*modal styles*/
+
+/* Modal mejorado */
+.perfil-modal-enhanced .modal-content {
+  border-radius: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+.bg-gradient-perfil {
+  background: linear-gradient(135deg, #8b2136);
+  border-radius: 1rem 1rem 0 0 !important;
+}
+
+.nav-tabs-custom .nav-tabs {
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.nav-tabs-custom .nav-link {
+  border: none;
+  color: #6c757d;
+  transition: all 0.3s ease;
+}
+
+.nav-tabs-custom .nav-link.active {
+  background: linear-gradient(135deg, #8b2136);
+  color: white !important;
+  box-shadow: 0 -2px 10px rgba(102,126,234,0.3);
+}
+
+.card-perfil .card-header {
+  font-family: 'Montserrat', sans-serif !important;
+  font-weight: 700 !important;
+  border-radius: 0.5rem 0.5rem 0 0 !important;
+  border: none;
+}
+
+.card-perfil {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-perfil:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+}
+
+.bg-pink { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%) !important; }
+
+@media (max-width: 768px) {
+  .nav-tabs-custom .nav-link { font-size: 0.875rem; padding: 0.5rem 0.75rem; }
+}
+
+/*tabs grid municipios, busquedas por municipio*/
+.bg-custom-primary { background-color: var(--primary-gobmx) !important; color: white !important; }
+.text-custom-primary { color: var(--primary-gobmx) !important; }
+.border-custom-primary { border-color: var(--primary-gobmx) !important; }
+
+.bg-custom-secondary { background-color: var(--accent-gobmx) !important; color: white !important; }
+.text-custom-secondary { color: var(--accent-gobmx) !important; }
+.border-custom-secondary { border-color: var(--accent-gobmx) !important; }
+
+.nav-tabs .nav-link.active {
+  background-color: var(--primary-gobmx) !important;
+  color: white !important;
+  border-radius: 50px !important;
+  box-shadow: 0 0.25rem 0.5rem rgba(139,33,54,0.2);
+}
+
+.nav-tabs .nav-link:hover {
+  background-color: rgba(139,33,54,0.1) !important;
+  border-radius: 50px;
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+.form-select-solid, .form-control-solid {
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.form-select-solid:focus, .form-control-solid:focus {
+  box-shadow: 0 0 0 0.25rem rgba(139,33,54,0.25) !important;
+  border-color: var(--primary-gobmx) !important;
+}
+
+.card { border-radius: 1rem !important; }
+.shadow-inner { box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+

@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Captura Completa - Actores Políticos</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    body { visibility: hidden; }
+  </style>
+</head>
+
+<body>
+  <script>
+  (async function guardCaptura() {
+        const token = localStorage.getItem("token");
+        if (!token) return (window.location.href = "/");
+
+        try {
+          const r = await fetch("/api/auth/me", {
+            headers: { Authorization: "Bearer " + token }
+          });
+
+          if (r.status === 401) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            return (window.location.href = "/");
+          }
+
+          const data = await r.json();
+          const user = data?.user || {};
+          const roles = user.roles || [];
+
+          // En captura permites capturista/analista; superadmin al dashboard
+          if (roles.includes("superadmin")) return (window.location.href = "/dashboard");
+          const ok = roles.includes("capturista") || roles.includes("analista");
+          if (!ok) return (window.location.href = "/");
+
+          // Cachea user para UI si quieres (lblUsuario/lblRol)
+          localStorage.setItem("user", JSON.stringify(user));
+          document.body.style.visibility = "visible";
+        } catch (e) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          window.location.href = "/";
+        }
+      })();
+  </script>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+  <div class="container-fluid">
+
+    <span class="navbar-brand fw-semibold">
+      Actores Políticos
+    </span>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="topNav">
+      <div class="ms-auto d-flex flex-column flex-lg-row align-items-lg-center gap-3 mt-3 mt-lg-0">
+        <div class="text-lg-end">
+          <div class="fw-semibold text-white" id="lblUsuario">Usuario</div>
+          <div class="small text-white-50" id="lblRol">Rol</div>
+        </div>
+
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btnLogout">
+          Salir
+        </button>
+      </div>
+    </div>
+
+  </div>
+</nav>
+
+
+<div class="container my-4">
+  <div id="alertBox" class="alert d-none" role="alert"></div>
+
+  <div class="row g-4">
+    <div class="col-12 col-lg-10 mx-auto">
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div style="min-width:320px; flex:1;">
+              <label class="form-label">Mis borradores</label>
+              <select class="form-select" id="selBorradores">
+                <option value="">(Cargar borrador...)</option>
+              </select>
+              <div class="small text-muted mt-1" id="lblBorradorActual">Borrador actual: ninguno</div>
+            </div>
+
+            <button type="button" class="btn btn-outline-primary" id="btnGuardarBorrador">
+              Guardar borrador
+            </button>
+
+            <button type="button" class="btn btn-outline-secondary" id="btnRecargarBorradores">
+              Recargar lista
+            </button>
+
+            <button type="button" class="btn btn-outline-danger" id="btnEliminarBorrador" disabled>
+              Eliminar borrador
+            </button>
+          </div>
+        </div>
+      </div>
+      <form id="personaForm">
+
+        <!-- ================== PERSONA ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="mb-3">Información personal</h5>
+
+            <div class="row g-3">
+              <div class="col-md-12">
+                <label class="form-label required">Nombre completo</label>
+                <input class="form-control" name="nombre" required placeholder="Ej. Juan Carlos Hernández López">
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">CURP</label>
+                <input class="form-control" name="curp" maxlength="18">
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">RFC</label>
+                <input class="form-control" name="rfc" maxlength="13">
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Clave de elector</label>
+                <input class="form-control" name="clave_elector" maxlength="20">
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Estado civil</label>
+                <select class="form-select" name="estado_civil">
+                  <option value="">Seleccione</option>
+                  <option value="Soltero">Soltero</option>
+                  <option value="Casado">Casado</option>
+                  <option value="Divorciado">Divorciado</option>
+                  <option value="Viudo">Viudo</option>
+                  <option value="Concubinato">Concubinato</option>
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Escala de influencia</label>
+                <select class="form-select" name="escala_influencia">
+                  <option value="">Seleccione</option>
+                  <option value="municipal">Municipal</option>
+                  <option value="regional">Regional</option>
+                  <option value="distrital">Distrital</option>
+                  <option value="estatal">Estatal</option>
+                  <option value="nacional">Nacional</option>
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">¿Ha contendido elección?</label>
+                <select class="form-select" name="ha_contendido_eleccion">
+                  <option value="">(sin definir)</option>
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" id="sin_sp" name="sin_servicio_publico">
+                  <label class="form-check-label" for="sin_sp">
+                    No ha ocupado cargos en el servicio público
+                  </label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="mb-3">Datos INE</h5>
+              <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label">Sección electoral</label>
+                    <input class="form-control" name="ine_seccion" maxlength="4" placeholder="Ej. 1234">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Distrito federal</label>
+                    <input class="form-control" name="ine_df" maxlength="2" placeholder="Ej. 05">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Distrito local</label>
+                    <input class="form-control" name="ine_dl" maxlength="2" placeholder="Ej. 12">
+                  </div>
+              </div>
+          </div>
+        </div>
+
+        <!-- ================== MUNICIPIOS ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="mb-3">Municipios</h5>
+
+            <div class="row g-3">
+
+              <!-- Residencia legal -->
+              <div class="col-12 col-md-4">
+                <label class="form-label">Residencia legal</label>
+                <select class="form-select" name="municipio_residencia_legal" id="mun_legal"></select>
+              </div>
+
+              <!-- Residencia real -->
+              <div class="col-12 col-md-4">
+                <label class="form-label">Residencia real</label>
+                <select class="form-select" name="municipio_residencia_real" id="mun_real"></select>
+
+                <div class="form-check mt-1">
+                  <input class="form-check-input" type="checkbox" id="chkMunRealIgual">
+                  <label class="form-check-label small" for="chkMunRealIgual">
+                    Igual que residencia legal
+                  </label>
+                </div>
+              </div>
+
+              <!-- Trabajo político -->
+              <div class="col-12 col-md-4">
+                <label class="form-label">Trabajo político</label>
+                <select class="form-select" name="municipio_trabajo_politico" id="mun_trabajo"></select>
+
+                <div class="form-check mt-1">
+                  <input class="form-check-input" type="checkbox" id="chkMunTrabajoIgual">
+                  <label class="form-check-label small" for="chkMunTrabajoIgual">
+                    Igual que residencia legal
+                  </label>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+        <!-- ================== FORMACION ACADEMICA ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="mb-3">Formación académica</h5>
+
+            <div class="row g-3">
+              <div class="col-12 col-md-4">
+                <label class="form-label">Nivel</label>
+                <select class="form-select" id="fa_nivel" name="fa_nivel">
+                  <option value="">Seleccione</option>
+                  <option value="Primaria">Primaria</option>
+                  <option value="Secundaria">Secundaria</option>
+                  <option value="Educación Media Superior">Educación Media Superior</option>
+                  <option value="Educación Superior">Educación Superior</option>
+                  <option value="Posgrado">Posgrado</option>
+                </select>
+              </div>
+
+              <div class="col-12 col-md-4" id="fa_grado_wrap" style="display:none;">
+                <label class="form-label">Grado obtenido</label>
+                <input class="form-control" id="fa_grado_obtenido" name="fa_grado_obtenido" placeholder="Ej. Licenciatura en Derecho">
+                <div class="invalid-feedback">Requerido para Educación Superior o Posgrado.</div>
+              </div>
+
+              <div class="col-12 col-md-4" id="fa_inst_wrap" style="display:none;">
+                <label class="form-label">Institución</label>
+                <input class="form-control" id="fa_institucion" name="fa_institucion" placeholder="Ej. UAEM">
+                <div class="invalid-feedback">Requerido para Educación Superior o Posgrado.</div>
+              </div>
+            </div>
+
+            <div class="small text-muted mt-2">
+              *Si seleccionas Educación Superior o Posgrado, se habilitan “Grado obtenido” e “Institución”.
+            </div>
+          </div>
+        </div>
+        <!-- ================== TELEFONOS ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Teléfonos</h5>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddTelefono">+ Agregar</button>
+            </div>
+            <div class="small-muted mb-3">Recomendado: solo uno marcado como <b>principal</b>.</div>
+            <div id="telefonosContainer"></div>
+          </div>
+        </div>
+
+        <!-- ================== PAREJAS ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Parejas</h5>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddPareja">+ Agregar</button>
+            </div>
+            <div class="small-muted mb-3">Tipo relación: <code>actual</code> o <code>anterior</code>.</div>
+            <div id="parejasContainer"></div>
+          </div>
+        </div>
+
+        <!-- ================== HIJOS ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Hijos</h5>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddHijo">+ Agregar</button>
+            </div>
+            <div class="small-muted mb-3">Puedes ligar a pareja después; por ahora va sin <code>id_pareja</code>.</div>
+            <div id="hijosContainer"></div>
+          </div>
+        </div>
+
+        <!-- ================== REDES ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Redes sociales</h5>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddRed">+ Agregar</button>
+            </div>
+            <div id="redesContainer"></div>
+          </div>
+        </div>
+
+        <!-- ================== SERVICIO PUBLICO ================== -->
+        <div class="card mb-4" id="cardServicioPublico">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Servicio público</h5>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddServicio">+ Agregar</button>
+            </div>
+            <div class="small-muted mb-3">Si marcaste “No ha ocupado…”, puedes dejarlo vacío.</div>
+            <div id="servicioContainer"></div>
+          </div>
+        </div>
+        <!-- ================== MILITANCIA E IDEOLOGÍA / TRABAJO POLÍTICO ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="mb-3">Militancia e ideología / Trabajo político</h5>
+
+            <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label">Ideología política</label>
+              <select class="form-select" id="selIdeologia" name="id_ideologia_politica">
+                <option value="">Seleccione</option>
+              </select>
+            </div>
+              <!-- Partido actual -->
+              <div class="col-12 col-md-4">
+                <label class="form-label">Trayectoria política (Partido político)</label>
+                <select class="form-select" id="selPartidoActual" name="id_partido_actual">
+                  <option value="">Seleccione</option>
+                </select>
+              </div>
+
+              <!-- Tema interés central -->
+              <div class="col-12 col-md-4">
+                <label class="form-label">Tema de interés político central</label>
+                <select class="form-select" id="selTemaInteres" name="id_tema_interes_central">
+                  <option value="">Seleccione</option>
+                </select>
+              </div>
+
+              <!-- Grupo postulación (single) -->
+              <div class="col-12 col-md-4">
+                <label class="form-label">Grupo de postulación prioritario</label>
+                <select class="form-select" id="selGrupoPostulacion" name="id_grupo_postulacion">
+                  <option value="">Seleccione</option>
+                </select>
+              </div>
+
+              <!-- “Otro” tema -->
+              <div class="col-12 d-none" id="temaOtroWrap">
+                <label class="form-label">Especifique “Otro”</label>
+                <input class="form-control" id="temaOtroTexto" name="tema_interes_otro_texto"
+                      placeholder="Describe el tema de interés">
+                <div class="invalid-feedback">Este campo es obligatorio cuando seleccionas “Otro”.</div>
+              </div>
+            </div>
+
+            <hr class="my-4">
+
+            <!-- Participación en otros partidos / organizaciones -->
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
+              <h6 class="mb-0">Participación en otros partidos u organizaciones</h6>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddParticipacion">+ Agregar</button>
+            </div>
+            <div id="participacionContainer"></div>
+          </div>
+        </div>
+
+        <!-- ================== EFECTIVIDAD ELECTORAL ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+              <div>
+                <h5 class="mb-0">Efectividad electoral</h5>
+                <div class="text-muted small">Elecciones contendidas y capacidad de movilización</div>
+              </div>
+
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddEleccion">
+                + Agregar elección
+              </button>
+            </div>
+
+            <div id="eleccionesContainer" class="mb-3"></div>
+
+            <hr class="my-3">
+
+            <h6 class="mb-2">Capacidad de movilización</h6>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label">Eventos (últimos 3 años)</label>
+                <input class="form-control" type="number" min="0" name="mov_eventos" inputmode="numeric">
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Asistencia promedio</label>
+                <input class="form-control" type="number" min="0" name="mov_asistencia" inputmode="numeric">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================== EQUIPOS Y REFERENTES ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="mb-3">Equipo y referentes</h5>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Equipos políticos</h6>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddEquipo">+ Agregar</button>
+            </div>
+            <div id="equiposContainer" class="mb-3"></div>
+
+            <hr class="my-3">
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Referentes políticos</h6>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddReferente">+ Agregar</button>
+            </div>
+            <div id="referentesContainer"></div>
+          </div>
+        </div>
+
+<!-- ================== CONTROVERSIAS ================== -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <!-- Header + botón (responsive) -->
+          <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
+            <h5 class="mb-0">Controversias</h5>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddControversia">
+              + Agregar
+            </button>
+          </div>
+
+          <!-- Checkbox “sin controversias” -->
+          <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="chkSinControversias">
+              <label class="form-check-label" for="chkSinControversias">
+                No se detectaron controversias públicas
+              </label>
+              <div class="form-text">
+                Si activas esta opción, se deshabilita la captura de controversias.
+              </div>
+            </div>
+
+              <!-- Mensaje cuando está activo -->
+              <div id="sinControversiasMsg" class="alert alert-success py-2 d-none" role="alert">
+                  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div>
+                      <strong>Sin controversias públicas</strong>
+                    </div>
+                    <span class="badge text-bg-success">Validado</span>
+                  </div>
+                </div>
+
+                <!-- Contenedor normal -->
+                <div id="controversiasContainer"></div>
+              </div>
+      </div>
+
+        <!-- ================== FAMILIARES EN POLITICA ================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Familiares en política / administración pública</h5>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddFamiliar">+ Agregar</button>
+            </div>
+            <div id="familiaresContainer"></div>
+          </div>
+        </div>
+
+        <!-- ================== SUBMIT ================== -->
+        <div class="d-flex justify-content-end gap-2 mb-5">
+          <button type="button" class="btn btn-outline-secondary" id="btnReset">Limpiar</button>
+          <button type="submit" class="btn btn-primary btn-lg">Guardar todo</button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- ================== PREVIEW ==================
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Payload</h5>
+          <p class="small-muted">Lo que se enviará a <code>POST /api/personas</code>.</p>
+          <pre id="payloadPreview" class="bg-light p-3 rounded" style="max-height: 75vh; overflow:auto; font-size: 12px;"></pre>
+        </div>
+      </div>
+    </div> -->
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  function logout() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/";
+  }
+
+  document.getElementById("btnLogout")?.addEventListener("click", () => {
+    if (confirm("¿Deseas cerrar sesión?")) logout();
+  });
+
+  // ✅ Validación real contra backend
+  (async function bootUser() {
+    const token = localStorage.getItem("token");
+    if (!token) return (window.location.href = "/");
+
+    try {
+      const r = await fetch("/api/auth/me", {
+        headers: { Authorization: "Bearer " + token },
+      });
+
+      if (r.status === 401) return logout();
+
+      const data = await r.json();
+      const user = data?.user || {};
+      const roles = user.roles || [];
+
+      // ✅ En captura: permites capturista y analista
+      // (superadmin lo mandas al dashboard)
+      if (roles.includes("superadmin")) {
+        return (window.location.href = "/dashboard");
+      }
+      const ok = roles.includes("capturista") || roles.includes("analista");
+      if (!ok) return logout();
+
+      document.getElementById("lblUsuario").textContent =
+        user.nombre || user.email || "Usuario";
+      document.getElementById("lblRol").textContent = roles.join(", ");
+
+      localStorage.setItem("user", JSON.stringify(user));
+    } catch (e) {
+      console.error("bootUser error:", e);
+      return logout();
+    }
+  })();
+
+  // ✅ Base relativa (funciona local y Render)
+  const API_BASE = "/api";
+
+  // ✅ Único helper para requests (NO dupliques apiGet/apiPost/etc)
+  async function apiFetch(path, opts = {}) {
+    const token = localStorage.getItem("token");
+
+    const headers = {
+      ...(opts.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    const res = await fetch(API_BASE + path, { ...opts, headers });
+
+    if (res.status === 401) {
+      logout();
+      return null; // por si alguien intenta usarlo después del redirect
+    }
+
+    const text = await res.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!res.ok) {
+      const msg = data?.error || data?.message || text || "Error";
+      throw new Error(msg);
+    }
+
+    return data;
+  }
+
+  const apiGet = (path) => apiFetch(path);
+
+  const apiPost = (path, body) =>
+    apiFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  const apiPut = (path, body) =>
+    apiFetch(path, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  const apiDelete = (path) =>
+    apiFetch(path, {
+      method: "DELETE",
+    });
+
+  const $ = (sel) => document.querySelector(sel);
+
+
+
+  let municipiosCache = [];
+  let redesCatalog = [];
+  let controversiasCatalog = [];
+  let borradorActualId = null;
+
+  function showAlert(type, msg) {
+    const box = $('#alertBox');
+    box.className = `alert alert-${type}`;
+    box.textContent = msg;
+    box.classList.remove('d-none');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function hideAlert(){ $('#alertBox').classList.add('d-none'); }
+
+
+    function getMunicipioNombreById(id) {
+    const n = Number(id);
+    const m = (municipiosCache || []).find(x => Number(x.id_municipio) === n);
+    return m?.nombre || null;
+  }
+
+  function generarTituloBorrador(payload) {
+    const nombre = payload?.persona?.nombre?.trim() || 'SIN NOMBRE';
+    const munId = payload?.persona?.municipio_trabajo_politico;
+    const munNombre = munId ? (getMunicipioNombreById(munId) || `Municipio ${munId}`) : 'SIN MUNICIPIO';
+    return `${nombre} - ${munNombre}`;
+  }
+
+  async function cargarListaBorradores() {
+    const sel = document.getElementById('selBorradores');
+    sel.innerHTML = `<option value="">(Cargar borrador...)</option>`;
+
+    const borradores = await apiGet('/borradores/mios');
+    borradores.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b.id_borrador;
+      const fecha = (b.updated_at || b.created_at || '').toString().slice(0, 19).replace('T',' ');
+      opt.textContent = `${b.titulo || '(sin título)'}  —  ${b.estatus}  —  ${fecha}`;
+      sel.appendChild(opt);
+    });
+  }
+
+  function setBorradorActual(id) {
+    borradorActualId = id ? Number(id) : null;
+    const lbl = document.getElementById('lblBorradorActual');
+    const btnDel = document.getElementById('btnEliminarBorrador');
+
+    if (!borradorActualId) {
+      lbl.textContent = 'Borrador actual: ninguno';
+      btnDel.disabled = true;
+    } else {
+      lbl.textContent = `Borrador actual: #${borradorActualId}`;
+      btnDel.disabled = false;
+    }
+  }
+
+  // Aplica el payload al formulario (rellena todo)
+  function applyPayloadToForm(payload) {
+    clearAll(); // limpia y deja 1 bloque de cada cosa (según tu implementación)
+
+    // 1) persona
+    const p = payload.persona || {};
+    const setVal = (name, value) => {
+      const el = document.querySelector(`[name="${name}"]`);
+      if (!el) return;
+      el.value = (value ?? '') === null ? '' : String(value ?? '');
+    };
+
+    setVal('nombre', p.nombre);
+    setVal('curp', p.curp);
+    setVal('rfc', p.rfc);
+    setVal('clave_elector', p.clave_elector);
+    setVal('estado_civil', p.estado_civil);
+    setVal('escala_influencia', p.escala_influencia);
+    setVal('ha_contendido_eleccion', p.ha_contendido_eleccion === null ? '' : String(p.ha_contendido_eleccion));
+    document.getElementById('sin_sp').checked = !!p.sin_servicio_publico;
+
+    setVal('municipio_residencia_legal', p.municipio_residencia_legal);
+    setVal('municipio_residencia_real', p.municipio_residencia_real);
+    setVal('municipio_trabajo_politico', p.municipio_trabajo_politico);
+
+    // 2) datos_ine
+    const ine = payload.datos_ine || {};
+    setVal('ine_seccion', ine.seccion_electoral);
+    setVal('ine_df', ine.distrito_federal);
+    setVal('ine_dl', ine.distrito_local);
+
+    // Helpers para reconstruir listas
+    document.getElementById('chkSinControversias').checked =
+      payload?.persona?.sin_controversias_publicas === true;
+
+    // aplica estado UI (deshabilita botón y limpia si está activo)
+    const rebuildList = (containerId, items, createBlock, fillFn) => {
+      const c = document.getElementById(containerId);
+      c.innerHTML = '';
+      (items || []).forEach(it => {
+        const b = createBlock();
+        c.appendChild(b);
+        fillFn(b, it);
+      });
+      // si estaba vacío, deja uno
+      if ((items || []).length === 0) c.appendChild(createBlock());
+    };
+
+    // 3) parejas (necesita temp_id)
+    rebuildList('parejasContainer', payload.parejas || [], parejaBlock, (b, it) => {
+      // respeta temp_id si venía
+      if (it.temp_id) b.dataset.tempId = it.temp_id;
+      b.querySelector('input[name="nombre_pareja"]').value = it.nombre_pareja || '';
+      b.querySelector('select[name="tipo_relacion"]').value = it.tipo_relacion || '';
+      b.querySelector('input[name="fecha_inicio"]').value = it.fecha_inicio || '';
+      b.querySelector('input[name="fecha_fin"]').value = it.fecha_fin || '';
+    });
+
+    // refresca selects de hijos con parejas cargadas
+    refreshHijosParejasSelects();
+
+    // 4) hijos
+    rebuildList('hijosContainer', payload.hijos || [], hijoBlock, (b, it) => {
+      b.querySelector('input[name="anio_nacimiento"]').value = it.anio_nacimiento || '';
+      b.querySelector('select[name="sexo"]').value = it.sexo || '';
+      const sel = b.querySelector('select[name="pareja_temp_id"]');
+      fillHijoParejaSelect(sel);
+      sel.value = it.pareja_temp_id || '';
+    });
+
+    // 5) telefonos
+    rebuildList('telefonosContainer', payload.telefonos || [], telefonoBlock, (b, it) => {
+      b.querySelector('input[name="telefono"]').value = it.telefono || '';
+      b.querySelector('select[name="tipo"]').value = it.tipo || '';
+      b.querySelector('input[name="principal"]').checked = !!it.principal;
+    });
+
+    // 6) redes
+    rebuildList('redesContainer', payload.redes || [], redBlock, (b, it) => {
+      b.querySelector('select[name="id_red"]').value = it.id_red || '';
+      b.querySelector('input[name="url"]').value = it.url || '';
+    });
+
+    // 7) servicio_publico
+    rebuildList('servicioContainer', payload.servicio_publico || [], servicioBlock, (b, it) => {
+      b.querySelector('input[name="periodo"]').value = it.periodo || '';
+      b.querySelector('input[name="cargo"]').value = it.cargo || '';
+      b.querySelector('input[name="dependencia"]').value = it.dependencia || '';
+    });
+
+    // 8) elecciones
+    rebuildList('eleccionesContainer', payload.elecciones || [], eleccionBlock, (b, it) => {
+      b.querySelector('input[name="anio_eleccion"]').value = it.anio_eleccion || '';
+      b.querySelector('input[name="candidatura"]').value = it.candidatura || '';
+      b.querySelector('input[name="partido_postulacion"]').value = it.partido_postulacion || '';
+      b.querySelector('select[name="resultado"]').value = it.resultado || '';
+      b.querySelector('input[name="diferencia_votos"]').value = it.diferencia_votos || '';
+      b.querySelector('input[name="diferencia_porcentaje"]').value = it.diferencia_porcentaje || '';
+    });
+
+    // 9) capacidad movilizacion (si tu form la tiene)
+    const mov = payload.capacidad_movilizacion || null;
+    if (mov) {
+      setVal('mov_eventos', mov.eventos_ultimos_3_anios);
+      setVal('mov_asistencia', mov.asistencia_promedio);
+    } else {
+      setVal('mov_eventos', '');
+      setVal('mov_asistencia', '');
+    }
+
+    // 10) equipos
+    rebuildList('equiposContainer', payload.equipos || [], equipoBlock, (b, it) => {
+      b.querySelector('input[name="nombre_equipo"]').value = it.nombre_equipo || '';
+      b.querySelector('select[name="activo"]').value = String(it.activo ?? true);
+    });
+
+    // 11) referentes
+    rebuildList('referentesContainer', payload.referentes || [], referenteBlock, (b, it) => {
+      b.querySelector('select[name="nivel"]').value = it.nivel || '';
+      b.querySelector('input[name="nombre_referente"]').value = it.nombre_referente || '';
+    });
+
+    // 12) controversias
+    if (!document.getElementById('chkSinControversias').checked) {
+      rebuildList('controversiasContainer', payload.controversias || [], controversiaBlock, (b, it) => {
+        b.querySelector('select[name="id_tipo"]').value = it.id_tipo || '';
+        b.querySelector('select[name="estatus"]').value = it.estatus || '';
+        b.querySelector('input[name="fecha_registro"]').value = it.fecha_registro || '';
+        b.querySelector('textarea[name="descripcion"]').value = it.descripcion || '';
+        b.querySelector('input[name="fuente"]').value = it.fuente || '';
+      });
+    }
+
+    // 13) familiares
+    rebuildList('familiaresContainer', payload.familiares || [], familiarBlock, (b, it) => {
+      b.querySelector('input[name="nombre"]').value = it.nombre || '';
+      b.querySelector('input[name="parentesco"]').value = it.parentesco || '';
+      b.querySelector('input[name="cargo"]').value = it.cargo || '';
+      b.querySelector('input[name="institucion"]').value = it.institucion || '';
+    });
+
+    // 1) Partido actual
+    const selPartido = document.getElementById('selPartidoActual');
+    if (selPartido) {
+      selPartido.value = payload?.persona?.id_partido_actual ?? '';
+    }
+
+    // 2) Tema interés central
+    const selTema = document.getElementById('selTemaInteres');
+    if (selTema) {
+      selTema.value = payload?.persona?.id_tema_interes_central ?? '';
+    }
+
+    // 3) Texto “Otro”
+    const inpOtro = document.getElementById('temaOtroTexto');
+    if (inpOtro) {
+      inpOtro.value = payload?.persona?.tema_interes_otro_texto ?? '';
+      inpOtro.classList.remove('is-invalid');
+    }
+
+    // 4) Grupo postulación (single)
+    const selGrupo = document.getElementById('selGrupoPostulacion');
+    if (selGrupo) {
+      selGrupo.value = payload?.persona?.id_grupo_postulacion ?? '';
+    }
+
+    // 5) Aplicar toggle de UI para “Otro”
+    // (importante hacerlo después de setear el select)
+    if (typeof toggleTemaOtroUI === 'function') {
+      toggleTemaOtroUI();
+    }
+
+    // 6) Reconstruir lista participación ( + )
+    const itemsPO = payload?.participacion_organizaciones || [];
+    rebuildList('participacionContainer', itemsPO, participacionBlock, (b, it) => {
+      b.querySelector('select[name="po_tipo"]').value = it.tipo || '';
+      b.querySelector('input[name="po_nombre"]').value = it.nombre || '';
+      b.querySelector('input[name="po_rol"]').value = it.rol || '';
+      b.querySelector('input[name="po_periodo"]').value = it.periodo || '';
+      b.querySelector('input[name="po_notas"]').value = it.notas || '';
+    });
+
+    document.getElementById('selIdeologia').value = payload?.persona?.id_ideologia_politica ?? '';
+
+    refreshPreview();
+  }
+
+  function fillSelect(sel, items, valueKey, labelKey) {
+    sel.innerHTML = '<option value="">Seleccione</option>';
+    items.forEach(it => {
+      const opt = document.createElement('option');
+      opt.value = it[valueKey];
+      opt.textContent = it[labelKey];
+      sel.appendChild(opt);
+    });
+  }
+
+  const toIntOrNull = (v) => (v === '' || v == null) ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
+  const toBoolOrNull = (v) => (v === 'true') ? true : (v === 'false') ? false : null;
+
+  // ---------- UI Blocks ----------
+  function telefonoBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label">Teléfono</label>
+          <input class="form-control" name="telefono" placeholder="Ej. 7221234567">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Tipo</label>
+          <select class="form-select" name="tipo">
+            <option value="">Seleccione</option>
+            <option value="personal">Personal</option>
+            <option value="trabajo">Trabajo</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="principal">
+            <label class="form-check-label">Principal</label>
+          </div>
+        </div>
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
+      </div>
+    `;
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    div.querySelector('input[name="principal"]').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        document.querySelectorAll('#telefonosContainer input[name="principal"]').forEach(ch => {
+          if (ch !== e.target) ch.checked = false;
+        });
+      }
+    });
+    return div;
+  }
+  function participacionBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2">
+        <div class="col-12 col-md-3">
+          <label class="form-label">Tipo</label>
+          <select class="form-select" name="po_tipo">
+            <option value="">Seleccione</option>
+            <option value="partido">Partido</option>
+            <option value="organizacion_social">Organización social</option>
+            <option value="organizacion_politica">Organización política</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-md-5">
+          <label class="form-label">Nombre</label>
+          <input class="form-control" name="po_nombre" placeholder="Nombre del partido/organización">
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">Rol</label>
+          <input class="form-control" name="po_rol" placeholder="Ej. integrante, dirigente, enlace">
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">Periodo</label>
+          <input class="form-control" name="po_periodo" placeholder="Ej. 2021-2023">
+        </div>
+
+        <div class="col-12 col-md-8">
+          <label class="form-label">Notas</label>
+          <input class="form-control" name="po_notas" placeholder="Opcional">
+        </div>
+
+        <div class="col-12 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
+        </div>
+      </div>
+    `;
+    div.querySelector('.btnRemove').addEventListener('click', () => {
+      div.remove();
+      refreshPreview?.();
+    });
+    return div;
+  }
+
+let parejaCounter = 0;
+function parejaBlock() {
+  parejaCounter += 1;
+  const tempId = `p_${parejaCounter}`;
+
+  const div = document.createElement('div');
+  div.className = 'list-item';
+  div.dataset.tempId = tempId;
+
+  div.innerHTML = `
+    <div class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label">Nombre pareja</label>
+        <input class="form-control" name="nombre_pareja">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Tipo relación</label>
+        <select class="form-select" name="tipo_relacion">
+          <option value="">Seleccione</option>
+          <option value="actual">Actual</option>
+          <option value="anterior">Anterior</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Inicio</label>
+        <input type="date" class="form-control" name="fecha_inicio">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Fin</label>
+        <input type="date" class="form-control" name="fecha_fin">
+      </div>
+      <div class="col-12 text-end mt-2">
+        <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
+      </div>
+    </div>
+  `;
+
+  div.querySelector('.btnRemove').addEventListener('click', () => {
+    div.remove();
+    refreshHijosParejasSelects();
+  });
+
+  div.addEventListener('input', refreshHijosParejasSelects);
+  div.addEventListener('change', refreshHijosParejasSelects);
+
+  return div;
+}
+
+ function hijoBlock() {
+  const div = document.createElement('div');
+  div.className = 'list-item';
+  div.innerHTML = `
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">Con quién</label>
+        <select class="form-select" name="pareja_temp_id">
+          <option value="">(Sin especificar)</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Año nacimiento</label>
+        <input type="number" class="form-control" name="anio_nacimiento" min="1900" max="2100">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Sexo</label>
+        <select class="form-select" name="sexo">
+          <option value="">Seleccione</option>
+          <option value="F">F</option>
+          <option value="M">M</option>
+        </select>
+      </div>
+      <div class="col-md-1 text-end">
+        <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+      </div>
+    </div>
+  `;
+
+  div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+
+  // ✅ llena SOLO este select (no depende del DOM global)
+  const sel = div.querySelector('select[name="pareja_temp_id"]');
+  fillHijoParejaSelect(sel);
+
+  return div;
+}
+
+
+ function getParejasForSelect() {
+  const items = [];
+  document.querySelectorAll('#parejasContainer .list-item').forEach(p => {
+    const tempId = p.dataset.tempId;
+    const nombre = (p.querySelector('input[name="nombre_pareja"]')?.value || '').trim();
+    const tipo = (p.querySelector('select[name="tipo_relacion"]')?.value || '').trim();
+
+    if (!tempId) return;
+
+    const label = `${nombre || 'Pareja'}${tipo ? ' (' + tipo + ')' : ''}`;
+    items.push({ tempId, label });
+  });
+  return items;
+}
+
+function fillHijoParejaSelect(sel) {
+  if (!sel) return;
+
+  const current = sel.value;
+  const parejas = getParejasForSelect();
+
+  sel.innerHTML = `<option value="">(Sin especificar)</option>`;
+  parejas.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.tempId;
+    opt.textContent = `${p.label} [${p.tempId}]`;
+    sel.appendChild(opt);
+  });
+
+  // conserva selección si todavía existe
+  if (parejas.some(p => p.tempId === current)) sel.value = current;
+}
+
+function refreshHijosParejasSelects() {
+  document.querySelectorAll('#hijosContainer select[name="pareja_temp_id"]').forEach(sel => {
+    fillHijoParejaSelect(sel);
+  });
+}
+
+  function redBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Red</label>
+          <select class="form-select" name="id_red"></select>
+        </div>
+        <div class="col-md-7">
+          <label class="form-label">URL</label>
+          <input class="form-control" name="url" placeholder="https://...">
+        </div>
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
+      </div>
+    `;
+    fillSelect(div.querySelector('select[name="id_red"]'), redesCatalog, 'id_red', 'nombre');
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    return div;
+  }
+
+  function servicioBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label">Periodo</label>
+          <input class="form-control" name="periodo" placeholder="2018-2021">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Cargo</label>
+          <input class="form-control" name="cargo">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Dependencia</label>
+          <input class="form-control" name="dependencia">
+        </div>
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
+      </div>
+    `;
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    return div;
+  }
+
+  function eleccionBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item border rounded-3 p-3 mb-2';
+
+    div.innerHTML = `
+      <div class="row g-2">
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label">Año</label>
+          <input type="number" class="form-control" name="anio_eleccion" min="1900" max="2100" inputmode="numeric">
+        </div>
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label">Resultado</label>
+          <select class="form-select" name="resultado">
+            <option value="">Seleccione</option>
+            <option value="ganada">Ganada</option>
+            <option value="no_ganada">No ganada</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <label class="form-label">Candidatura</label>
+          <input class="form-control" name="candidatura" placeholder="Ej. Presidencia municipal">
+        </div>
+
+        <div class="col-12 col-lg-2">
+          <label class="form-label">Partido</label>
+          <input class="form-control" name="partido_postulacion" placeholder="Ej. PAN / PRI / MORENA">
+        </div>
+
+        <div class="col-6 col-lg-1">
+          <label class="form-label">Votos</label>
+          <input type="number" class="form-control" name="diferencia_votos" min="0" inputmode="numeric">
+        </div>
+
+        <div class="col-6 col-lg-1">
+          <label class="form-label">% Dif.</label>
+          <div class="input-group">
+            <input
+              type="number"
+              step="0.01"
+              class="form-control"
+              name="diferencia_porcentaje"
+              min="0"
+              max="100"
+              inputmode="decimal"
+            >
+          </div>
+        </div>
+
+        <div class="col-12 d-flex justify-content-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">
+            Eliminar
+          </button>
+        </div>
+
+      </div>
+    `;
+
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    return div;
+  }
+
+  function equipoBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label">Nombre del equipo</label>
+          <input class="form-control" name="nombre_equipo">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Activo</label>
+          <select class="form-select" name="activo">
+            <option value="true">Si</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
+      </div>
+    `;
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    return div;
+  }
+
+  function referenteBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label">Nivel</label>
+          <select class="form-select" name="nivel">
+            <option value="">Seleccione</option>
+            <option value="municipal">Municipal</option>
+            <option value="regional">Regional</option>
+            <option value="distrital">Distrital</option>
+            <option value="estatal">Estatal</option>
+            <option value="nacional">Nacional</option>
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">Nombre referente</label>
+          <input class="form-control" name="nombre_referente">
+        </div>
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
+      </div>
+    `;
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    return div;
+  }
+    function setControversiasUIState() {
+      const chk = document.getElementById('chkSinControversias');
+      const btn = document.getElementById('btnAddControversia');
+      const cont = document.getElementById('controversiasContainer');
+      const msg = document.getElementById('sinControversiasMsg');
+
+      if (!chk || !btn || !cont || !msg) return;
+
+      const activo = chk.checked;
+
+      // Deshabilita botón y oculta contenedor
+      btn.disabled = activo;
+      cont.classList.toggle('opacity-50', activo);
+
+      // Opcional: esconder el contenedor completo cuando está activo
+      // cont.classList.toggle('d-none', activo);
+
+      // Muestra mensaje
+      msg.classList.toggle('d-none', !activo);
+
+      // Si se activa, limpia controversias ya capturadas para evitar inconsistencia
+      if (activo) {
+        cont.innerHTML = '';
+        // Si tienes un arreglo JS tipo controversiasState = [], límpialo también aquí
+      }
+
+      // Si tienes preview, refresca:
+      // refreshPreview();
+    }
+
+  function controversiaBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label">Tipo</label>
+          <select class="form-select" name="id_tipo"></select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Estatus</label>
+          <select class="form-select" name="estatus">
+            <option value="">Seleccione</option>
+            <option value="activa">Activa</option>
+            <option value="cerrada">Cerrada</option>
+            <option value="en_investigacion">En investigación</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Fecha</label>
+          <input type="date" class="form-control" name="fecha_registro">
+        </div>
+
+        <div class="col-md-8">
+          <label class="form-label">Descripción</label>
+          <textarea class="form-control" name="descripcion" rows="2"></textarea>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Fuente</label>
+          <input class="form-control" name="fuente" placeholder="Medio / enlace / nota">
+        </div>
+
+        <div class="col-12 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
+        </div>
+      </div>
+    `;
+    fillSelect(div.querySelector('select[name="id_tipo"]'), controversiasCatalog, 'id_tipo', 'tipo');
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    return div;
+  }
+
+  function familiarBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Nombre</label>
+          <input class="form-control" name="nombre">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Parentesco</label>
+          <input class="form-control" name="parentesco" placeholder="Hermano / Padre / etc">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Cargo</label>
+          <input class="form-control" name="cargo">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Institución</label>
+          <input class="form-control" name="institucion">
+        </div>
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
+      </div>
+    `;
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    return div;
+  }
+//funcion para habilitar los grados academicos:
+
+  function toggleFormacionAcademicaUI() {
+    const nivel = ($('#fa_nivel')?.value || '').trim();
+    const requiere = (nivel === 'Educación Superior' || nivel === 'Posgrado');
+
+    const wrapGrado = $('#fa_grado_wrap');
+    const wrapInst  = $('#fa_inst_wrap');
+    const inpGrado  = $('#fa_grado_obtenido');
+    const inpInst   = $('#fa_institucion');
+
+    if (!wrapGrado || !wrapInst || !inpGrado || !inpInst) return;
+
+    wrapGrado.style.display = requiere ? '' : 'none';
+    wrapInst.style.display  = requiere ? '' : 'none';
+
+    inpGrado.required = requiere;
+    inpInst.required  = requiere;
+
+    // Si ya no aplica, limpia (evita “basura fantasma” en el payload)
+    if (!requiere) {
+      inpGrado.value = '';
+      inpInst.value = '';
+      inpGrado.classList.remove('is-invalid');
+      inpInst.classList.remove('is-invalid');
+    }
+  }
+  // ---------- Build payload ----------
+  function buildPayload() {
+  const fd = new FormData($('#personaForm'));
+
+  const munLegal   = toIntOrNull(fd.get('municipio_residencia_legal'));
+  const munRealSel = toIntOrNull(fd.get('municipio_residencia_real'));
+  const munTrabSel = toIntOrNull(fd.get('municipio_trabajo_politico'));
+
+  const chkMunRealIgual    = $('#chkMunRealIgual')?.checked || false;
+  const chkMunTrabajoIgual = $('#chkMunTrabajoIgual')?.checked || false;
+
+  // --- Formación académica (array, aunque hoy sea solo 1) ---
+  const fa_nivel = (fd.get('fa_nivel') || '').toString().trim();
+  const fa_grado_obtenido = (fd.get('fa_grado_obtenido') || '').toString().trim();
+  const fa_institucion = (fd.get('fa_institucion') || '').toString().trim();
+  let controversias = [];
+
+  const persona = {
+    nombre: (fd.get('nombre') || '').toString().trim(),
+    curp: (fd.get('curp') || '').toString().trim() || null,
+    rfc: (fd.get('rfc') || '').toString().trim() || null,
+    clave_elector: (fd.get('clave_elector') || '').toString().trim() || null,
+    estado_civil: (fd.get('estado_civil') || '').toString().trim() || null,
+    escala_influencia: (fd.get('escala_influencia') || '').toString().trim() || null,
+    sin_servicio_publico: $('#sin_sp').checked,
+    ha_contendido_eleccion: toBoolOrNull(fd.get('ha_contendido_eleccion')),
+
+    // ❌ NO enviar creado_por: lo asigna el backend con req.user.id_usuario
+    // creado_por: null,
+
+    municipio_residencia_legal: munLegal,
+    municipio_residencia_real: chkMunRealIgual ? munLegal : munRealSel,
+    municipio_trabajo_politico: chkMunTrabajoIgual ? munLegal : munTrabSel,
+    sin_controversias_publicas: document.getElementById('chkSinControversias')?.checked ?? false,
+    id_partido_actual: toIntOrNull(fd.get('id_partido_actual')),
+    id_tema_interes_central: toIntOrNull(fd.get('id_tema_interes_central')),
+    tema_interes_otro_texto: (fd.get('tema_interes_otro_texto') || '').toString().trim() || null,
+    id_grupo_postulacion: toIntOrNull(fd.get('id_grupo_postulacion')),
+    id_ideologia_politica: toIntOrNull(fd.get('id_ideologia_politica')),
+  };
+  const formacion_academica = [];
+  if (fa_nivel) {
+    const requiere = (fa_nivel === 'Educación Superior' || fa_nivel === 'Posgrado');
+
+    // validación front rápida (backend también valida)
+    if (requiere) {
+      const ok = !!fa_grado_obtenido && !!fa_institucion;
+      $('#fa_grado_obtenido')?.classList.toggle('is-invalid', !fa_grado_obtenido);
+      $('#fa_institucion')?.classList.toggle('is-invalid', !fa_institucion);
+
+      if (!ok) {
+        // OJO: aquí no hacemos throw para no romper el preview,
+        // se validará al submit también (abajo te digo).
+      }
+    }
+
+    formacion_academica.push({
+      nivel: fa_nivel,
+      grado_obtenido: requiere ? (fa_grado_obtenido || null) : null,
+      institucion: requiere ? (fa_institucion || null) : null
+      // anio_inicio/anio_fin si luego los agregas
+    });
+  }
+
+    const telefonos = [];
+    document.querySelectorAll('#telefonosContainer .list-item').forEach(item => {
+      const telefono = item.querySelector('input[name="telefono"]').value.trim();
+      const tipo = item.querySelector('select[name="tipo"]').value.trim();
+      const principal = item.querySelector('input[name="principal"]').checked;
+      if (telefono) telefonos.push({ telefono, tipo: tipo || null, principal });
+    });
+
+    const parejas = [];
+    document.querySelectorAll('#parejasContainer .list-item').forEach(item => {
+      const nombre_pareja = item.querySelector('input[name="nombre_pareja"]').value.trim();
+      const tipo_relacion = item.querySelector('select[name="tipo_relacion"]').value.trim();
+      const fecha_inicio = item.querySelector('input[name="fecha_inicio"]').value;
+      const fecha_fin = item.querySelector('input[name="fecha_fin"]').value;
+      if (nombre_pareja || tipo_relacion || fecha_inicio || fecha_fin) {
+        parejas.push({
+          temp_id: item.dataset.tempId,
+          nombre_pareja: nombre_pareja || null,
+          tipo_relacion: tipo_relacion || null,
+          fecha_inicio: fecha_inicio || null,
+          fecha_fin: fecha_fin || null
+        });
+      }
+    });
+
+    const hijos = [];
+    document.querySelectorAll('#hijosContainer .list-item').forEach(item => {
+      const pareja_temp_id = item.querySelector('select[name="pareja_temp_id"]').value || null;
+      const anio = item.querySelector('input[name="anio_nacimiento"]').value;
+      const sexo = item.querySelector('select[name="sexo"]').value.trim();
+      if (anio || sexo) hijos.push({ pareja_temp_id, anio_nacimiento: anio ? Number(anio) : null, sexo: sexo || null });
+    });
+
+    const redes = [];
+    document.querySelectorAll('#redesContainer .list-item').forEach(item => {
+      const id_red = item.querySelector('select[name="id_red"]').value;
+      const url = item.querySelector('input[name="url"]').value.trim();
+      if (id_red && url) redes.push({ id_red: Number(id_red), url });
+    });
+
+    const servicio_publico = [];
+    document.querySelectorAll('#servicioContainer .list-item').forEach(item => {
+      const periodo = item.querySelector('input[name="periodo"]').value.trim();
+      const cargo = item.querySelector('input[name="cargo"]').value.trim();
+      const dependencia = item.querySelector('input[name="dependencia"]').value.trim();
+      if (periodo || cargo || dependencia) servicio_publico.push({ periodo: periodo||null, cargo: cargo||null, dependencia: dependencia||null });
+    });
+
+    const elecciones = [];
+    document.querySelectorAll('#eleccionesContainer .list-item').forEach(item => {
+      const anio = item.querySelector('input[name="anio_eleccion"]').value;
+      const candidatura = item.querySelector('input[name="candidatura"]').value.trim();
+      const partido_postulacion = item.querySelector('input[name="partido_postulacion"]').value.trim();
+      const resultado = item.querySelector('select[name="resultado"]').value.trim();
+      const diferencia_votos = item.querySelector('input[name="diferencia_votos"]').value;
+      const diferencia_porcentaje = item.querySelector('input[name="diferencia_porcentaje"]').value;
+      const tieneAlgo = anio || candidatura || partido_postulacion || resultado || diferencia_votos || diferencia_porcentaje;
+      if (tieneAlgo) {
+        elecciones.push({
+          anio_eleccion: anio ? Number(anio) : null,
+          candidatura: candidatura || null,
+          partido_postulacion: partido_postulacion || null,
+          resultado: resultado || null,
+          diferencia_votos: diferencia_votos ? Number(diferencia_votos) : null,
+          diferencia_porcentaje: diferencia_porcentaje ? Number(diferencia_porcentaje) : null
+        });
+      }
+    });
+
+    const capacidad_movilizacion = (() => {
+      const eventos = fd.get('mov_eventos');
+      const asistencia = fd.get('mov_asistencia');
+      if (eventos === '' && asistencia === '') return null;
+      return {
+        eventos_ultimos_3_anios: eventos === '' ? null : Number(eventos),
+        asistencia_promedio: asistencia === '' ? null : Number(asistencia)
+      };
+    })();
+
+    const equipos = [];
+    document.querySelectorAll('#equiposContainer .list-item').forEach(item => {
+      const nombre_equipo = item.querySelector('input[name="nombre_equipo"]').value.trim();
+      const activo = item.querySelector('select[name="activo"]').value;
+      if (nombre_equipo) equipos.push({ nombre_equipo, activo: activo === 'true' });
+    });
+
+    const referentes = [];
+    document.querySelectorAll('#referentesContainer .list-item').forEach(item => {
+      const nivel = item.querySelector('select[name="nivel"]').value.trim();
+      const nombre_referente = item.querySelector('input[name="nombre_referente"]').value.trim();
+      if (nivel || nombre_referente) referentes.push({ nivel: nivel || null, nombre_referente: nombre_referente || null });
+    });
+
+    if (!persona.sin_controversias_publicas) {
+      document.querySelectorAll('#controversiasContainer .list-item').forEach(item => {
+        const id_tipo = item.querySelector('select[name="id_tipo"]').value;
+        const estatus = item.querySelector('select[name="estatus"]').value.trim();
+        const fecha_registro = item.querySelector('input[name="fecha_registro"]').value;
+        const descripcion = item.querySelector('textarea[name="descripcion"]').value.trim();
+        const fuente = item.querySelector('input[name="fuente"]').value.trim();
+        const tieneAlgo = id_tipo || estatus || fecha_registro || descripcion || fuente;
+
+        if (tieneAlgo) {
+          controversias.push({
+            id_tipo: id_tipo ? Number(id_tipo) : null,
+            estatus: estatus || null,
+            fecha_registro: fecha_registro || null,
+            descripcion: descripcion || null,
+            fuente: fuente || null
+          });
+        }
+      });
+    }
+
+    const datos_ine = {
+      seccion_electoral: (fd.get('ine_seccion') || '').toString().trim() || null,
+      distrito_federal: (fd.get('ine_df') || '').toString().trim() || null,
+      distrito_local: (fd.get('ine_dl') || '').toString().trim() || null
+    };
+    const datosINEFinal = (datos_ine.seccion_electoral || datos_ine.distrito_federal || datos_ine.distrito_local) ? datos_ine : null;
+
+    const familiares = [];
+    document.querySelectorAll('#familiaresContainer .list-item').forEach(item => {
+      const nombre = item.querySelector('input[name="nombre"]').value.trim();
+      const parentesco = item.querySelector('input[name="parentesco"]').value.trim();
+      const cargo = item.querySelector('input[name="cargo"]').value.trim();
+      const institucion = item.querySelector('input[name="institucion"]').value.trim();
+      if (nombre || parentesco || cargo || institucion) {
+        familiares.push({
+          nombre: nombre || null,
+          parentesco: parentesco || null,
+          cargo: cargo || null,
+          institucion: institucion || null
+        });
+      }
+    });
+
+    let participacion_organizaciones = [];
+    document.querySelectorAll('#participacionContainer .list-item').forEach(item => {
+      const tipo = (item.querySelector('select[name="po_tipo"]').value || '').trim();
+      const nombre = (item.querySelector('input[name="po_nombre"]').value || '').trim();
+      const rol = (item.querySelector('input[name="po_rol"]').value || '').trim();
+      const periodo = (item.querySelector('input[name="po_periodo"]').value || '').trim();
+      const notas = (item.querySelector('input[name="po_notas"]').value || '').trim();
+
+      const tieneAlgo = tipo || nombre || rol || periodo || notas;
+      if (!tieneAlgo) return;
+
+      // Nombre es lo importante si capturan algo
+      if (!nombre) return;
+
+      participacion_organizaciones.push({
+        tipo: tipo || 'otro',
+        nombre,
+        rol: rol || null,
+        periodo: periodo || null,
+        notas: notas || null
+      });
+    });
+    return {
+      persona,
+      datos_ine: datosINEFinal,
+      telefonos,
+      parejas,
+      hijos,
+      redes,
+      servicio_publico,
+      elecciones,
+      capacidad_movilizacion,
+      equipos,
+      referentes,
+      controversias,
+      familiares,
+      formacion_academica,
+      participacion_organizaciones
+    };
+  }
+
+function refreshPreview() {
+  try {
+    const payload = buildPayload();
+
+    const pre = document.getElementById('payloadPreview');
+    if (pre) {
+      pre.textContent = JSON.stringify(payload, null, 2);
+    }
+
+    // si tienes otras cosas en preview, igual protégelas
+  } catch (e) {
+    console.warn('refreshPreview error:', e);
+    // NO dispares showAlert aquí, porque se llama en cada input/change
+  }
+}
+
+  function clearAll() {
+    $('#personaForm').reset();
+
+    // limpiar contenedores
+    $('#telefonosContainer').innerHTML = '';
+    $('#parejasContainer').innerHTML = '';
+    $('#hijosContainer').innerHTML = '';
+    $('#redesContainer').innerHTML = '';
+    $('#servicioContainer').innerHTML = '';
+    $('#eleccionesContainer').innerHTML = '';
+    $('#equiposContainer').innerHTML = '';
+    $('#referentesContainer').innerHTML = '';
+    $('#controversiasContainer').innerHTML = '';
+    $('#familiaresContainer').innerHTML = '';
+    $('#participacionContainer').innerHTML = ''; // ✅ nuevo
+
+    // re-seed mínimos
+    $('#telefonosContainer').appendChild(telefonoBlock());
+    $('#parejasContainer').appendChild(parejaBlock());
+    $('#hijosContainer').appendChild(hijoBlock());
+    $('#redesContainer').appendChild(redBlock());
+    $('#servicioContainer').appendChild(servicioBlock());
+    $('#eleccionesContainer').appendChild(eleccionBlock());
+    $('#equiposContainer').appendChild(equipoBlock());
+    $('#referentesContainer').appendChild(referenteBlock());
+    $('#familiaresContainer').appendChild(familiarBlock());
+
+    // ✅ controversias: si NO está activado "sin controversias", seed 1 fila
+    const chkSin = document.getElementById('chkSinControversias');
+    const sinCont = chkSin?.checked === true;
+    if (!sinCont) {
+      $('#controversiasContainer').appendChild(controversiaBlock());
+    } else {
+      $('#controversiasContainer').innerHTML = '';
+    }
+
+    // ✅ Estado UI dependiente de selects/checkboxes
+    if (typeof toggleTemaOtroUI === 'function') toggleTemaOtroUI();        // Tema "Otro"
+    if (typeof setControversiasUIState === 'function') setControversiasUIState(); // Sin controversias
+
+    hideAlert();
+    refreshPreview();
+  }
+
+  // ---------- init ----------
+  (async function init() {
+    let partidosCatalog = [];
+    let temasCatalog = [];
+    let gruposCatalog = [];
+    hideAlert();
+    try {
+      municipiosCache = await apiGet('/municipios');
+      redesCatalog = await apiGet('/catalogos/redes');
+      controversiasCatalog = await apiGet('/catalogos/controversias');
+      partidosCatalog = await apiGet('/catalogos/partidos');
+      temasCatalog = await apiGet('/catalogos/temas-interes');
+      gruposCatalog = await apiGet('/catalogos/grupos-postulacion');
+      ideologiasCatalog = await apiGet('/catalogos/ideologias');
+
+      fillSelect($('#mun_legal'), municipiosCache, 'id_municipio', 'nombre');
+      fillSelect($('#mun_real'), municipiosCache, 'id_municipio', 'nombre');
+      fillSelect($('#mun_trabajo'), municipiosCache, 'id_municipio', 'nombre');
+
+      fillSelect($('#selPartidoActual'), partidosCatalog, 'id_partido', 'nombre');
+      fillSelect($('#selTemaInteres'), temasCatalog, 'id_tema', 'nombre');
+      fillSelect($('#selGrupoPostulacion'), gruposCatalog, 'id_grupo', 'nombre');
+      fillSelect($('#selIdeologia'), ideologiasCatalog, 'id_ideologia', 'nombre');
+
+      const munLegal = document.getElementById('mun_legal');
+      const munReal = document.getElementById('mun_real');
+      const munTrabajo = document.getElementById('mun_trabajo');
+
+      const chkMunRealIgual = document.getElementById('chkMunRealIgual');
+      const chkMunTrabajoIgual = document.getElementById('chkMunTrabajoIgual');
+
+      function syncMunicipio(selectTarget, checked) {
+        if (checked) {
+          selectTarget.value = munLegal.value;
+          selectTarget.disabled = true;
+        } else {
+          selectTarget.disabled = false;
+        }
+      }
+
+      // Cuando cambia el municipio legal
+      munLegal.addEventListener('change', () => {
+        if (chkMunRealIgual.checked) {
+          munReal.value = munLegal.value;
+        }
+        if (chkMunTrabajoIgual.checked) {
+          munTrabajo.value = munLegal.value;
+        }
+      });
+
+      // Checkbox residencia real
+      chkMunRealIgual.addEventListener('change', (e) => {
+        syncMunicipio(munReal, e.target.checked);
+      });
+
+      // Checkbox trabajo político
+      chkMunTrabajoIgual.addEventListener('change', (e) => {
+        syncMunicipio(munTrabajo, e.target.checked);
+      });
+
+      // seed blocks
+      clearAll();
+      setControversiasUIState();
+      toggleTemaOtroUI();
+
+      document.getElementById('chkSinControversias')?.addEventListener('change', () => {
+        setControversiasUIState();
+        refreshPreview();
+      });
+      //nvel
+      $('#fa_nivel')?.addEventListener('change', () => {
+        toggleFormacionAcademicaUI();
+        refreshPreview();
+      });
+      // buttons add
+      $('#btnAddTelefono').addEventListener('click', () => { $('#telefonosContainer').appendChild(telefonoBlock()); refreshPreview(); });
+      $('#btnAddPareja').addEventListener('click', () => {
+        const pb = parejaBlock();
+        $('#parejasContainer').appendChild(pb);
+
+        // 🔥 importante: ahora sí el DOM ya tiene la nueva pareja
+        refreshHijosParejasSelects();
+        toggleFormacionAcademicaUI();
+        refreshPreview();
+      });
+
+      $('#btnAddHijo').addEventListener('click', () => {
+        const hb = hijoBlock();
+        $('#hijosContainer').appendChild(hb);
+
+        // opcional: por si quieres sincronizar todos siempre
+        // refreshHijosParejasSelects();
+
+        refreshPreview();
+      });
+      // Cargar lista al iniciar
+      await cargarListaBorradores();
+      setBorradorActual(null);
+
+      // Botón recargar
+      document.getElementById('btnRecargarBorradores').addEventListener('click', async () => {
+        await cargarListaBorradores();
+      });
+
+      // Guardar borrador (create o update)
+      document.getElementById('btnGuardarBorrador').addEventListener('click', async () => {
+        try {
+          const payload = buildPayload();
+
+          const fa0 = (payload.formacion_academica || [])[0];
+
+          if (fa0 && (fa0.nivel === 'Educación Superior' || fa0.nivel === 'Posgrado')) {
+            if (!fa0.grado_obtenido || !fa0.institucion) {
+              showAlert(
+                'warning',
+                'Borrador guardado, pero falta “Grado obtenido” e “Institución” para Educación Superior/Posgrado.'
+              );
+              // OJO: no hacemos return, porque es borrador
+            }
+          }
+          const titulo = generarTituloBorrador(payload);
+
+          if (!borradorActualId) {
+            const resp = await apiPost('/borradores', { titulo, payload });
+            setBorradorActual(resp.id_borrador);
+            await cargarListaBorradores();
+            showAlert('success', `Borrador guardado ✅ (#${resp.id_borrador})`);
+          } else {
+            await apiPut(`/borradores/${borradorActualId}`, { titulo, payload, estatus: 'borrador' });
+            await cargarListaBorradores();
+            showAlert('success', `Borrador actualizado ✅ (#${borradorActualId})`);
+          }
+
+          refreshPreview();
+        } catch (e) {
+          console.error(e);
+          showAlert('danger', 'Error al guardar borrador: ' + e.message);
+        }
+      });
+
+      // Cargar borrador desde select
+      document.getElementById('selBorradores').addEventListener('change', async (e) => {
+        const id = e.target.value;
+        if (!id) return;
+
+        try {
+          const b = await apiGet(`/borradores/${id}`);
+          setBorradorActual(b.id_borrador);
+          applyPayloadToForm(b.payload);
+          showAlert('info', `Borrador cargado (#${b.id_borrador})`);
+        } catch (err) {
+          console.error(err);
+          showAlert('danger', 'No pude cargar borrador: ' + err.message);
+        }
+      });
+
+      // Eliminar borrador actual
+      document.getElementById('btnEliminarBorrador').addEventListener('click', async () => {
+        if (!borradorActualId) return;
+
+        try {
+          await apiDelete(`/borradores/${borradorActualId}`);
+          showAlert('success', `Borrador eliminado ✅ (#${borradorActualId})`);
+          setBorradorActual(null);
+          await cargarListaBorradores();
+        } catch (e) {
+          console.error(e);
+          showAlert('danger', 'No pude eliminar borrador: ' + e.message);
+        }
+      });
+
+      document.getElementById('btnAddParticipacion')?.addEventListener('click', () => {
+        document.getElementById('participacionContainer')?.appendChild(participacionBlock());
+        refreshPreview?.();
+      });
+
+      $('#btnAddRed').addEventListener('click', () => { $('#redesContainer').appendChild(redBlock()); refreshPreview(); });
+
+      $('#btnAddServicio').addEventListener('click', () => { $('#servicioContainer').appendChild(servicioBlock()); refreshPreview(); });
+      $('#btnAddEleccion').addEventListener('click', () => { $('#eleccionesContainer').appendChild(eleccionBlock()); refreshPreview(); });
+
+      $('#btnAddEquipo').addEventListener('click', () => { $('#equiposContainer').appendChild(equipoBlock()); refreshPreview(); });
+      $('#btnAddReferente').addEventListener('click', () => { $('#referentesContainer').appendChild(referenteBlock()); refreshPreview(); });
+
+      $('#btnAddControversia').addEventListener('click', () => {
+        const chk = document.getElementById('chkSinControversias');
+        if (chk?.checked) {
+          showAlert('warning', 'Está activada la opción "No se detectaron controversias públicas". Desmárcala para agregar controversias.');
+          return;
+        }
+        $('#controversiasContainer').appendChild(controversiaBlock());
+        setControversiasUIState();
+        refreshPreview();
+      });
+      $('#btnAddFamiliar').addEventListener('click', () => { $('#familiaresContainer').appendChild(familiarBlock()); refreshPreview(); });
+
+      // live preview
+      $('#personaForm').addEventListener('input', refreshPreview);
+      $('#personaForm').addEventListener('change', refreshPreview);
+
+      $('#btnReset').addEventListener('click', clearAll);
+
+      function toggleTemaOtroUI() {
+        const sel = document.getElementById('selTemaInteres');
+        const wrap = document.getElementById('temaOtroWrap');
+        const inp = document.getElementById('temaOtroTexto');
+
+        if (!sel || !wrap || !inp) return;
+
+        const idTema = Number(sel.value || 0);
+        const tema = temasCatalog.find(t => Number(t.id_tema) === idTema);
+        const requiere = !!tema?.requiere_otro_texto;
+
+        wrap.classList.toggle('d-none', !requiere);
+        inp.required = requiere;
+
+        if (!requiere) {
+          inp.value = '';
+          inp.classList.remove('is-invalid');
+        }
+      }
+      document.getElementById('selTemaInteres')?.addEventListener('change', () => {
+        toggleTemaOtroUI();
+        refreshPreview?.();
+      });
+
+      // submit
+      $('#personaForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideAlert();
+
+        const payload = buildPayload();
+
+        // ✅ Sin controversias públicas (mutuo excluyente)
+        const chkSin = document.getElementById('chkSinControversias')?.checked ?? false;
+
+        // Asegura que viaje en persona
+        payload.persona.sin_controversias_publicas = chkSin;
+
+        // Si está marcado, forzamos controversias vacías
+        if (chkSin) payload.controversias = [];
+
+        // ============================
+        // VALIDACION FORMACION ACADEMICA
+        // ============================
+        const fa0 = (payload.formacion_academica || [])[0];
+
+        if (fa0 && (fa0.nivel === 'Educación Superior' || fa0.nivel === 'Posgrado')) {
+          if (!fa0.grado_obtenido || !fa0.institucion) {
+            showAlert(
+              'warning',
+              'Para Educación Superior o Posgrado captura el grado obtenido y la institución.'
+            );
+            return; // ⛔ NO envía al backend
+          }
+        }
+        // ============================
+        if (!payload.persona.nombre) return showAlert('warning', 'El nombre es obligatorio.');
+        // Nota: si no tienes usuarios, deja creado_por null.
+
+        if (payload.persona?.id_tema_interes_central) {
+          const tema = temasCatalog.find(t => Number(t.id_tema) === Number(payload.persona.id_tema_interes_central));
+          if (tema?.requiere_otro_texto && !payload.persona.tema_interes_otro_texto) {
+            document.getElementById('temaOtroTexto')?.classList.add('is-invalid');
+            return showAlert('warning', 'Si seleccionas “Otro”, captura la descripción del tema.');
+          }
+        }
+
+        try {
+          const resp = await apiPost('/personas', payload);
+          showAlert('success', `Guardado correctamente ✅ id_persona: ${resp.id_persona}`);
+                // después de guardar persona OK
+          if (borradorActualId) {
+            try {
+              await apiPut(`/borradores/${borradorActualId}`, { estatus: 'enviado' });
+            } catch(_) {}
+            setBorradorActual(null);
+            await cargarListaBorradores();
+          }
+          // si quieres que NO limpie, quita esto:
+          clearAll();
+
+        } catch (err) {
+          console.error(err);
+          showAlert('danger', 'Error al guardar: ' + err.message);
+        }
+      });
+
+    } catch (e) {
+      console.error(e);
+      showAlert('danger', 'No pude cargar catálogos (municipios/redes/controversias). Revisa backend.');
+    }
+  })();
+</script>
+
+</body>
+</html>
