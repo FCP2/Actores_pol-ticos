@@ -939,3 +939,733 @@ exports.resumenPersonasPorUsuario = async (req, res) => {
     return res.status(500).json({ error: 'Error al generar resumen', detail: e.message });
   }
 };
+//pdf 
+const PDFDocument = require("pdfkit");
+
+exports.getPerfilPdf = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
+
+    // ✅ TU QUERY COMPLETO (igual que getPerfilCompleto)
+    const { rows } = await pool.query(
+      `
+        SELECT
+        p.id_persona,
+        p.nombre,
+        p.curp,
+        p.rfc,
+        p.clave_elector,
+        p.estado_civil,
+        p.escala_influencia,
+        p.sin_servicio_publico,
+        p.ha_contendido_eleccion,
+        p.created_at,
+        p.creado_por,
+
+        p.sin_controversias_publicas,
+
+        p.id_partido_actual,
+        p.id_tema_interes_central,
+        p.tema_interes_otro_texto,
+        p.id_grupo_postulacion,
+        p.id_ideologia_politica,
+
+        cp.nombre  AS partido_actual,
+        cp.siglas  AS partido_actual_siglas,
+        cti.nombre AS tema_interes_central,
+        cgp.nombre AS grupo_postulacion,
+        cip.nombre AS ideologia_politica,
+
+        ml.nombre AS municipio_residencia_legal,
+        mr.nombre AS municipio_residencia_real,
+        mt.nombre AS municipio_trabajo_politico,
+
+        -- =========================
+        -- 1) DATOS INE (objeto 1:1)
+        -- =========================
+        (
+          SELECT CASE
+            WHEN di.id_persona IS NULL THEN NULL
+            ELSE jsonb_build_object(
+              'seccion_electoral', di.seccion_electoral,
+              'distrito_federal',  di.distrito_federal,
+              'distrito_local',    di.distrito_local
+            )
+          END
+          FROM datos_ine di
+          WHERE di.id_persona = p.id_persona
+          LIMIT 1
+        ) AS datos_ine,
+
+        -- =========================
+        -- 2) TELEFONOS
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_telefono', t.id_telefono,
+              'telefono',    t.telefono,
+              'tipo',        t.tipo,
+              'principal',   t.principal
+            )
+            ORDER BY t.principal DESC, t.id_telefono ASC
+          )
+          FROM telefonos t
+          WHERE t.id_persona = p.id_persona
+        ), '[]'::jsonb) AS telefonos,
+
+        -- =========================
+        -- 3) FORMACION ACADEMICA
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_formacion',   fa.id_formacion,
+              'nivel',          fa.nivel,
+              'grado',          fa.grado,
+              'grado_obtenido', fa.grado_obtenido,
+              'institucion',    fa.institucion,
+              'anio_inicio',    fa.anio_inicio,
+              'anio_fin',       fa.anio_fin
+            )
+            ORDER BY fa.id_formacion ASC
+          )
+          FROM formacion_academica fa
+          WHERE fa.id_persona = p.id_persona
+        ), '[]'::jsonb) AS formacion_academica,
+
+        -- =========================
+        -- 4) REDES (con catálogo)
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_red', crs.id_red,
+              'red',    crs.nombre,
+              'url',    rsp.url
+            )
+            ORDER BY crs.nombre ASC
+          )
+          FROM redes_sociales_persona rsp
+          JOIN catalogo_redes_sociales crs ON crs.id_red = rsp.id_red
+          WHERE rsp.id_persona = p.id_persona
+        ), '[]'::jsonb) AS redes_sociales,
+
+        -- =========================
+        -- 5) PAREJAS con HIJOS anidados
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_pareja',      pa.id_pareja,
+              'nombre_pareja',  pa.nombre_pareja,
+              'tipo_relacion',  pa.tipo_relacion,
+              'fecha_inicio',   pa.fecha_inicio,
+              'fecha_fin',      pa.fecha_fin,
+              'hijos', COALESCE((
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'id_hijo',         h.id_hijo,
+                    'anio_nacimiento', h.anio_nacimiento,
+                    'sexo',            h.sexo
+                  )
+                  ORDER BY h.id_hijo ASC
+                )
+                FROM hijos h
+                WHERE h.id_persona = p.id_persona
+                  AND h.id_pareja = pa.id_pareja
+              ), '[]'::jsonb)
+            )
+            ORDER BY pa.id_pareja ASC
+          )
+          FROM parejas pa
+          WHERE pa.id_persona = p.id_persona
+        ), '[]'::jsonb) AS parejas,
+
+        -- (Opcional) Si tu frontend todavía consume hijos "plano", lo dejamos también:
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_hijo',         h.id_hijo,
+              'id_pareja',       h.id_pareja,
+              'anio_nacimiento', h.anio_nacimiento,
+              'sexo',            h.sexo
+            )
+            ORDER BY h.id_hijo ASC
+          )
+          FROM hijos h
+          WHERE h.id_persona = p.id_persona
+        ), '[]'::jsonb) AS hijos,
+
+        -- =========================
+        -- 6) SERVICIO PUBLICO
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_servicio', sp.id_servicio,
+              'periodo',     sp.periodo,
+              'cargo',       sp.cargo,
+              'dependencia', sp.dependencia
+            )
+            ORDER BY sp.id_servicio ASC
+          )
+          FROM servicio_publico sp
+          WHERE sp.id_persona = p.id_persona
+        ), '[]'::jsonb) AS servicio_publico,
+
+        -- =========================
+        -- 7) ELECCIONES
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_eleccion',            ec.id_eleccion,
+              'anio_eleccion',          ec.anio_eleccion,
+              'candidatura',            ec.candidatura,
+              'partido_postulacion',    ec.partido_postulacion,
+              'resultado',              ec.resultado,
+              'diferencia_votos',       ec.diferencia_votos,
+              'diferencia_porcentaje',  ec.diferencia_porcentaje
+            )
+            ORDER BY ec.anio_eleccion DESC NULLS LAST, ec.id_eleccion ASC
+          )
+          FROM elecciones_contendidas ec
+          WHERE ec.id_persona = p.id_persona
+        ), '[]'::jsonb) AS elecciones,
+
+        -- =========================
+        -- 8) CAPACIDAD MOVILIZACION (1:1)
+        -- =========================
+        (
+          SELECT CASE
+            WHEN cm.id_persona IS NULL THEN NULL
+            ELSE jsonb_build_object(
+              'eventos_ultimos_3_anios', cm.eventos_ultimos_3_anios,
+              'asistencia_promedio',     cm.asistencia_promedio
+            )
+          END
+          FROM capacidad_movilizacion cm
+          WHERE cm.id_persona = p.id_persona
+          LIMIT 1
+        ) AS capacidad_movilizacion,
+
+        -- =========================
+        -- 9) EQUIPOS
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_equipo',     ep.id_equipo,
+              'nombre_equipo', ep.nombre_equipo,
+              'activo',        ep.activo
+            )
+            ORDER BY ep.activo DESC, ep.id_equipo ASC
+          )
+          FROM equipos_politicos ep
+          WHERE ep.id_persona = p.id_persona
+        ), '[]'::jsonb) AS equipos,
+
+        -- =========================
+        -- 10) REFERENTES
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_referente',     rp.id_referente,
+              'nivel',            rp.nivel,
+              'nombre_referente', rp.nombre_referente
+            )
+            ORDER BY rp.id_referente ASC
+          )
+          FROM referentes_politicos rp
+          WHERE rp.id_persona = p.id_persona
+        ), '[]'::jsonb) AS referentes,
+
+        -- =========================
+        -- 11) FAMILIARES
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_familiar',  fp.id_familiar,
+              'nombre',       fp.nombre,
+              'parentesco',   fp.parentesco,
+              'cargo',        fp.cargo,
+              'institucion',  fp.institucion
+            )
+            ORDER BY fp.id_familiar ASC
+          )
+          FROM familiares_politica fp
+          WHERE fp.id_persona = p.id_persona
+        ), '[]'::jsonb) AS familiares,
+
+        -- =========================
+        -- 12) PARTICIPACION ORGANIZACIONES
+        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_participacion', po.id_participacion,
+              'tipo',             po.tipo,
+              'nombre',           po.nombre,
+              'rol',              po.rol,
+              'periodo',          po.periodo,
+              'notas',            po.notas
+            )
+            ORDER BY po.id_participacion ASC
+          )
+          FROM participacion_organizaciones po
+          WHERE po.id_persona = p.id_persona
+        ), '[]'::jsonb) AS participacion_organizaciones,
+
+        -- =========================
+        -- 13) CONTROVERSIAS (condicional)
+        -- =========================
+        CASE
+          WHEN p.sin_controversias_publicas = true THEN '[]'::jsonb
+          ELSE COALESCE((
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id_controversia', cper.id_controversia,
+                'id_tipo',         cper.id_tipo,
+                'tipo',            ccat.tipo,
+                'descripcion',     cper.descripcion,
+                'fuente',          cper.fuente,
+                'fecha_registro',  cper.fecha_registro,
+                'estatus',         cper.estatus
+              )
+              ORDER BY cper.id_controversia ASC
+            )
+            FROM controversias_persona cper
+            LEFT JOIN catalogo_controversias ccat ON ccat.id_tipo = cper.id_tipo
+            WHERE cper.id_persona = p.id_persona
+          ), '[]'::jsonb)
+        END AS controversias
+
+      FROM personas p
+      LEFT JOIN municipios ml ON ml.id_municipio = p.municipio_residencia_legal
+      LEFT JOIN municipios mr ON mr.id_municipio = p.municipio_residencia_real
+      LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
+
+      LEFT JOIN catalogo_partidos cp            ON cp.id_partido = p.id_partido_actual
+      LEFT JOIN catalogo_temas_interes cti      ON cti.id_tema    = p.id_tema_interes_central
+      LEFT JOIN catalogo_grupos_postulacion cgp ON cgp.id_grupo   = p.id_grupo_postulacion
+      LEFT JOIN catalogo_ideologia_politica cip ON cip.id_ideologia = p.id_ideologia_politica
+
+      WHERE p.id_persona = $1
+      LIMIT 1`
+      , [id]);
+    const p = rows[0];
+    if (!p) return res.status(404).json({ error: "Persona no encontrada" });
+
+    // ✅ Seguridad: capturista solo su registro
+    const roles = req.user.roles || [];
+    if (roles.includes("capturista") && p.creado_por !== req.user.id_usuario) {
+      return res.status(403).json({ error: "No autorizado" });
+    }
+
+    // ====== Headers respuesta
+    const safeName = String(p.nombre || `persona_${p.id_persona}`)
+      .replace(/[\\/:*?"<>|]/g, "")
+      .slice(0, 60);
+
+    res.setHeader("Content-Type", "application/pdf");
+    // inline (abre en navegador) o attachment (descarga)
+    res.setHeader("Content-Disposition", `inline; filename="perfil_${safeName}.pdf"`);
+
+    const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
+    doc.pipe(res);
+
+    // ====== Colores institucionales
+    const C = {
+      prim: "#8b2136",     // vino
+      sec:  "#b89056",     // dorado
+      text: "#111827",     // gris oscuro
+      muted:"#6b7280",
+      line: "#e5e7eb",
+      bg:   "#ffffff"
+    };
+
+    const M = doc.page.margins;
+    const pageW = () => doc.page.width;
+    const pageH = () => doc.page.height;
+    const contentW = () => pageW() - M.left - M.right;
+    const bottomY = () => pageH() - M.bottom;
+
+    const GAP = 14; // gap entre columnas
+    const COL_W = () => (contentW() - GAP) / 2;
+
+    // ====== Helpers paginación
+    function ensure(h = 24) {
+      if (doc.y + h > bottomY()) {
+        doc.addPage();
+        header(); // re-dibuja header en cada página
+      }
+    }
+
+    // ====== Header institucional (se repite en cada página)
+function header() {
+  const x = M.left;
+  const y = M.top;   // ✅ sin negativos
+  const w = contentW();
+
+  doc.save();
+  doc.rect(x, y, w, 36).fill(C.prim);
+  doc.rect(x, y + 33, w, 3).fill(C.sec);
+
+  doc.fillColor("white").font("Helvetica-Bold").fontSize(14)
+    .text("Actores Políticos", x + 10, y + 10, { width: w - 20, align: "left" });
+
+  doc.fillColor("white").font("Helvetica").fontSize(9)
+    .text("Perfil individual", x + 10, y + 24, { width: w - 20, align: "left" });
+
+  doc.restore();
+
+  // cursor fijo debajo del header
+  doc.y = y + 48;
+}
+
+    // ====== Badge de sección
+    function section(title) {
+      ensure(26);
+      const x = M.left;
+      const y = doc.y;
+      const w = contentW();
+
+      doc.save();
+      doc.roundedRect(x, y, w, 22, 8).fill(C.prim);
+      doc.fillColor("white").font("Helvetica-Bold").fontSize(10)
+        .text(title.toUpperCase(), x + 10, y + 6, { width: w - 20, align: "left" });
+      doc.restore();
+      doc.y = y + 28;
+    }
+
+    // ====== Row de 2 columnas (campo + valor con línea)
+    function field2(labelL, valueL, labelR, valueR) {
+      ensure(44);
+      const x0 = M.left;
+      const y0 = doc.y;
+
+      const renderField = (x, label, value) => {
+        doc.save();
+        doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(8).text(String(label || "").toUpperCase(), x, y0);
+        doc.fillColor(C.text).font("Helvetica").fontSize(10).text(String(value ?? "-"), x, y0 + 11, { width: COL_W() });
+        doc.strokeColor(C.line).lineWidth(1).moveTo(x, y0 + 32).lineTo(x + COL_W(), y0 + 32).stroke();
+        doc.restore();
+      };
+
+      renderField(x0, labelL, valueL);
+      renderField(x0 + COL_W() + GAP, labelR, valueR);
+
+      doc.y = y0 + 40;
+    }
+
+    // ====== Campo a 1 columna (para textos largos)
+    function field1(label, value) {
+      ensure(44);
+      const x = M.left;
+      const y = doc.y;
+
+      doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(8).text(String(label || "").toUpperCase(), x, y);
+      doc.fillColor(C.text).font("Helvetica").fontSize(10)
+        .text(String(value ?? "-"), x, y + 11, { width: contentW() });
+
+      doc.strokeColor(C.line).lineWidth(1).moveTo(x, doc.y + 2).lineTo(x + contentW(), doc.y + 2).stroke();
+      doc.moveDown(0.8);
+    }
+
+    // ====== Chips/badges (partido, ideología, etc.)
+    function chips(items) {
+      if (!items.length) return;
+      ensure(18);
+      let x = M.left;
+      let y = doc.y;
+      const h = 16;
+      const padX = 8;
+      const gap = 6;
+
+      items.forEach(it => {
+        const t = String(it.text || "");
+        if (!t) return;
+        doc.font("Helvetica-Bold").fontSize(8);
+        const w = doc.widthOfString(t) + padX * 2;
+
+        if (x + w > M.left + contentW()) {
+          x = M.left;
+          y += h + 6;
+          ensure(h + 12);
+        }
+
+        doc.roundedRect(x, y, w, h, 8).fill(it.color || C.sec);
+        doc.fillColor("white").text(t, x + padX, y + 4);
+        doc.fillColor(C.text);
+
+        x += w + gap;
+      });
+
+      doc.y = y + h + 10;
+    }
+
+    // ====== Tabla simple (auto page-break por renglón)
+    function table(title, headers, rowsData) {
+       if (!Array.isArray(rowsData) || rowsData.length === 0) {
+          section(title);
+          field1("Registro", "-");
+          return;
+        }
+
+        section(title);
+
+      const x = M.left;
+      const w = contentW();
+      const colCount = headers.length;
+      const colW = w / colCount;
+      const rowH = 18;
+
+      // header row
+      ensure(rowH + 10);
+      doc.save();
+      doc.rect(x, doc.y, w, rowH).fill(C.sec);
+      doc.fillColor("white").font("Helvetica-Bold").fontSize(9);
+      headers.forEach((h, i) => {
+        doc.text(h, x + i * colW + 6, doc.y + 5, { width: colW - 12, ellipsis: true });
+      });
+      doc.restore();
+      doc.y += rowH;
+
+      // body rows
+      doc.font("Helvetica").fontSize(9).fillColor(C.text);
+      rowsData.forEach((r, idx) => {
+        ensure(rowH + 10);
+
+        // zebra
+        if (idx % 2 === 0) {
+          doc.save();
+          doc.rect(x, doc.y, w, rowH).fill("#f9fafb");
+          doc.restore();
+        }
+
+        r.forEach((cell, i) => {
+          doc.fillColor(C.text).text(String(cell ?? "-"), x + i * colW + 6, doc.y + 5, {
+            width: colW - 12,
+            ellipsis: true
+          });
+        });
+
+        // line
+        doc.strokeColor(C.line).lineWidth(1).moveTo(x, doc.y + rowH).lineTo(x + w, doc.y + rowH).stroke();
+        doc.y += rowH;
+      });
+
+      doc.moveDown(0.6);
+    }
+
+    // ============ Render PDF ============
+    header();
+
+    // Chips “arriba”
+    chips([
+      p.grupo_postulacion ? { text: p.grupo_postulacion, color: "#0ea5e9" } : null,
+      (p.partido_actual_siglas || p.partido_actual) ? { text: (p.partido_actual_siglas || p.partido_actual), color: C.prim } : null,
+      p.ideologia_politica ? { text: p.ideologia_politica, color: "#374151" } : null,
+      p.tema_interes_central ? { text: p.tema_interes_central, color: "#f59e0b" } : null,
+      p.sin_controversias_publicas === true ? { text: "Sin controversias", color: "#16a34a" } : null
+    ].filter(Boolean));
+
+    // Datos generales (2 columnas)
+    section("Datos generales");
+    field2("Nombre", p.nombre, "CURP", p.curp);
+    field2("RFC", p.rfc, "Clave elector", p.clave_elector);
+    field2("Estado civil", p.estado_civil, "Escala influencia", p.escala_influencia);
+    field2("Mun. residencia legal", p.municipio_residencia_legal, "Mun. residencia real", p.municipio_residencia_real);
+    field1("Municipio trabajo político", p.municipio_trabajo_politico);
+
+    // Datos INE
+    section("Datos INE");
+    if (p.datos_ine) {
+      field2("Sección electoral", p.datos_ine.seccion_electoral, "Distrito federal", p.datos_ine.distrito_federal);
+      field2("Distrito local", p.datos_ine.distrito_local, "—", "—");
+    } else {
+      field1("Registro", "-");
+    }
+
+    // Teléfonos
+    section("Teléfonos");
+    if (Array.isArray(p.telefonos) && p.telefonos.length) {
+      p.telefonos.forEach(t => {
+        ensure(18);
+        doc.fillColor(C.text).font("Helvetica").fontSize(10)
+          .text(`• ${t.telefono || "-"} (${t.tipo || "s/tipo"})${t.principal ? " [principal]" : ""}`);
+      });
+      doc.moveDown(0.6);
+    } else {
+      field1("Registro", "-");
+    }
+
+    // Redes
+    section("Redes sociales");
+    if (Array.isArray(p.redes_sociales) && p.redes_sociales.length) {
+      p.redes_sociales.forEach(r => {
+        ensure(18);
+        doc.fillColor(C.text).font("Helvetica").fontSize(10)
+          .text(`• ${r.red || "-"}: ${r.url || "-"}`);
+      });
+      doc.moveDown(0.6);
+    } else {
+      field1("Registro", "-");
+    }
+
+    // Formación
+    section("Formación académica");
+    if (Array.isArray(p.formacion_academica) && p.formacion_academica.length) {
+      p.formacion_academica.forEach(fa => {
+        ensure(22);
+        const periodo = [fa.anio_inicio, fa.anio_fin].filter(Boolean).join(" - ");
+        doc.fillColor(C.text).font("Helvetica").fontSize(10)
+          .text(`• ${fa.nivel || "-"} | ${fa.grado || "-"} | ${fa.institucion || "-"}${periodo ? ` (${periodo})` : ""}${fa.grado_obtenido ? " [obtenido]" : ""}`);
+      });
+      doc.moveDown(0.6);
+    } else {
+      field1("Registro", "-");
+    }
+
+    // Tablas: Servicio público y Elecciones
+    const spRows = (p.sin_servicio_publico === true) ? [] : (p.servicio_publico || []).map(sp => [
+      sp.periodo || "-",
+      sp.cargo || "-",
+      sp.dependencia || "-"
+    ]);
+
+    table("Servicio público", ["Periodo", "Cargo", "Dependencia"], spRows);
+    if (p.sin_servicio_publico === true) {
+      field1("Registro", "Marcado como: Sin servicio público");
+    }
+
+    const elRows = (p.ha_contendido_eleccion === false) ? [] : (p.elecciones || []).map(ec => [
+      ec.anio_eleccion || "-",
+      ec.candidatura || "-",
+      ec.partido_postulacion || "-",
+      ec.resultado || "-"
+    ]);
+
+    table("Elecciones contendidas", ["Año", "Candidatura", "Partido", "Resultado"], elRows);
+    if (p.ha_contendido_eleccion === false) {
+      field1("Registro", "Marcado como: No ha contendiendo elección");
+    }
+
+    // Movilización (2 columnas)
+    section("Capacidad de movilización");
+    if (p.capacidad_movilizacion) {
+      field2("Eventos últimos 3 años", p.capacidad_movilizacion.eventos_ultimos_3_anios,
+             "Asistencia promedio", p.capacidad_movilizacion.asistencia_promedio);
+    } else {
+      field1("Registro", "-");
+    }
+
+    // Equipos / Referentes (2 columnas como listas cortas)
+    section("Equipos y referentes");
+    const equiposTxt = (p.equipos || []).map(e => `${e.nombre_equipo}${e.activo ? " [activo]" : ""}`).join("\n") || "-";
+    const refTxt = (p.referentes || []).map(r => `${r.nivel || "-"} — ${r.nombre_referente || "-"}`).join("\n") || "-";
+    ensure(70);
+    const xL = M.left, xR = M.left + COL_W() + GAP;
+    const y = doc.y;
+    doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(8).text("EQUIPOS", xL, y);
+    doc.fillColor(C.text).font("Helvetica").fontSize(10).text(equiposTxt, xL, y + 12, { width: COL_W() });
+
+    doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(8).text("REFERENTES", xR, y);
+    doc.fillColor(C.text).font("Helvetica").fontSize(10).text(refTxt, xR, y + 12, { width: COL_W() });
+    doc.y = Math.max(doc.y, y + 60);
+    doc.moveDown(0.4);
+
+    // Familiares
+    section("Familiares");
+    if (Array.isArray(p.familiares) && p.familiares.length) {
+      p.familiares.forEach(f => {
+        ensure(18);
+        doc.font("Helvetica").fontSize(10).fillColor(C.text)
+          .text(`• ${f.nombre || "-"} (${f.parentesco || "-"}) — ${f.cargo || "-"} | ${f.institucion || "-"}`);
+      });
+      doc.moveDown(0.6);
+    } else {
+      field1("Registro", "-");
+    }
+
+    // Participación organizaciones
+    section("Participación en organizaciones");
+    if (Array.isArray(p.participacion_organizaciones) && p.participacion_organizaciones.length) {
+      p.participacion_organizaciones.forEach(o => {
+        ensure(22);
+        doc.font("Helvetica").fontSize(10).fillColor(C.text)
+          .text(`• ${o.tipo || "-"} — ${o.nombre || "-"} | Rol: ${o.rol || "-"} | Periodo: ${o.periodo || "-"}${o.notas ? ` | Notas: ${o.notas}` : ""}`);
+      });
+      doc.moveDown(0.6);
+    } else {
+      field1("Registro", "-");
+    }
+
+    // Parejas e hijos
+    section("Parejas e hijos");
+    if (Array.isArray(p.parejas) && p.parejas.length) {
+      p.parejas.forEach(pa => {
+        ensure(30);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor(C.text)
+          .text(`• ${pa.nombre_pareja || "-"} (${pa.tipo_relacion || "-"})`);
+        doc.font("Helvetica").fontSize(9).fillColor(C.muted)
+          .text(`${pa.fecha_inicio || ""}${pa.fecha_fin ? " a " + pa.fecha_fin : ""}`);
+
+        if (Array.isArray(pa.hijos) && pa.hijos.length) {
+          pa.hijos.forEach(h => {
+            ensure(16);
+            doc.font("Helvetica").fontSize(10).fillColor(C.text)
+              .text(`   - Hijo: ${h.anio_nacimiento || "-"} | Sexo: ${h.sexo || "-"}`);
+          });
+        } else {
+          ensure(16);
+          doc.font("Helvetica").fontSize(10).fillColor(C.text).text(`   - Hijos: -`);
+        }
+        doc.moveDown(0.3);
+      });
+      doc.moveDown(0.4);
+    } else {
+      field1("Registro", "-");
+    }
+
+    // Controversias
+    section("Controversias");
+    if (p.sin_controversias_publicas === true) {
+      field1("Registro", "Marcado como: Sin controversias públicas");
+    } else if (Array.isArray(p.controversias) && p.controversias.length) {
+      p.controversias.forEach(c => {
+        ensure(28);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor(C.text)
+          .text(`• ${c.tipo || "-"}`);
+        doc.font("Helvetica").fontSize(10).fillColor(C.text)
+          .text(`${c.descripcion || "-"}`);
+        if (c.fuente) doc.font("Helvetica").fontSize(9).fillColor(C.muted).text(`Fuente: ${c.fuente}`);
+        doc.moveDown(0.3);
+      });
+      doc.moveDown(0.4);
+    } else {
+      field1("Registro", "-");
+    }
+
+    // ===== Footer con numeración de páginas
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(i);
+      const pageNum = i + 1;
+      const total = range.count;
+
+      doc.fillColor(C.muted).font("Helvetica").fontSize(9)
+        .text(`Página ${pageNum} de ${total}`, M.left, pageH() - M.bottom + 10, { width: contentW(), align: "right" });
+    }
+
+    doc.end();
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Error al generar PDF", detail: e.message });
+  }
+};
+
