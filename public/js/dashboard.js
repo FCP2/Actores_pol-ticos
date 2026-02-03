@@ -96,7 +96,7 @@ function renderCards(list){
   }
 
   cont.innerHTML = list.map(p => {
-    const partido = p.partido_actual_siglas || p.partido_actual; // primero siglas
+    const partido = p.partido_actual_siglas || p.partido_actual;
     const badges = [
       badge(p.grupo_postulacion, 'text-bg-info'),
       badge(partido, 'text-bg-dark'),
@@ -114,21 +114,57 @@ function renderCards(list){
               <div class="small text-muted">${labelEscalaInfluencia(p.escala_influencia)}</div>
               <div class="mt-2 d-flex flex-wrap">${badges}</div>
             </div>
-            <div class="flex-shrink-0">
-              <button class="btn btn-outline-primary btn-sm" data-id="${p.id_persona}">Ver</button>
+
+            <div class="flex-shrink-0 d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm"
+                      data-action="pdf"
+                      data-id="${p.id_persona}">
+                PDF
+              </button>
+
+              <button class="btn btn-outline-primary btn-sm"
+                      data-action="ver"
+                      data-id="${p.id_persona}">
+                Ver
+              </button>
             </div>
+
           </div>
         </div>
       </div>
     `;
   }).join('');
 
-  cont.querySelectorAll('button[data-id]').forEach(btn=>{
+  cont.querySelectorAll('button[data-action][data-id]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const id = btn.getAttribute('data-id');
-      await openPerfilModal(id);
+      const action = btn.getAttribute('data-action');
+
+      if (action === 'ver') {
+        await openPerfilModal(id);
+      } else if (action === 'pdf') {
+        await generarPDFPersona(id);
+      }
     });
   });
+}
+//GENERAR PDF
+async function generarPDFPersona(idPersona){
+  const token = localStorage.getItem("token");
+  const res = await fetch(`/api/personas/${idPersona}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (res.status === 401) { localStorage.clear(); location.href='/'; return; }
+  if (!res.ok) { alert("No se pudo generar el PDF"); return; }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `perfil_${idPersona}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function applySearch(){
