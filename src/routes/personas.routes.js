@@ -10,6 +10,7 @@ router.get('/admin/grid', requireAuth, requireRole('superadmin'), ctrl.listPerso
 router.post('/', requireAuth, requireRole('capturista','analista','superadmin'), ctrl.createPersonaCompleta);
 router.get('/', requireAuth, requireRole('capturista','analista','superadmin'), ctrl.listPersonas);
 router.get('/:id/perfil', requireAuth, requireRole('capturista','analista','superadmin'), ctrl.getPerfilCompleto);
+router.get('/:id/pdf', requireAuth, requireRole('superadmin','analista','capturista'), ctrl.getPerfilPdf);
 
 
 module.exports = router;
