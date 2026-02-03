@@ -11,6 +11,8 @@ router.post('/', requireAuth, requireRole('capturista','analista','superadmin'),
 router.get('/', requireAuth, requireRole('capturista','analista','superadmin'), ctrl.listPersonas);
 router.get('/:id/perfil', requireAuth, requireRole('capturista','analista','superadmin'), ctrl.getPerfilCompleto);
 router.get('/:id/pdf', requireAuth, requireRole('superadmin','analista','capturista'), ctrl.getPerfilPdf);
+router.get('/admin/kpis/completitud', requireAuth, requireRole('superadmin'), ctrl.kpiCompletitud);
+router.get('/admin/kpis/municipios', requireAuth, requireRole('superadmin'), ctrl.kpiMunicipios);
 
 
 module.exports = router;
