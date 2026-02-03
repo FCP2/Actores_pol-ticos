@@ -83,11 +83,16 @@
   <!-- DASHBOARD -->
   <div class="container-fluid pb-3">
     <div class="row g-3">
-
       <!-- MAPA -->
       <div class="col-12 col-lg-7">
         <div class="card shadow-sm">
           <div class="card-body p-0">
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+              <div class="fw-semibold" id="munTitle">Estado de México</div>
+              <button class="btn btn-sm btn-outline-secondary" id="btnResetMap">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Restablecer
+              </button>
+            </div>
             <div id="map" style="height: calc(100vh - 160px); min-height: 360px;"></div>
           </div>
         </div>
@@ -125,6 +130,18 @@
                   <i class="bi bi-grid-3x3-gap me-1"></i> Grid
                 </button>
               </li>
+              <!-- 🔥 NUEVO TAB KPI -->
+              <li class="nav-item" role="presentation">
+                <button class="nav-link border-0 px-4 py-2 fw-semibold"
+                        id="tab-kpis"
+                        data-bs-toggle="tab"
+                        data-bs-target="#pane-kpis"
+                        type="button"
+                        role="tab"
+                        style="color:#0c413c">
+                  <i class="bi bi-speedometer2 me-1"></i>Captura - Ranking Municipios
+                </button>
+              </li>
             </ul>
 
             <div class="tab-content pt-4 bg-white rounded-bottom shadow-inner">
@@ -146,7 +163,7 @@
                 <hr class="my-3 border-custom-primary" style="border-color: #8b2136 !important; opacity: 0.3;">
 
                 <!-- CONTENEDOR DE TARJETAS -->
-                <div id="cardsContainer" style="max-height: calc(100vh - 360px); overflow:auto; border-radius: 0.5rem; border: 1px solid #dee2e6;"></div>
+                <div id="cardsContainer" style="max-height: calc(100vh - 360px); overflow:auto; border-radius: 0.5rem; border: 1px solid #dee2e6;"></div>        
               </div>
 
               <!-- ===================== GRID (SUPERADMIN) ===================== -->
@@ -203,11 +220,213 @@
                   Tip: da clic en <strong>Ver</strong> para abrir el perfil completo.
                 </div>
               </div>
+
+                <!-- 🔥 KPIs -->
+              <div class="tab-pane fade" id="pane-kpis" role="tabpanel">
+                <!-- Pegas aquí TODO el bloque de KPIs que te pasé -->
+                <!-- (cards, charts y tabla) -->
+                
+                <section class="container-fluid my-3" id="kpiSection">
+                  <!-- KPIs -->
+                  <div class="row g-3">
+                    <div class="col-12 col-sm-6 col-xl-3">
+                      <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                          <div class="d-flex align-items-start justify-content-between">
+                            <div>
+                              <div class="text-muted small">Total actores</div>
+                              <div class="fs-3 fw-semibold" id="kpiTotal">—</div>
+                            </div>
+                            <span class="badge rounded-pill text-bg-dark">BD</span>
+                          </div>
+                          <div class="small text-muted mt-2">Registros totales</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6 col-xl-3">
+                      <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                          <div class="d-flex align-items-start justify-content-between">
+                            <div>
+                              <div class="text-muted small">Score promedio</div>
+                              <div class="fs-3 fw-semibold" id="kpiAvg">—</div>
+                            </div>
+                            <span class="badge rounded-pill text-bg-secondary">0–100</span>
+                          </div>
+                          <div class="small text-muted mt-2">Calidad global de captura</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6 col-xl-3">
+                      <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                          <div class="d-flex align-items-start justify-content-between">
+                            <div>
+                              <div class="text-muted small">% completos (≥80)</div>
+                              <div class="fs-3 fw-semibold" id="kpiPct80">—</div>
+                            </div>
+                            <span class="badge rounded-pill text-bg-success">OK</span>
+                          </div>
+                          <div class="small text-muted mt-2"><span id="kpiCompletos80">—</span> perfiles completos</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6 col-xl-3">
+                      <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                          <div class="d-flex align-items-start justify-content-between">
+                            <div>
+                              <div class="text-muted small">Críticos (&lt;50)</div>
+                              <div class="fs-3 fw-semibold" id="kpiCrit">—</div>
+                            </div>
+                            <span class="badge rounded-pill text-bg-danger">Alerta</span>
+                          </div>
+                          <div class="small text-muted mt-2">Revisar y completar</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Charts + Tabla -->
+                  <div class="row g-3 mt-1">
+                    <div class="col-12 col-xl-4">
+                      <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-semibold">Completitud global</div>
+                            <span class="badge text-bg-light border">≥80</span>
+                          </div>
+                          <div class="ratio ratio-1x1">
+                            <canvas id="chartCompleto"></canvas>
+                          </div>
+                          <div class="text-muted small mt-2" id="lblCompletoDetail">—</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-12 col-xl-8">
+                      <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-semibold">% completos por capturista (Top 10)</div>
+                            <span class="badge text-bg-light border">Ranking</span>
+                          </div>
+                          <div style="height: 340px;">
+                            <canvas id="chartUsuarios"></canvas>
+                          </div>
+                          <div class="text-muted small mt-2">Ordenado por score promedio y % completos</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-12">
+                      <div class="card shadow-sm">
+                        <div class="card-body">
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-semibold">Detalle por capturista</div>
+                            <span class="badge text-bg-light border">Calidad</span>
+                          </div>
+
+                          <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                              <thead class="table-light">
+                                <tr>
+                                  <th>Usuario</th>
+                                  <th class="text-end">Total</th>
+                                  <th class="text-end">Score prom.</th>
+                                  <th class="text-end">% completos ≥80</th>
+                                  <th class="text-end">Completos</th>
+                                </tr>
+                              </thead>
+                              <tbody id="tblUsuariosKpi">
+                                <tr><td colspan="5" class="text-muted">Cargando…</td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row g-3 mt-2">
+                  <div class="col-12 col-xl-8">
+                    <div class="card shadow-sm h-100">
+                      <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                          <div class="fw-semibold">Top 10 municipios por número de actores</div>
+                          <span class="badge text-bg-light border">Municipio trabajo político</span>
+                        </div>
+                        <div style="height: 360px;">
+                          <canvas id="chartMunicipiosTop"></canvas>
+                        </div>
+                        <div class="text-muted small mt-2" id="lblMunResumen">—</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12 col-xl-4">
+                    <div class="card shadow-sm h-100 border-danger">
+                      <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                          <div class="fw-semibold text-danger">
+                            <i class="bi bi-exclamation-triangle me-1"></i> Municipios sin registros
+                          </div>
+                          <span class="badge text-bg-danger" id="badgeMunCero">—</span>
+                        </div>
+                        <div class="small text-muted mb-2">Prioridad de cobertura territorial</div>
+
+                        <div class="table-responsive" style="max-height: 310px;">
+                          <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                              <tr>
+                                <th>Municipio</th>
+                              </tr>
+                            </thead>
+                            <tbody id="tblMunCero">
+                              <tr><td class="text-muted">Cargando…</td></tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="card shadow-sm">
+                      <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                          <div class="fw-semibold">Bottom 10 municipios (con registros)</div>
+                          <span class="badge text-bg-light border">Menor cobertura</span>
+                        </div>
+
+                        <div class="table-responsive">
+                          <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                              <tr>
+                                <th>Municipio</th>
+                                <th class="text-end">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody id="tblMunBottom">
+                              <tr><td colspan="2" class="text-muted">Cargando…</td></tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                </section>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
     </div>
   </div>
 
@@ -493,6 +712,8 @@
 
   <!-- ✅ DASHBOARD AL FINAL -->
   <script src="/static/js/dashboard.js"></script>
+    <!--chart.js-->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <script>
   (async function bootUser() {
