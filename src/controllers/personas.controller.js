@@ -1669,3 +1669,187 @@ function header() {
   }
 };
 
+//kpi completitud de registros 
+exports.kpiCompletitud = async (req, res) => {
+  try {
+    const SQL = `
+      WITH base AS (
+        SELECT
+          p.id_persona,
+          p.creado_por,
+
+          -- Base fields
+          p.nombre,
+          p.municipio_trabajo_politico,
+          p.id_partido_actual,
+          p.escala_influencia,
+          p.id_tema_interes_central,
+          p.id_grupo_postulacion,
+          p.id_ideologia_politica,
+
+          -- flags
+          p.sin_servicio_publico,
+          p.ha_contendido_eleccion,
+          p.sin_controversias_publicas,
+
+          -- existence counts
+          EXISTS (SELECT 1 FROM datos_ine di WHERE di.id_persona = p.id_persona) AS has_ine,
+          (SELECT COUNT(*) FROM telefonos t WHERE t.id_persona = p.id_persona) AS n_telefonos,
+          (SELECT COUNT(*) FROM redes_sociales_persona rs WHERE rs.id_persona = p.id_persona) AS n_redes,
+          (SELECT COUNT(*) FROM formacion_academica fa WHERE fa.id_persona = p.id_persona) AS n_formacion,
+          (SELECT COUNT(*) FROM servicio_publico sp WHERE sp.id_persona = p.id_persona) AS n_serv_pub,
+          (SELECT COUNT(*) FROM elecciones_contendidas ec WHERE ec.id_persona = p.id_persona) AS n_elecciones,
+          EXISTS (SELECT 1 FROM capacidad_movilizacion cm WHERE cm.id_persona = p.id_persona) AS has_movilizacion,
+          (SELECT COUNT(*) FROM equipos_politicos ep WHERE ep.id_persona = p.id_persona) AS n_equipos,
+          (SELECT COUNT(*) FROM referentes_politicos rp WHERE rp.id_persona = p.id_persona) AS n_referentes,
+          (SELECT COUNT(*) FROM familiares_politica fp WHERE fp.id_persona = p.id_persona) AS n_familiares,
+          (SELECT COUNT(*) FROM participacion_organizaciones po WHERE po.id_persona = p.id_persona) AS n_orgs,
+          (SELECT COUNT(*) FROM controversias_persona c WHERE c.id_persona = p.id_persona) AS n_controversias
+
+        FROM personas p
+      ),
+
+      scored AS (
+        SELECT
+          b.*,
+
+          (
+            -- ===== Base (30)
+            (CASE WHEN NULLIF(TRIM(b.nombre), '') IS NOT NULL THEN 6 ELSE 0 END) +
+            (CASE WHEN b.municipio_trabajo_politico IS NOT NULL THEN 6 ELSE 0 END) +
+            (CASE WHEN b.id_partido_actual IS NOT NULL THEN 5 ELSE 0 END) +
+            (CASE WHEN b.escala_influencia IS NOT NULL THEN 5 ELSE 0 END) +
+            (CASE WHEN b.id_tema_interes_central IS NOT NULL THEN 4 ELSE 0 END) +
+            (CASE WHEN b.id_grupo_postulacion IS NOT NULL THEN 2 ELSE 0 END) +
+            (CASE WHEN b.id_ideologia_politica IS NOT NULL THEN 2 ELSE 0 END) +
+
+            -- ===== Secciones (70)
+            (CASE WHEN b.has_ine THEN 5 ELSE 0 END) +
+            (CASE WHEN b.n_telefonos > 0 THEN 10 ELSE 0 END) +
+            (CASE WHEN b.n_redes > 0 THEN 5 ELSE 0 END) +
+            (CASE WHEN b.n_formacion > 0 THEN 7 ELSE 0 END) +
+
+            -- Servicio público (10)
+            (CASE
+              WHEN b.sin_servicio_publico = true THEN 10
+              WHEN b.sin_servicio_publico = false AND b.n_serv_pub > 0 THEN 10
+              ELSE 0
+            END) +
+
+            -- Elecciones (10)
+            (CASE
+              WHEN b.ha_contendido_eleccion = false THEN 10
+              WHEN b.ha_contendido_eleccion = true AND b.n_elecciones > 0 THEN 10
+              ELSE 0
+            END) +
+
+            (CASE WHEN b.has_movilizacion THEN 6 ELSE 0 END) +
+            (CASE WHEN b.n_equipos > 0 THEN 4 ELSE 0 END) +
+            (CASE WHEN b.n_referentes > 0 THEN 4 ELSE 0 END) +
+            (CASE WHEN b.n_familiares > 0 THEN 4 ELSE 0 END) +
+            (CASE WHEN b.n_orgs > 0 THEN 3 ELSE 0 END) +
+
+            -- Controversias (3)
+            (CASE
+              WHEN b.sin_controversias_publicas = true THEN 3
+              WHEN b.sin_controversias_publicas = false AND b.n_controversias > 0 THEN 3
+              ELSE 0
+            END)
+          )::int AS score
+
+        FROM base b
+      ),
+
+      global AS (
+        SELECT
+          COUNT(*)::int AS total_personas,
+          AVG(score)::numeric(5,2) AS score_promedio,
+          SUM(CASE WHEN score >= 80 THEN 1 ELSE 0 END)::int AS completos_80,
+          ROUND(100.0 * SUM(CASE WHEN score >= 80 THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 2) AS pct_completos_80,
+          SUM(CASE WHEN score < 50 THEN 1 ELSE 0 END)::int AS criticos_lt50
+        FROM scored
+      ),
+
+      por_usuario AS (
+        SELECT
+          u.id_usuario,
+          u.nombre,
+          u.email,
+          COUNT(s.id_persona)::int AS total,
+          AVG(s.score)::numeric(5,2) AS score_promedio,
+          SUM(CASE WHEN s.score >= 80 THEN 1 ELSE 0 END)::int AS completos_80,
+          ROUND(100.0 * SUM(CASE WHEN s.score >= 80 THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 2) AS pct_completos_80
+        FROM scored s
+        JOIN usuarios u ON u.id_usuario = s.creado_por
+        GROUP BY u.id_usuario, u.nombre, u.email
+        ORDER BY score_promedio DESC, total DESC
+      )
+
+      SELECT
+        (SELECT row_to_json(global) FROM global) AS global,
+        (SELECT COALESCE(json_agg(por_usuario), '[]'::json) FROM por_usuario) AS por_usuario;
+    `;
+
+    const { rows } = await pool.query(SQL);
+    return res.json(rows[0]);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Error KPI completitud", detail: e.message });
+  }
+};
+
+//kpi municipio trabajo político
+
+exports.kpiMunicipios = async (req, res) => {
+  try {
+    const SQL = `
+      WITH conteo AS (
+        SELECT
+          m.id_municipio,
+          m.nombre AS municipio,
+          COUNT(p.id_persona)::int AS total
+        FROM municipios m
+        LEFT JOIN personas p
+          ON p.municipio_trabajo_politico = m.id_municipio
+        GROUP BY m.id_municipio, m.nombre
+      ),
+      resumen AS (
+        SELECT
+          COUNT(*)::int AS total_municipios,
+          SUM(CASE WHEN total > 0 THEN 1 ELSE 0 END)::int AS municipios_con_registros,
+          SUM(CASE WHEN total = 0 THEN 1 ELSE 0 END)::int AS municipios_sin_registros,
+          SUM(total)::int AS total_personas
+        FROM conteo
+      ),
+      top10 AS (
+        SELECT * FROM conteo
+        ORDER BY total DESC, municipio ASC
+        LIMIT 10
+      ),
+      bottom10 AS (
+        SELECT * FROM conteo
+        WHERE total > 0
+        ORDER BY total ASC, municipio ASC
+        LIMIT 10
+      ),
+      cero AS (
+        SELECT * FROM conteo
+        WHERE total = 0
+        ORDER BY municipio ASC
+      )
+      SELECT
+        (SELECT row_to_json(resumen) FROM resumen) AS resumen,
+        (SELECT COALESCE(json_agg(top10), '[]'::json) FROM top10) AS top10,
+        (SELECT COALESCE(json_agg(bottom10), '[]'::json) FROM bottom10) AS bottom10,
+        (SELECT COALESCE(json_agg(cero), '[]'::json) FROM cero) AS cero,
+        (SELECT COALESCE(json_agg(conteo ORDER BY municipio), '[]'::json) FROM conteo) AS conteo;
+    `;
+
+    const { rows } = await pool.query(SQL);
+    return res.json(rows[0]);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Error KPI municipios", detail: e.message });
+  }
+};
+
