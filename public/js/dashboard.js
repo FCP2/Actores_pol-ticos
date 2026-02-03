@@ -14,6 +14,14 @@ let gridState = {
   q: '',
   pageSize: 25
 };
+
+//kpi compeltitud
+let chartCompleto = null;
+let chartUsuarios = null;
+
+//kpi municipios con o sin actores municipio_trabajo_politico
+let chartMunTop = null;
+
 //debounce (para búsqueda)
 function debounce(fn, wait = 300) {
   let t = null;
@@ -167,6 +175,8 @@ async function generarPDFPersona(idPersona){
   URL.revokeObjectURL(url);
 }
 
+
+
 function applySearch(){
   const q = norm(document.getElementById('searchInput').value);
   const filtered = !q ? personasCache : personasCache.filter(p => norm(p.nombre).includes(q));
@@ -234,6 +244,7 @@ async function initDashboard(){
   // 4) init map y dibujar
   initMap();
   drawMunicipios(municipiosConPoligono);
+  await loadAndPaintMunicipioCoverage();
 
   // 5) llenar select desde BD
   const sel = document.getElementById('selMunicipio');
@@ -259,7 +270,22 @@ async function initDashboard(){
     // const rows = await apiGet(`/personas?municipio_trabajo=${id}`);
     // ...
   });
+    document.getElementById("btnResetMap")?.addEventListener("click", () => {
+      // reset select
+      const sel = document.getElementById("selMunicipio");
+      if (sel) sel.value = "";
 
+      // reset titulo
+      const title = document.getElementById("munTitle");
+      if (title) title.textContent = "Estado de México";
+
+      // opcional: limpiar tarjetas
+      const cont = document.getElementById("cardsContainer");
+      if (cont) cont.innerHTML = `<div class="alert alert-light border mb-0">Selecciona un municipio para ver registros.</div>`;
+
+      // reset mapa con cobertura
+      resetMapCoverageView();
+    });
   //buscador
   document.getElementById('searchInput').addEventListener('input', applySearch);
 }
@@ -956,6 +982,238 @@ function fillSelectMunicipios(selectEl, municipios) {
     municipios.map(m => `<option value="${m.id_municipio}">${esc(m.nombre)}</option>`).join('');
   if (current) selectEl.value = current;
 }
+//kpi completitud
+
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return "—";
+  return `${Number(n).toFixed(2)}%`;
+}
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return "—";
+  return String(n);
+}
+
+async function loadKpisCompletitud() {
+  // Endpoint nuevo
+  const data = await apiGet("/personas/admin/kpis/completitud");
+  const g = data?.global || {};
+  const users = data?.por_usuario || [];
+
+  // KPIs
+  document.getElementById("kpiTotal").textContent = fmtNum(g.total_personas);
+  document.getElementById("kpiAvg").textContent = (g.score_promedio != null ? Number(g.score_promedio).toFixed(2) : "—");
+  document.getElementById("kpiPct80").textContent = fmtPct(g.pct_completos_80);
+  document.getElementById("kpiCompletos80").textContent = fmtNum(g.completos_80);
+  document.getElementById("kpiCrit").textContent = fmtNum(g.criticos_lt50);
+
+  // Label detalle dona
+  const incompletos = (g.total_personas || 0) - (g.completos_80 || 0);
+  document.getElementById("lblCompletoDetail").textContent =
+    `Completos: ${fmtNum(g.completos_80)} | Incompletos: ${fmtNum(incompletos)} | Total: ${fmtNum(g.total_personas)}`;
+
+  // Chart: dona completitud global
+  const ctx1 = document.getElementById("chartCompleto");
+  if (chartCompleto) chartCompleto.destroy();
+
+  chartCompleto = new Chart(ctx1, {
+    type: "doughnut",
+    data: {
+      labels: ["Completos (≥80)", "Incompletos"],
+      datasets: [{
+        data: [g.completos_80 || 0, incompletos || 0]
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { enabled: true }
+      }
+    }
+  });
+
+  // Chart: barras % completos por usuario (Top 10)
+  const top = [...users].slice(0, 10);
+  const labels = top.map(u => u.nombre || u.email || `Usuario ${u.id_usuario}`);
+  const pct = top.map(u => Number(u.pct_completos_80 || 0));
+
+  const ctx2 = document.getElementById("chartUsuarios");
+  if (chartUsuarios) chartUsuarios.destroy();
+
+  chartUsuarios = new Chart(ctx2, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "% completos ≥80",
+        data: pct
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, max: 100 }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (c) => `${Number(c.raw).toFixed(2)}%`
+          }
+        }
+      }
+    }
+  });
+
+  // Tabla detalle
+  const tbody = document.getElementById("tblUsuariosKpi");
+  if (!users.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-muted">Sin datos</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = users.map(u => {
+    const nombre = (u.nombre || u.email || `Usuario ${u.id_usuario}`);
+    const score = (u.score_promedio != null ? Number(u.score_promedio).toFixed(2) : "—");
+    const pct80 = (u.pct_completos_80 != null ? `${Number(u.pct_completos_80).toFixed(2)}%` : "—");
+    return `
+      <tr>
+        <td class="text-truncate" style="max-width: 420px;">
+          <div class="fw-semibold">${nombre}</div>
+          <div class="text-muted small">${u.email || ""}</div>
+        </td>
+        <td class="text-end">${u.total ?? "—"}</td>
+        <td class="text-end">${score}</td>
+        <td class="text-end">${pct80}</td>
+        <td class="text-end">${u.completos_80 ?? "—"}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function initKpisUI() {
+  document.getElementById("btnRefreshKpis")?.addEventListener("click", () => {
+    loadKpisMunicipios().catch(err => {
+      console.error(err);
+      alert("No se pudieron cargar los KPIs: " + (err.message || err));
+    });
+
+    loadKpisCompletitud().catch(err => {
+      console.error(err);
+      alert("No se pudieron cargar los KPIs: " + (err.message || err));
+    });
+
+  });
+
+  // Carga inicial
+  loadKpisCompletitud().catch(err => {
+    console.error(err);
+    alert("No se pudieron cargar los KPIs: " + (err.message || err));
+  });
+}
+
+//kpi municipios con o sin actores municipio_trabajo_politico
+
+async function loadKpisMunicipios() {
+  const data = await apiGet("/personas/admin/kpis/municipios");
+  const r = data?.resumen || {};
+  const top10 = data?.top10 || [];
+  const bottom10 = data?.bottom10 || [];
+  const cero = data?.cero || [];
+
+  // Resumen textual
+  const lbl = document.getElementById("lblMunResumen");
+  if (lbl) {
+    lbl.textContent = `Municipios: ${r.total_municipios ?? "—"} | Con registros: ${r.municipios_con_registros ?? "—"} | Sin registros: ${r.municipios_sin_registros ?? "—"} | Total actores: ${r.total_personas ?? "—"}`;
+  }
+
+  // Badge de cero
+  const badge = document.getElementById("badgeMunCero");
+  if (badge) badge.textContent = (r.municipios_sin_registros ?? cero.length ?? "—");
+
+  // Chart Top 10
+  const labels = top10.map(x => x.municipio);
+  const values = top10.map(x => Number(x.total || 0));
+
+  const c = document.getElementById("chartMunicipiosTop");
+  if (c) {
+    if (chartMunTop) chartMunTop.destroy();
+    chartMunTop = new Chart(c, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{ label: "Actores", data: values }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
+
+  // Tabla municipios cero
+  const tbCero = document.getElementById("tblMunCero");
+  if (tbCero) {
+    if (!cero.length) {
+      tbCero.innerHTML = `<tr><td class="text-muted">Sin municipios en cero 🎉</td></tr>`;
+    } else {
+      tbCero.innerHTML = cero.map(m => `<tr><td>${m.municipio}</td></tr>`).join("");
+    }
+  }
+
+  // Tabla bottom 10
+  const tbBottom = document.getElementById("tblMunBottom");
+  if (tbBottom) {
+    if (!bottom10.length) {
+      tbBottom.innerHTML = `<tr><td colspan="2" class="text-muted">Sin datos</td></tr>`;
+    } else {
+      tbBottom.innerHTML = bottom10.map(m => `
+        <tr>
+          <td>${m.municipio}</td>
+          <td class="text-end">${m.total}</td>
+        </tr>
+      `).join("");
+    }
+  }
+}
+
+//map vs kpi
+async function loadAndPaintMunicipioCoverage(){
+  // endpoint KPI (debe traer conteo completo o al menos top/bottom/cero)
+  const data = await apiGet("/personas/admin/kpis/municipios");
+
+  // Ideal: que el endpoint regrese "conteo" con TODOS.
+  // Si aún no lo tienes, te digo cómo ajustarlo.
+  const conteo = data?.conteo || [];
+
+  // Si no hay conteo completo, no podemos pintar todos.
+  if (!conteo.length) {
+    console.warn("KPI municipios: no viene 'conteo' completo. Ajusta endpoint para incluirlo.");
+    return;
+  }
+
+  // Construye Map id->total
+  const countsMap = new Map(conteo.map(x => [Number(x.id_municipio), Number(x.total || 0)]));
+
+  // Esta función está en map.js
+  setMunicipioCoverageCounts(countsMap);
+}
+
+// Llama esto cuando tu dashboard ya esté listo
+document.addEventListener("DOMContentLoaded", () => {
+  let loaded = false;
+
+  document.getElementById("tab-kpis")?.addEventListener("shown.bs.tab", () => {
+    if (!loaded) {
+      initKpisUI();
+      loadKpisMunicipios();      // municipios
+      loaded = true;
+    }
+  });
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   
