@@ -1,7 +1,8 @@
-
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require("fs");
 
 const apiRoutes = require('./routes');
 const { requireAuth, requireRole } = require('./middlewares/auth');
@@ -32,17 +33,25 @@ app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'dashboard.html'));
 });
 
+// ✅ Ruta del disco (Render mount path)
+app.set("trust proxy", 1);
+
+const DISK_MOUNT = process.env.DISK_MOUNT_PATH || "/var/data";
+const UPLOAD_DIR = path.join(DISK_MOUNT, "uploads");
+
+// crea carpeta si no existe
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// ✅ servir archivos subidos
+app.use("/uploads", express.static(UPLOAD_DIR)); // express.static docs :contentReference[oaicite:2]{index=2}
+app.use("/api/upload", require("./routes/upload.routes"));
+
 // ✅ API
 app.use('/api', apiRoutes);
 
 // ✅ status opcional
 app.get('/api-status', (req, res) => {
   res.send('API funcionando correctamente 🚀');
-});
-
-// Health check (Render)
-app.get('/health', (req, res) => {
-  res.status(200).send('ok');
 });
 
 module.exports = app;
