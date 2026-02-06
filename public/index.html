@@ -102,103 +102,102 @@
             <button type="button" class="btn btn-outline-danger" id="btnEliminarBorrador" disabled>
               Eliminar borrador
             </button>
+
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="offcanvas" data-bs-target="#offcanvasPersonas">
+              📋 Editar / Eliminar
+            </button>
           </div>
         </div>
       </div>
       <form id="personaForm">
+      <!-- ================== PERSONA ================== -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="mb-3 card-header-custom">Información personal</h5> <!-- Clase de tu preferencia para Montserrat/blanco [cite:5] -->
 
-        <!-- ================== PERSONA ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <h5 class="mb-3">Información personal</h5>
+          <div class="row g-3">
+            <!-- FOTO A LA IZQUIERDA - Nueva columna dedicada -->
+            <div class="col-md-3">
+              <label class="form-label">Foto</label>
+              <input class="form-control" type="file" id="inpFoto" accept="image/*">
+              <div class="form-text">JPG/PNG/WebP, máximo 3MB.</div>
+              <img id="previewFoto" class="img-thumbnail d-none mt-2" style="max-height:180px; width:150px;">
+              <input type="hidden" name="foto_url" id="foto_url">
+            </div>
 
-            <div class="row g-3">
-              <div class="col-md-12">
-                <label class="form-label required">Nombre completo</label>
-                <input class="form-control" name="nombre" required placeholder="Ej. Juan Carlos Hernández López">
-              </div>
-
-              <div class="col-md-4">
-                <label class="form-label">CURP</label>
-                <input class="form-control" name="curp" maxlength="18">
-              </div>
-
-              <div class="col-md-4">
-                <label class="form-label">RFC</label>
-                <input class="form-control" name="rfc" maxlength="13">
-              </div>
-
-              <div class="col-md-4">
-                <label class="form-label">Clave de elector</label>
-                <input class="form-control" name="clave_elector" maxlength="20">
-              </div>
-
-              <div class="col-md-4">
-                <label class="form-label">Estado civil</label>
-                <select class="form-select" name="estado_civil">
-                  <option value="">Seleccione</option>
-                  <option value="Soltero">Soltero</option>
-                  <option value="Casado">Casado</option>
-                  <option value="Divorciado">Divorciado</option>
-                  <option value="Viudo">Viudo</option>
-                  <option value="Concubinato">Concubinato</option>
-                </select>
-              </div>
-
-              <div class="col-md-4">
-                <label class="form-label">Escala de influencia</label>
-                <select class="form-select" name="escala_influencia">
-                  <option value="">Seleccione</option>
-                  <option value="municipal">Municipal</option>
-                  <option value="regional">Regional</option>
-                  <option value="distrital">Distrital</option>
-                  <option value="estatal">Estatal</option>
-                  <option value="nacional">Nacional</option>
-                </select>
-              </div>
-
-              <div class="col-md-4">
-                <label class="form-label">¿Ha contendido elección?</label>
-                <select class="form-select" name="ha_contendido_eleccion">
-                  <option value="">(sin definir)</option>
-                  <option value="true">Sí</option>
-                  <option value="false">No</option>
-                </select>
-              </div>
-
-              <div class="col-md-6">
-                <div class="form-check mt-4">
-                  <input class="form-check-input" type="checkbox" id="sin_sp" name="sin_servicio_publico">
-                  <label class="form-check-label" for="sin_sp">
-                    No ha ocupado cargos en el servicio público
-                  </label>
+            <!-- CAMPOS PERSONALES - Resto del espacio -->
+            <div class="col-md-9">
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label required">Nombre(s)</label>
+                  <input class="form-control" name="nombre" required placeholder="Ej. Juan Carlos">
                 </div>
-              </div>
+                <div class="col-md-4">
+                  <label class="form-label">Apellido paterno</label>
+                  <input class="form-control" name="apellido_paterno">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Apellido materno</label>
+                  <input class="form-control" name="apellido_materno">
+                </div>
 
-              <div class="col-md-6">
+                <div class="col-md-4">
+                  <label class="form-label">CURP</label>
+                  <input class="form-control" name="curp" maxlength="18">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">RFC</label>
+                  <input class="form-control" name="rfc" maxlength="13">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Clave de elector</label>
+                  <input class="form-control" name="clave_elector" maxlength="20">
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Estado civil</label>
+                  <select class="form-select" name="estado_civil">
+                    <option value="">Seleccione</option>
+                    <option value="Soltero">Soltero</option>
+                    <option value="Casado">Casado</option>
+                    <option value="Divorciado">Divorciado</option>
+                    <option value="Viudo">Viudo</option>
+                    <option value="Concubinato">Concubinato</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Nivel de alcance territorial</label>
+                  <select class="form-select" name="escala_influencia">
+                    <option value="">Seleccione</option>
+                    <option value="municipal">Municipal</option>
+                    <option value="regional">Regional</option>
+                    <option value="distrital">Distrital</option>
+                    <option value="estatal">Estatal</option>
+                    <option value="nacional">Nacional</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div class="card mb-4">
-          <div class="card-body">
-            <h5 class="mb-3">Datos INE</h5>
-              <div class="row g-3">
-                  <div class="col-md-4">
-                    <label class="form-label">Sección electoral</label>
-                    <input class="form-control" name="ine_seccion" maxlength="4" placeholder="Ej. 1234">
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label">Distrito federal</label>
-                    <input class="form-control" name="ine_df" maxlength="2" placeholder="Ej. 05">
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label">Distrito local</label>
-                    <input class="form-control" name="ine_dl" maxlength="2" placeholder="Ej. 12">
-                  </div>
+
+          <!-- SEPARADOR -->
+          <hr class="my-4">
+
+          <!-- ================== FAMILIARES EN POLITICA ================== -->
+          <!-- Ahora correctamente posicionado DENTRO del card principal -->
+          <div class="card shadow-sm mb-0"> <!-- mb-0 para no duplicar margen -->
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0"><i class="bi bi-people me-2"></i>Familiares en política / administración pública</h6>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddFamiliar">
+                  <i class="bi bi-plus-circle me-1"></i>+ Agregar
+                </button>
               </div>
+              <div id="familiaresContainer"></div>
+            </div>
           </div>
         </div>
+      </div>
 
         <!-- ================== MUNICIPIOS ================== -->
         <div class="card mb-4">
@@ -238,7 +237,20 @@
                   </label>
                 </div>
               </div>
-
+              <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label">Sección electoral</label>
+                    <input class="form-control" name="ine_seccion" maxlength="4" placeholder="Ej. 1234">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Distrito federal</label>
+                    <input class="form-control" name="ine_df" maxlength="2" placeholder="Ej. 05">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Distrito local</label>
+                    <input class="form-control" name="ine_dl" maxlength="2" placeholder="Ej. 12">
+                  </div>
+              </div>
             </div>
           </div>
         </div>
@@ -271,6 +283,16 @@
                 <input class="form-control" id="fa_institucion" name="fa_institucion" placeholder="Ej. UAEM">
                 <div class="invalid-feedback">Requerido para Educación Superior o Posgrado.</div>
               </div>
+
+              <div class="col-12 col-md-4 d-none" id="faTituladoWrap">
+                <label class="form-label">Titulado</label>
+                <select class="form-select" id="fa_titulado" name="fa_titulado">
+                  <option value="">Seleccione</option>
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+
             </div>
 
             <div class="small text-muted mt-2">
@@ -324,17 +346,80 @@
           </div>
         </div>
 
-        <!-- ================== SERVICIO PUBLICO ================== -->
-        <div class="card mb-4" id="cardServicioPublico">
+        <!-- ================== TRAYECTORIA POLÍTICA ================== -->
+        <div class="card mb-4">
           <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="mb-0">Servicio público</h5>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddServicio">+ Agregar</button>
+            <!-- ===== ELECCIÓN POPULAR ===== -->
+            <div class="mb-4">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Cargos de elección popular</h5>
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" id="chkSinCargosEleccion">
+                  <label class="form-check-label" for="chkSinCargosEleccion">
+                    No ha ocupado cargos de elección popular
+                  </label>
+                </div>
+              </div>
+
+              <div id="cargosEleccionSection">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0">Detalle de cargos</h6>
+                  <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddCargoEleccion">
+                    + Agregar
+                  </button>
+                </div>
+
+                <div class="small text-muted mb-2">
+                  Indica únicamente cargos obtenidos por elección popular.
+                </div>
+
+                <div id="cargosEleccionContainer"></div>
+              </div>
             </div>
-            <div class="small-muted mb-3">Si marcaste “No ha ocupado…”, puedes dejarlo vacío.</div>
-            <div id="servicioContainer"></div>
+
+            <hr class="my-4">
+
+            <!-- ===== SERVICIO PÚBLICO ===== -->
+            <div class="mb-4">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Servicio Público</h5>
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" id="sin_sp" name="sin_servicio_publico">
+                  <label class="form-check-label" for="sin_sp">
+                    No ha ocupado cargos en el servicio público
+                  </label>
+                </div>
+              </div>
+
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddServicio" style="margin-bottom: 1rem;">
+                + Agregar
+              </button>
+
+              <div id="servicioPublicoSection">
+                <div class="small text-muted mb-3">
+                  Registra cargos desempeñados en la administración pública (no necesariamente de elección).
+                </div>
+                <div id="servicioContainer"></div>
+              </div>
+            </div>
+            <hr class="my-4">
+            <!-- ===== EXPERIENCIA LABORAL (FUERA SP) ===== -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Experiencia laboral relevante (fuera del servicio público)</h5>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddExpLab">
+                + Agregar
+              </button>
+            </div>
+
+            <div class="small text-muted mb-3">
+              Incluye empleos o cargos relevantes en empresas, organizaciones, asociaciones, etc.
+            </div>
+
+            <div id="expLabContainer"></div>
           </div>
         </div>
+
+ 
         <!-- ================== MILITANCIA E IDEOLOGÍA / TRABAJO POLÍTICO ================== -->
         <div class="card mb-4">
           <div class="card-body">
@@ -349,23 +434,40 @@
             </div>
               <!-- Partido actual -->
               <div class="col-12 col-md-4">
-                <label class="form-label">Trayectoria política (Partido político)</label>
+                <label class="form-label">Partido político actual</label>
                 <select class="form-select" id="selPartidoActual" name="id_partido_actual">
                   <option value="">Seleccione</option>
                 </select>
+
+                <div class="mt-2 d-none" id="partidoOtroWrap">
+                  <label class="form-label">Especifique partido</label>
+                  <input
+                    class="form-control"
+                    id="partidoOtroTexto"
+                    name="partido_otro_texto"
+                    placeholder="Captura el nombre del partido"
+                  >
+                  <div class="form-text">Solo aplica si seleccionas “Otro”.</div>
+                </div>
               </div>
 
-              <!-- Tema interés central -->
-              <div class="col-12 col-md-4">
-                <label class="form-label">Tema de interés político central</label>
-                <select class="form-select" id="selTemaInteres" name="id_tema_interes_central">
-                  <option value="">Seleccione</option>
-                </select>
+              <!-- Tema(s) de interés político central -->
+              <div class="col-12">
+                <label class="form-label">Tema(s) de interés político central</label>
+                <div id="temasInteresChecks" class="border rounded p-2 bg-light" style="max-height: 180px; overflow:auto;">
+                  <div class="text-muted small">Cargando temas…</div>
+                </div>
+                <!-- “Otro” -->
+                <div class="mt-2 d-none" id="temaOtroWrap">
+                  <label class="form-label">Especifique “Otro”</label>
+                  <input class="form-control" id="temaOtroTexto" placeholder="Captura el tema">
+                  <div class="form-text">Solo aplica si seleccionas “Otro”.</div>
+                </div>
               </div>
 
               <!-- Grupo postulación (single) -->
               <div class="col-12 col-md-4">
-                <label class="form-label">Grupo de postulación prioritario</label>
+                <label class="form-label">Accion afirmativa aplicable</label>
                 <select class="form-select" id="selGrupoPostulacion" name="id_grupo_postulacion">
                   <option value="">Seleccione</option>
                 </select>
@@ -384,7 +486,7 @@
 
             <!-- Participación en otros partidos / organizaciones -->
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
-              <h6 class="mb-0">Participación en otros partidos u organizaciones</h6>
+              <h6 class="mb-0">Antecedentes de Participación en otros partidos u organizaciones</h6>
               <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddParticipacion">+ Agregar</button>
             </div>
             <div id="participacionContainer"></div>
@@ -394,40 +496,58 @@
         <!-- ================== EFECTIVIDAD ELECTORAL ================== -->
         <div class="card mb-4">
           <div class="card-body">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
-              <div>
-                <h5 class="mb-0">Efectividad electoral</h5>
-                <div class="text-muted small">Elecciones contendidas y capacidad de movilización</div>
-              </div>
 
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddEleccion">
-                + Agregar elección
-              </button>
+            <div class="row g-3 align-items-end mb-3">
+              <div class="col-12 col-md-4">
+                <label class="form-label">¿Participó en la contienda electoral?</label>
+                <select class="form-select" name="ha_contendido_eleccion" id="selHaContendido">
+                  <option value="">Seleccione...</option>
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
             </div>
 
-            <div id="eleccionesContainer" class="mb-3"></div>
+            <!-- ✅ SOLO SE MUESTRA SI RESPUESTA = SÍ -->
+            <div id="eleccionesWrap">
+              <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+                <div>
+                  <h5 class="mb-0">Efectividad electoral</h5>
+                  <div class="text-muted small">Elecciones contendidas</div>
+                </div>
 
-            <hr class="my-3">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddEleccion">
+                  + Agregar elección
+                </button>
+              </div>
 
-            <h6 class="mb-2">Capacidad de movilización</h6>
+              <div id="eleccionesContainer" class="mb-3"></div>
+
+              <hr class="my-3">
+            </div>
+
             <div class="row g-3">
-              <div class="col-12 col-md-6">
-                <label class="form-label">Eventos (últimos 3 años)</label>
-                <input class="form-control" type="number" min="0" name="mov_eventos" inputmode="numeric">
+              <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-2">
+                <div>
+                  <h6 class="mb-0">Eventos de movilización</h6>
+                  <div class="text-muted small">Nombre, fecha y asistencia por evento</div>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddMovEvento">
+                  + Agregar evento
+                </button>
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label">Asistencia promedio</label>
-                <input class="form-control" type="number" min="0" name="mov_asistencia" inputmode="numeric">
-              </div>
+
+              <div id="movEventosContainer"></div>
             </div>
+
           </div>
         </div>
+
 
         <!-- ================== EQUIPOS Y REFERENTES ================== -->
         <div class="card mb-4">
           <div class="card-body">
-            <h5 class="mb-3">Equipo y referentes</h5>
-
+            <h5 class="mb-3">Equipo<code> (Opcional)</code> y referentes políticos</h5>
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0">Equipos políticos</h6>
               <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddEquipo">+ Agregar</button>
@@ -480,18 +600,6 @@
                 <div id="controversiasContainer"></div>
               </div>
       </div>
-
-        <!-- ================== FAMILIARES EN POLITICA ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="mb-0">Familiares en política / administración pública</h5>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddFamiliar">+ Agregar</button>
-            </div>
-            <div id="familiaresContainer"></div>
-          </div>
-        </div>
-
         <!-- ================== SUBMIT ================== -->
         <div class="d-flex justify-content-end gap-2 mb-5">
           <button type="button" class="btn btn-outline-secondary" id="btnReset">Limpiar</button>
@@ -518,6 +626,24 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+    //funcion para ocultar efectividad electoral
+  function setEleccionesUIState() {
+    const sel = document.getElementById('selHaContendido');
+    const wrap = document.getElementById('eleccionesWrap');
+    if (!sel || !wrap) return;
+
+    const val = sel.value;                 // "true" | "false" | ""
+    const showElecciones = (val === 'true');
+
+    wrap.classList.toggle('d-none', !showElecciones);
+
+    // Si es NO, limpiamos elecciones para que no se envíen y no confundan
+    if (!showElecciones) {
+      const cont = document.getElementById('eleccionesContainer');
+      if (cont) cont.innerHTML = '';
+    }
+  }
+  
   function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -627,6 +753,9 @@
   let redesCatalog = [];
   let controversiasCatalog = [];
   let borradorActualId = null;
+  let temasCatalog = [];
+  let editingId = null;
+  let fotoUrlActual = null;
 
   function showAlert(type, msg) {
     const box = $('#alertBox');
@@ -642,6 +771,55 @@
     const n = Number(id);
     const m = (municipiosCache || []).find(x => Number(x.id_municipio) === n);
     return m?.nombre || null;
+  }
+
+  //editar persona cargar datos
+    function cancelEditing() {
+        // deja tu estado de edición limpio
+        editingId = null;
+  
+        // deshabilita botones
+        const btnSalir = document.getElementById('btnSalirEdicion');
+        const btnEliminar = document.getElementById('btnEliminarPersona');
+        if (btnSalir) btnSalir.disabled = true;
+        if (btnEliminar) btnEliminar.disabled = true;
+  
+        // opcional: reset del submit
+        const btnSubmit = document.getElementById('btnSubmitPersona');
+        if (btnSubmit) btnSubmit.textContent = 'Guardar';
+  
+        // limpia formulario
+        if (typeof clearAll === 'function') clearAll();
+        if (typeof refreshPreview === 'function') refreshPreview();
+      }
+    async function onEditPersona(id_persona) {
+    try {
+      const payload = await apiGet(`/personas/${id_persona}/payload`);
+      applyPayloadToForm(payload);     // 👈 tu función actual
+      setEditing(id_persona);          // 👈 activa modo edición
+      showAlert("info", `Editando registro #${id_persona}`);
+    } catch (e) {
+      console.error(e);
+      showAlert("danger", "No pude cargar el registro para editar: " + e.message);
+    }
+  }
+  //detele
+  async function onDeletePersona(id_persona) {
+    const ok = confirm(`¿Eliminar el registro #${id_persona}? Esta acción no se puede deshacer.`);
+    if (!ok) return;
+  
+    try {
+      await apiDelete(`/personas/${id_persona}`);
+      showAlert("success", `Eliminado ✅ (#${id_persona})`);
+  
+      // si justo estabas editando ese registro
+      if (editingId === Number(id_persona)) cancelEditing();
+  
+      if (typeof reloadPanelPersonas === "function") await reloadPanelPersonas();
+    } catch (e) {
+      console.error(e);
+      showAlert("danger", "No pude eliminar: " + e.message);
+    }
   }
 
   function generarTituloBorrador(payload) {
@@ -692,6 +870,8 @@
     };
 
     setVal('nombre', p.nombre);
+    setVal('apellido_paterno', p.apellido_paterno);
+    setVal('apellido_materno', p.apellido_materno);
     setVal('curp', p.curp);
     setVal('rfc', p.rfc);
     setVal('clave_elector', p.clave_elector);
@@ -727,14 +907,15 @@
       if ((items || []).length === 0) c.appendChild(createBlock());
     };
 
-    // 3) parejas (necesita temp_id)
+    // 3) parejas (ya migrado a periodo)
     rebuildList('parejasContainer', payload.parejas || [], parejaBlock, (b, it) => {
-      // respeta temp_id si venía
       if (it.temp_id) b.dataset.tempId = it.temp_id;
+
       b.querySelector('input[name="nombre_pareja"]').value = it.nombre_pareja || '';
       b.querySelector('select[name="tipo_relacion"]').value = it.tipo_relacion || '';
-      b.querySelector('input[name="fecha_inicio"]').value = it.fecha_inicio || '';
-      b.querySelector('input[name="fecha_fin"]').value = it.fecha_fin || '';
+
+      const inpPeriodo = b.querySelector('input[name="periodo"]');
+      if (inpPeriodo) inpPeriodo.value = it.periodo || '';
     });
 
     // refresca selects de hijos con parejas cargadas
@@ -770,23 +951,37 @@
     });
 
     // 8) elecciones
-    rebuildList('eleccionesContainer', payload.elecciones || [], eleccionBlock, (b, it) => {
-      b.querySelector('input[name="anio_eleccion"]').value = it.anio_eleccion || '';
-      b.querySelector('input[name="candidatura"]').value = it.candidatura || '';
-      b.querySelector('input[name="partido_postulacion"]').value = it.partido_postulacion || '';
-      b.querySelector('select[name="resultado"]').value = it.resultado || '';
-      b.querySelector('input[name="diferencia_votos"]').value = it.diferencia_votos || '';
-      b.querySelector('input[name="diferencia_porcentaje"]').value = it.diferencia_porcentaje || '';
-    });
+    // ===== EFECTIVIDAD ELECTORAL (Elecciones contendidas) =====
 
-    // 9) capacidad movilizacion (si tu form la tiene)
-    const mov = payload.capacidad_movilizacion || null;
-    if (mov) {
-      setVal('mov_eventos', mov.eventos_ultimos_3_anios);
-      setVal('mov_asistencia', mov.asistencia_promedio);
-    } else {
-      setVal('mov_eventos', '');
-      setVal('mov_asistencia', '');
+    // 1) Setear el select desde persona
+    const selHa = document.getElementById('selHaContendido');
+    if (selHa) {
+      selHa.value =
+        p.ha_contendido_eleccion === null || p.ha_contendido_eleccion === undefined
+          ? ''
+          : String(!!p.ha_contendido_eleccion);
+    }
+
+    // 🔹 BONUS: si hay elecciones pero el campo vino null, forzamos "Sí"
+    const tieneElecciones = (payload.elecciones || []).length > 0;
+    if (selHa && tieneElecciones && !selHa.value) {
+      selHa.value = 'true';
+    }
+
+    // 2) Aplicar UI (mostrar/ocultar wrapper)
+    // ⚠️ ESTO LIMPIA EL CONTENEDOR SI ES "NO"
+    setEleccionesUIState();
+
+    // 3) SOLO si está visible, reconstruimos elecciones
+    if (selHa && selHa.value === 'true') {
+      rebuildList('eleccionesContainer', payload.elecciones || [], eleccionBlock, (b, it) => {
+        b.querySelector('input[name="anio_eleccion"]').value = it.anio_eleccion || '';
+        b.querySelector('input[name="candidatura"]').value = it.candidatura || '';
+        b.querySelector('input[name="partido_postulacion"]').value = it.partido_postulacion || '';
+        b.querySelector('select[name="resultado"]').value = it.resultado || '';
+        b.querySelector('input[name="diferencia_votos"]').value = it.diferencia_votos || '';
+        b.querySelector('input[name="diferencia_porcentaje"]').value = it.diferencia_porcentaje || '';
+      });
     }
 
     // 10) equipos
@@ -795,17 +990,23 @@
       b.querySelector('select[name="activo"]').value = String(it.activo ?? true);
     });
 
-    // 11) referentes
+    // 11) referentes (ya migrado a nombres/apellidos)
     rebuildList('referentesContainer', payload.referentes || [], referenteBlock, (b, it) => {
       b.querySelector('select[name="nivel"]').value = it.nivel || '';
-      b.querySelector('input[name="nombre_referente"]').value = it.nombre_referente || '';
+
+      const n = b.querySelector('input[name="nombres"]');
+      const ap = b.querySelector('input[name="apellido_paterno"]');
+      const am = b.querySelector('input[name="apellido_materno"]');
+
+      if (n)  n.value  = it.nombres || '';
+      if (ap) ap.value = it.apellido_paterno || '';
+      if (am) am.value = it.apellido_materno || '';
     });
 
     // 12) controversias
     if (!document.getElementById('chkSinControversias').checked) {
       rebuildList('controversiasContainer', payload.controversias || [], controversiaBlock, (b, it) => {
         b.querySelector('select[name="id_tipo"]').value = it.id_tipo || '';
-        b.querySelector('select[name="estatus"]').value = it.estatus || '';
         b.querySelector('input[name="fecha_registro"]').value = it.fecha_registro || '';
         b.querySelector('textarea[name="descripcion"]').value = it.descripcion || '';
         b.querySelector('input[name="fuente"]').value = it.fuente || '';
@@ -820,6 +1021,78 @@
       b.querySelector('input[name="institucion"]').value = it.institucion || '';
     });
 
+    //14 ELECCION POPULAR
+    const chkSinCargos = document.getElementById('chkSinCargosEleccion');
+    if (chkSinCargos) chkSinCargos.checked = !!p.sin_cargos_eleccion_popular;
+
+    const cargos = payload.cargos_eleccion_popular || [];
+    rebuildList('cargosEleccionContainer', cargos, cargoEleccionBlock, (b, it) => {
+      b.querySelector('input[name="periodo"]').value = it.periodo || '';
+      b.querySelector('input[name="cargo"]').value = it.cargo || '';
+      b.querySelector('input[name="partido_postulante"]').value = it.partido_postulante || '';
+      b.querySelector('select[name="modalidad"]').value = it.modalidad || '';
+    });
+    // ✅ Formación académica (single)
+    const fa = (payload.formacion_academica || [])[0] || {};
+
+    const selNivel = document.querySelector('[name="fa_nivel"]') || document.getElementById('fa_nivel');
+    const inpGrado = document.querySelector('[name="fa_grado_obtenido"]') || document.getElementById('fa_grado_obtenido');
+    const inpInst  = document.querySelector('[name="fa_institucion"]') || document.getElementById('fa_institucion');
+    const selTit   = document.querySelector('[name="fa_titulado"]') || document.getElementById('fa_titulado');
+
+    // 1) set valores
+    if (selNivel) selNivel.value = fa.nivel || '';
+    if (inpGrado) inpGrado.value = fa.grado_obtenido || '';
+    if (inpInst)  inpInst.value  = fa.institucion || '';
+    if (selTit)   selTit.value   = (fa.titulado == null) ? '' : String(!!fa.titulado);
+
+    // 2) FORZAR UI (mostrar/ocultar) igual que cuando el usuario cambia el select
+    //    - si tienes una función, llámala
+    if (typeof toggleFormacionUI === 'function') {
+      toggleFormacionUI();
+    } else if (selNivel) {
+      // si no tienes función, fuerza el change para que se ejecute el listener que ya tengas
+      selNivel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    //✅ EVENTOS DE MOVILIZACION
+    rebuildList('movEventosContainer', payload.capacidad_movilizacion_eventos || [], movEventoBlock, (b, it) => {
+      b.querySelector('input[name="mov_nombre_evento"]').value = it.nombre_evento || '';
+
+      const inpFecha = b.querySelector('input[name="mov_fecha_evento"]');
+      if (inpFecha) {
+        const raw = it.fecha_evento;
+        // normaliza: "2026-02-05T..." -> "2026-02-05"
+        inpFecha.value = raw ? String(raw).slice(0, 10) : '';
+      }
+
+      b.querySelector('input[name="mov_asistencia_evento"]').value = (it.asistencia ?? '');
+    });
+    //✅ EXPERIENCIA LABORAL
+    rebuildList('expLabContainer', payload.experiencia_laboral || [], expLabBlock, (b, it) => {
+      b.querySelector('input[name="periodo"]').value = it.periodo || '';
+      b.querySelector('input[name="cargo"]').value = it.cargo || '';
+      b.querySelector('input[name="organizacion"]').value = it.organizacion || '';
+    });
+
+    //SIN SERVICIO PUBLICO
+    // Sin servicio público (ocultar sección)
+    const chkSP = document.getElementById('sin_sp');
+    if (chkSP) chkSP.checked = !!p.sin_servicio_publico;
+    if (typeof setSinServicioUI === 'function') setSinServicioUI();
+
+    // aplica toggle si existe
+    if (typeof setSinCargosUI === 'function') setSinCargosUI();
+    // Foto
+    fotoUrlActual = p.foto_url || null;
+
+    setVal('foto_url', fotoUrlActual);
+
+    const img = document.getElementById('previewFoto'); // ✅ mismo id que tu uploader
+    if (img) {
+      img.src = fotoUrlActual || '';
+      img.classList.toggle('d-none', !fotoUrlActual);
+    }
+
     // 1) Partido actual
     const selPartido = document.getElementById('selPartidoActual');
     if (selPartido) {
@@ -827,10 +1100,7 @@
     }
 
     // 2) Tema interés central
-    const selTema = document.getElementById('selTemaInteres');
-    if (selTema) {
-      selTema.value = payload?.persona?.id_tema_interes_central ?? '';
-    }
+   
 
     // 3) Texto “Otro”
     const inpOtro = document.getElementById('temaOtroTexto');
@@ -860,19 +1130,37 @@
       b.querySelector('input[name="po_periodo"]').value = it.periodo || '';
       b.querySelector('input[name="po_notas"]').value = it.notas || '';
     });
+    //7 construir temas interes
+    // Temas interés (checkboxes)
+    const temas = payload.temas_interes || [];
+    // limpiar checks
+    document.querySelectorAll('.tema-interes-chk').forEach(chk => chk.checked = false);
+
+    temas.forEach(t => {
+      const chk = document.querySelector(`.tema-interes-chk[data-id="${Number(t.id_tema)}"]`);
+      if (chk) chk.checked = true;
+    });
+
+    // texto de “Otro”
+    const otro = temas.find(t => t.otro_texto);
+    document.getElementById('temaOtroTexto').value = otro?.otro_texto || '';
+
+    toggleTemaOtroUI();
 
     document.getElementById('selIdeologia').value = payload?.persona?.id_ideologia_politica ?? '';
 
     refreshPreview();
   }
 
-  function fillSelect(sel, items, valueKey, labelKey) {
-    sel.innerHTML = '<option value="">Seleccione</option>';
-    items.forEach(it => {
+ function fillSelect(el, rows, valueKey, textKey, placeholder = 'Seleccione') {
+    if (!el) return; // ✅ evita error si el elemento no existe
+
+    el.innerHTML = `<option value="">${placeholder}</option>`;
+    (rows || []).forEach(r => {
       const opt = document.createElement('option');
-      opt.value = it[valueKey];
-      opt.textContent = it[labelKey];
-      sel.appendChild(opt);
+      opt.value = r[valueKey];
+      opt.textContent = r[textKey];
+      el.appendChild(opt);
     });
   }
 
@@ -880,6 +1168,46 @@
   const toBoolOrNull = (v) => (v === 'true') ? true : (v === 'false') ? false : null;
 
   // ---------- UI Blocks ----------
+  function movEventoBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item mb-2';
+
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-6">
+          <label class="form-label">Nombre del evento</label>
+          <input class="form-control" name="mov_nombre_evento" placeholder="Ej. Asamblea regional">
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label class="form-label">Fecha</label>
+          <input type="date" class="form-control" name="mov_fecha_evento">
+        </div>
+
+        <div class="col-12 col-md-2">
+          <label class="form-label">Asistencia</label>
+          <input type="number" min="0" class="form-control" name="mov_asistencia_evento" inputmode="numeric" placeholder="Ej. 220">
+        </div>
+
+        <div class="col-12 col-md-1 text-md-end">
+          <button type="button" class="btn btn-outline-danger btn-sm w-100 btnRemove">X</button>
+        </div>
+      </div>
+    `;
+
+    div.querySelector('.btnRemove').addEventListener('click', () => {
+      div.remove();
+      refreshPreview?.();
+    });
+
+    // refrescar preview con input/change en ese bloque
+    div.addEventListener('input', () => refreshPreview?.());
+    div.addEventListener('change', () => refreshPreview?.());
+
+    return div;
+  }
+
+
   function telefonoBlock() {
     const div = document.createElement('div');
     div.className = 'list-item';
@@ -965,54 +1293,95 @@
     });
     return div;
   }
+  //experiencia laboral 
+  function expLabBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label">Periodo</label>
+          <input class="form-control" name="periodo" placeholder="2018-2021" maxlength="9">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Cargo</label>
+          <input class="form-control" name="cargo" maxlength="120">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Organización o empresa</label>
+          <input class="form-control" name="organizacion" maxlength="150">
+        </div>
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
+      </div>
+    `;
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    return div;
+  }
 
-let parejaCounter = 0;
-function parejaBlock() {
-  parejaCounter += 1;
-  const tempId = `p_${parejaCounter}`;
-
-  const div = document.createElement('div');
-  div.className = 'list-item';
-  div.dataset.tempId = tempId;
-
-  div.innerHTML = `
-    <div class="row g-2 align-items-end">
-      <div class="col-md-5">
-        <label class="form-label">Nombre pareja</label>
-        <input class="form-control" name="nombre_pareja">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Tipo relación</label>
-        <select class="form-select" name="tipo_relacion">
-          <option value="">Seleccione</option>
-          <option value="actual">Actual</option>
-          <option value="anterior">Anterior</option>
-        </select>
-      </div>
-      <div class="col-md-2">
-        <label class="form-label">Inicio</label>
-        <input type="date" class="form-control" name="fecha_inicio">
-      </div>
-      <div class="col-md-2">
-        <label class="form-label">Fin</label>
-        <input type="date" class="form-control" name="fecha_fin">
-      </div>
-      <div class="col-12 text-end mt-2">
-        <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
-      </div>
-    </div>
-  `;
-
-  div.querySelector('.btnRemove').addEventListener('click', () => {
-    div.remove();
-    refreshHijosParejasSelects();
+  document.getElementById("btnAddExpLab").addEventListener("click", () => {
+    document.getElementById("expLabContainer").appendChild(expLabBlock());
   });
 
-  div.addEventListener('input', refreshHijosParejasSelects);
-  div.addEventListener('change', refreshHijosParejasSelects);
 
-  return div;
-}
+  let parejaCounter = 0;
+
+  function parejaBlock() {
+    parejaCounter += 1;
+    const tempId = `p_${parejaCounter}`;
+
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.dataset.tempId = tempId;
+
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label">Nombre pareja</label>
+          <input class="form-control" name="nombre_pareja" maxlength="150" autocomplete="off">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Tipo relación</label>
+          <select class="form-select" name="tipo_relacion">
+            <option value="">Seleccione</option>
+            <option value="actual">Actual</option>
+            <option value="anterior">Anterior</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">Año o periodo</label>
+          <input class="form-control" name="periodo"
+                placeholder="2025 o 2015-2025"
+                inputmode="numeric" autocomplete="off"
+                maxlength="9">
+          <div class="form-text">Formato: AAAA o AAAA-AAAA</div>
+          <div class="invalid-feedback">Usa 2025 o 2015-2025.</div>
+        </div>
+
+        <div class="col-12 text-end mt-2">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
+        </div>
+      </div>
+    `;
+
+    div.querySelector('.btnRemove').addEventListener('click', () => {
+      div.remove();
+      refreshHijosParejasSelects();
+    });
+
+    // opcional: permitir sólo dígitos, espacios y guion
+    div.addEventListener('input', () => {
+      const inp = div.querySelector('input[name="periodo"]');
+      if (inp) inp.value = inp.value.replace(/[^\d\- ]/g, '');
+      refreshHijosParejasSelects();
+    });
+    div.addEventListener('change', refreshHijosParejasSelects);
+
+    return div;
+  }
 
  function hijoBlock() {
   const div = document.createElement('div');
@@ -1030,7 +1399,7 @@ function parejaBlock() {
         <input type="number" class="form-control" name="anio_nacimiento" min="1900" max="2100">
       </div>
       <div class="col-md-3">
-        <label class="form-label">Sexo</label>
+        <label class="form-label">Género</label>
         <select class="form-select" name="sexo">
           <option value="">Seleccione</option>
           <option value="F">F</option>
@@ -1233,9 +1602,10 @@ function refreshHijosParejasSelects() {
   function referenteBlock() {
     const div = document.createElement('div');
     div.className = 'list-item';
+
     div.innerHTML = `
       <div class="row g-2 align-items-end">
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label">Nivel</label>
           <select class="form-select" name="nivel">
             <option value="">Seleccione</option>
@@ -1246,18 +1616,33 @@ function refreshHijosParejasSelects() {
             <option value="nacional">Nacional</option>
           </select>
         </div>
-        <div class="col-md-8">
-          <label class="form-label">Nombre referente</label>
-          <input class="form-control" name="nombre_referente">
+
+        <div class="col-md-3">
+          <label class="form-label">Nombre(s)</label>
+          <input class="form-control" name="nombres" autocomplete="off">
         </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Apellido paterno</label>
+          <input class="form-control" name="apellido_paterno" autocomplete="off">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Apellido materno</label>
+          <input class="form-control" name="apellido_materno" autocomplete="off">
+        </div>
+
         <div class="col-md-1 text-end">
           <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
         </div>
       </div>
     `;
+
     div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
     return div;
   }
+
+
     function setControversiasUIState() {
       const chk = document.getElementById('chkSinControversias');
       const btn = document.getElementById('btnAddControversia');
@@ -1297,17 +1682,9 @@ function refreshHijosParejasSelects() {
           <label class="form-label">Tipo</label>
           <select class="form-select" name="id_tipo"></select>
         </div>
+
         <div class="col-md-4">
-          <label class="form-label">Estatus</label>
-          <select class="form-select" name="estatus">
-            <option value="">Seleccione</option>
-            <option value="activa">Activa</option>
-            <option value="cerrada">Cerrada</option>
-            <option value="en_investigacion">En investigación</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Fecha</label>
+          <label class="form-label">Periodo</label>
           <input type="date" class="form-control" name="fecha_registro">
         </div>
 
@@ -1317,7 +1694,7 @@ function refreshHijosParejasSelects() {
         </div>
         <div class="col-md-4">
           <label class="form-label">Fuente</label>
-          <input class="form-control" name="fuente" placeholder="Medio / enlace / nota">
+          <input class="form-control" name="fuente" placeholder="Medio / enlace / nota / Núm. de expte.">
         </div>
 
         <div class="col-12 text-end">
@@ -1359,6 +1736,57 @@ function refreshHijosParejasSelects() {
     div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
     return div;
   }
+
+  //Eleccion popular
+  let cargoEleccionCounter = 0;
+
+  function cargoEleccionBlock() {
+    cargoEleccionCounter += 1;
+
+    const div = document.createElement("div");
+    div.className = "list-item";
+
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label">Periodo</label>
+          <input class="form-control" name="periodo" placeholder="2021 o 2018-2021" maxlength="9">
+          <div class="invalid-feedback">Usa AAAA o AAAA-AAAA.</div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Cargo</label>
+          <input class="form-control" name="cargo" maxlength="120">
+          <div class="invalid-feedback">Indica el cargo.</div>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Partido postulante</label>
+          <input class="form-control" name="partido_postulante" maxlength="120">
+        </div>
+
+        <div class="col-md-1">
+          <label class="form-label">MR/RP</label>
+          <select class="form-select" name="modalidad">
+            <option value="">—</option>
+            <option value="mr">MR</option>
+            <option value="rp">RP</option>
+          </select>
+        </div>
+
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
+      </div>
+    `;
+
+    div.querySelector(".btnRemove").addEventListener("click", () => div.remove());
+    return div;
+  }
+
+  document.getElementById("btnAddCargoEleccion").addEventListener("click", () => {
+    document.getElementById("cargosEleccionContainer").appendChild(cargoEleccionBlock());
+  });
 //funcion para habilitar los grados academicos:
 
   function toggleFormacionAcademicaUI() {
@@ -1367,8 +1795,15 @@ function refreshHijosParejasSelects() {
 
     const wrapGrado = $('#fa_grado_wrap');
     const wrapInst  = $('#fa_inst_wrap');
+    const wrapTitulado = document.getElementById('faTituladoWrap');
     const inpGrado  = $('#fa_grado_obtenido');
     const inpInst   = $('#fa_institucion');
+
+    wrapTitulado?.classList.toggle('d-none', !requiere);
+
+    if (!requiere) {
+      document.getElementById('fa_titulado').value = '';
+    }
 
     if (!wrapGrado || !wrapInst || !inpGrado || !inpInst) return;
 
@@ -1386,6 +1821,36 @@ function refreshHijosParejasSelects() {
       inpInst.classList.remove('is-invalid');
     }
   }
+  function toggleTemaOtroUI() {
+    const wrap = document.getElementById('temaOtroWrap');
+    const inp  = document.getElementById('temaOtroTexto');
+    if (!wrap || !inp) return;
+
+    const selectedIds = getSelectedTemasIds();
+    const requiereOtro = (temasCatalog || []).some(t =>
+      selectedIds.includes(Number(t.id_tema)) && !!t.requiere_otro_texto
+    );
+
+    wrap.classList.toggle('d-none', !requiereOtro);
+    inp.required = requiereOtro;
+
+    if (!requiereOtro) {
+      inp.value = '';
+      inp.classList.remove('is-invalid');
+    }
+  }
+
+    function getSelectedTemasIds() {
+      const ids = [];
+
+      document.querySelectorAll('.tema-interes-chk:checked').forEach(chk => {
+        const raw = chk.getAttribute('data-id'); // 👈 más fiable que dataset
+        const n = parseInt(raw, 10);
+        if (!Number.isNaN(n)) ids.push(n);
+      });
+
+      return ids;
+    }
   // ---------- Build payload ----------
   function buildPayload() {
   const fd = new FormData($('#personaForm'));
@@ -1397,14 +1862,20 @@ function refreshHijosParejasSelects() {
   const chkMunRealIgual    = $('#chkMunRealIgual')?.checked || false;
   const chkMunTrabajoIgual = $('#chkMunTrabajoIgual')?.checked || false;
 
+  const selectedTemaIds = getSelectedTemasIds();
+  const temas_interes = selectedTemaIds.map(id => ({ id_tema: id }));
+
   // --- Formación académica (array, aunque hoy sea solo 1) ---
   const fa_nivel = (fd.get('fa_nivel') || '').toString().trim();
   const fa_grado_obtenido = (fd.get('fa_grado_obtenido') || '').toString().trim();
   const fa_institucion = (fd.get('fa_institucion') || '').toString().trim();
   let controversias = [];
+  
 
   const persona = {
     nombre: (fd.get('nombre') || '').toString().trim(),
+    apellido_paterno: (fd.get('apellido_paterno') ||'').toString().trim() || null,
+    apellido_materno: (fd.get('apellido_materno') || '').toString().trim() || null,
     curp: (fd.get('curp') || '').toString().trim() || null,
     rfc: (fd.get('rfc') || '').toString().trim() || null,
     clave_elector: (fd.get('clave_elector') || '').toString().trim() || null,
@@ -1412,7 +1883,8 @@ function refreshHijosParejasSelects() {
     escala_influencia: (fd.get('escala_influencia') || '').toString().trim() || null,
     sin_servicio_publico: $('#sin_sp').checked,
     ha_contendido_eleccion: toBoolOrNull(fd.get('ha_contendido_eleccion')),
-
+    partido_otro_texto: (fd.get('partido_otro_texto') || '').toString().trim() || null,
+    foto_url: (document.getElementById("foto_url")?.value || "").trim() || null,
     // ❌ NO enviar creado_por: lo asigna el backend con req.user.id_usuario
     // creado_por: null,
 
@@ -1421,14 +1893,15 @@ function refreshHijosParejasSelects() {
     municipio_trabajo_politico: chkMunTrabajoIgual ? munLegal : munTrabSel,
     sin_controversias_publicas: document.getElementById('chkSinControversias')?.checked ?? false,
     id_partido_actual: toIntOrNull(fd.get('id_partido_actual')),
-    id_tema_interes_central: toIntOrNull(fd.get('id_tema_interes_central')),
-    tema_interes_otro_texto: (fd.get('tema_interes_otro_texto') || '').toString().trim() || null,
     id_grupo_postulacion: toIntOrNull(fd.get('id_grupo_postulacion')),
     id_ideologia_politica: toIntOrNull(fd.get('id_ideologia_politica')),
   };
   const formacion_academica = [];
   if (fa_nivel) {
     const requiere = (fa_nivel === 'Educación Superior' || fa_nivel === 'Posgrado');
+    const fa_titulado_raw = fd.get('fa_titulado');
+    const fa_titulado =
+      fa_titulado_raw === '' ? null : (fa_titulado_raw === 'true');
 
     // validación front rápida (backend también valida)
     if (requiere) {
@@ -1445,7 +1918,8 @@ function refreshHijosParejasSelects() {
     formacion_academica.push({
       nivel: fa_nivel,
       grado_obtenido: requiere ? (fa_grado_obtenido || null) : null,
-      institucion: requiere ? (fa_institucion || null) : null
+      institucion: requiere ? (fa_institucion || null) : null,
+      titulado: requiere ? fa_titulado : null
       // anio_inicio/anio_fin si luego los agregas
     });
   }
@@ -1457,24 +1931,48 @@ function refreshHijosParejasSelects() {
       const principal = item.querySelector('input[name="principal"]').checked;
       if (telefono) telefonos.push({ telefono, tipo: tipo || null, principal });
     });
+//parejas
+    function normalizePeriodo(str) {
+      return (str || "").toString().replace(/\s+/g, "").trim();
+    }
+
+    function isPeriodoValido(p) {
+      if (!p) return true;
+      if (!/^(\d{4}|\d{4}-\d{4})$/.test(p)) return false;
+
+      const m = p.match(/^(\d{4})-(\d{4})$/);
+      if (m) {
+        const a = Number(m[1]), b = Number(m[2]);
+        if (b < a) return false;
+      }
+      return true;
+    }
 
     const parejas = [];
     document.querySelectorAll('#parejasContainer .list-item').forEach(item => {
       const nombre_pareja = item.querySelector('input[name="nombre_pareja"]').value.trim();
       const tipo_relacion = item.querySelector('select[name="tipo_relacion"]').value.trim();
-      const fecha_inicio = item.querySelector('input[name="fecha_inicio"]').value;
-      const fecha_fin = item.querySelector('input[name="fecha_fin"]').value;
-      if (nombre_pareja || tipo_relacion || fecha_inicio || fecha_fin) {
+
+      const periodoInput = item.querySelector('input[name="periodo"]');
+      const periodo = normalizePeriodo(periodoInput?.value);
+
+      // si el bloque tiene algo, valida periodo (si viene)
+      if ((nombre_pareja || tipo_relacion || periodo) && !isPeriodoValido(periodo)) {
+        periodoInput.classList.add("is-invalid");
+      } else if (periodoInput) {
+        periodoInput.classList.remove("is-invalid");
+      }
+
+      if (nombre_pareja || tipo_relacion || periodo) {
         parejas.push({
           temp_id: item.dataset.tempId,
           nombre_pareja: nombre_pareja || null,
           tipo_relacion: tipo_relacion || null,
-          fecha_inicio: fecha_inicio || null,
-          fecha_fin: fecha_fin || null
+          periodo: periodo || null
         });
       }
     });
-
+//hijos
     const hijos = [];
     document.querySelectorAll('#hijosContainer .list-item').forEach(item => {
       const pareja_temp_id = item.querySelector('select[name="pareja_temp_id"]').value || null;
@@ -1498,6 +1996,8 @@ function refreshHijosParejasSelects() {
       if (periodo || cargo || dependencia) servicio_publico.push({ periodo: periodo||null, cargo: cargo||null, dependencia: dependencia||null });
     });
 
+    //elecciones
+    const haContendido = toBoolOrNull(fd.get('ha_contendido_eleccion'));
     const elecciones = [];
     document.querySelectorAll('#eleccionesContainer .list-item').forEach(item => {
       const anio = item.querySelector('input[name="anio_eleccion"]').value;
@@ -1517,17 +2017,56 @@ function refreshHijosParejasSelects() {
           diferencia_porcentaje: diferencia_porcentaje ? Number(diferencia_porcentaje) : null
         });
       }
+      if (haContendido === false) {
+        elecciones.length = 0; // fuerza vacío
+      }
+    });
+    //experiencia laboral 
+    const experiencia_laboral = [];
+    document.querySelectorAll('#expLabContainer .list-item').forEach(item => {
+      const periodo = item.querySelector('input[name="periodo"]').value.trim();
+      const cargo = item.querySelector('input[name="cargo"]').value.trim();
+      const organizacion = item.querySelector('input[name="organizacion"]').value.trim();
+
+      if (periodo || cargo || organizacion) {
+        experiencia_laboral.push({
+          periodo: periodo || null,
+          cargo: cargo || null,
+          organizacion: organizacion || null
+        });
+      }
+    });
+    //movilizacion
+
+    const capacidad_movilizacion_eventos = [];
+    document.querySelectorAll('#movEventosContainer .list-item').forEach(item => {
+      const nombre_evento = item.querySelector('input[name="mov_nombre_evento"]').value.trim();
+      const fecha_evento  = item.querySelector('input[name="mov_fecha_evento"]').value;
+
+      const asisVal = item.querySelector('input[name="mov_asistencia_evento"]').value;
+      const asistencia = (asisVal === '' ? null : Number(asisVal));
+
+      const tieneAlgo = nombre_evento || fecha_evento || asistencia != null;
+
+      if (tieneAlgo) {
+        capacidad_movilizacion_eventos.push({
+          nombre_evento: nombre_evento || null,
+          fecha_evento: fecha_evento || null,
+          asistencia: (asistencia == null || Number.isNaN(asistencia)) ? null : asistencia
+        });
+      }
     });
 
-    const capacidad_movilizacion = (() => {
-      const eventos = fd.get('mov_eventos');
-      const asistencia = fd.get('mov_asistencia');
-      if (eventos === '' && asistencia === '') return null;
-      return {
-        eventos_ultimos_3_anios: eventos === '' ? null : Number(eventos),
-        asistencia_promedio: asistencia === '' ? null : Number(asistencia)
-      };
-    })();
+    // si “Otro” está seleccionado, agrega texto
+    const temaOtro = (temasCatalog || []).find(t =>
+      selectedTemaIds.includes(Number(t.id_tema)) && !!t.requiere_otro_texto
+    );
+
+    if (temaOtro) {
+      const txt = (document.getElementById('temaOtroTexto')?.value || '').trim();
+      const obj = temas_interes.find(x => x.id_tema === Number(temaOtro.id_tema));
+      if (obj) obj.otro_texto = txt || null;
+    }
 
     const equipos = [];
     document.querySelectorAll('#equiposContainer .list-item').forEach(item => {
@@ -1536,26 +2075,70 @@ function refreshHijosParejasSelects() {
       if (nombre_equipo) equipos.push({ nombre_equipo, activo: activo === 'true' });
     });
 
-    const referentes = [];
-    document.querySelectorAll('#referentesContainer .list-item').forEach(item => {
-      const nivel = item.querySelector('select[name="nivel"]').value.trim();
-      const nombre_referente = item.querySelector('input[name="nombre_referente"]').value.trim();
-      if (nivel || nombre_referente) referentes.push({ nivel: nivel || null, nombre_referente: nombre_referente || null });
+    //referentes
+function cleanText(v) {
+  return (v || "").toString().trim().replace(/\s+/g, " "); // colapsa espacios dobles
+}
+
+  const referentes = [];
+  let referentesInvalidos = 0;
+
+  document.querySelectorAll('#referentesContainer .list-item').forEach(item => {
+    const nivelEl = item.querySelector('select[name="nivel"]');
+    const nombresEl = item.querySelector('input[name="nombres"]');
+    const apEl = item.querySelector('input[name="apellido_paterno"]');
+    const amEl = item.querySelector('input[name="apellido_materno"]');
+
+    const nivel = cleanText(nivelEl.value);
+    const nombres = cleanText(nombresEl.value);
+    const apellido_paterno = cleanText(apEl.value);
+    const apellido_materno = cleanText(amEl.value);
+
+    const tieneAlgo = nivel || nombres || apellido_paterno || apellido_materno;
+    if (!tieneAlgo) {
+      // limpia estados por si borraron todo
+      nivelEl.classList.remove("is-invalid");
+      nombresEl.classList.remove("is-invalid");
+      return;
+    }
+
+    // Validación suave: si capturó algo, exige nivel + nombres
+    const okNivel = !!nivel;
+    const okNombres = !!nombres;
+
+    nivelEl.classList.toggle("is-invalid", !okNivel);
+    nombresEl.classList.toggle("is-invalid", !okNombres);
+
+    if (!okNivel || !okNombres) {
+      referentesInvalidos += 1;
+      return; // no metemos al payload si está incompleto
+    }
+
+    referentes.push({
+      nivel: nivel || null,
+      nombres: nombres || null,
+      apellido_paterno: apellido_paterno || null,
+      apellido_materno: apellido_materno || null
     });
+  });
+
+  // Si quieres bloquear submit:
+  if (referentesInvalidos > 0) {
+    // muestra alerta / toast / etc.
+    // return;
+  }
 
     if (!persona.sin_controversias_publicas) {
       document.querySelectorAll('#controversiasContainer .list-item').forEach(item => {
         const id_tipo = item.querySelector('select[name="id_tipo"]').value;
-        const estatus = item.querySelector('select[name="estatus"]').value.trim();
         const fecha_registro = item.querySelector('input[name="fecha_registro"]').value;
         const descripcion = item.querySelector('textarea[name="descripcion"]').value.trim();
         const fuente = item.querySelector('input[name="fuente"]').value.trim();
-        const tieneAlgo = id_tipo || estatus || fecha_registro || descripcion || fuente;
+        const tieneAlgo = id_tipo || fecha_registro || descripcion || fuente;
 
         if (tieneAlgo) {
           controversias.push({
             id_tipo: id_tipo ? Number(id_tipo) : null,
-            estatus: estatus || null,
             fecha_registro: fecha_registro || null,
             descripcion: descripcion || null,
             fuente: fuente || null
@@ -1609,6 +2192,55 @@ function refreshHijosParejasSelects() {
         notas: notas || null
       });
     });
+
+    function normalizePeriodo(str) {
+      return (str || "").toString().replace(/\s+/g, "").trim();
+    }
+    function isPeriodoValido(p) {
+      if (!p) return true;
+      if (!/^(\d{4}|\d{4}-\d{4})$/.test(p)) return false;
+      const m = p.match(/^(\d{4})-(\d{4})$/);
+      return !m || Number(m[2]) >= Number(m[1]);
+    }
+
+    const sin_cargos_eleccion_popular = document.getElementById("chkSinCargosEleccion").checked;
+
+    const cargos_eleccion_popular = [];
+    let invalidos = 0;
+
+    document.querySelectorAll("#cargosEleccionContainer .list-item").forEach(item => {
+      const periodoEl = item.querySelector('input[name="periodo"]');
+      const cargoEl = item.querySelector('input[name="cargo"]');
+
+      const periodo = normalizePeriodo(periodoEl.value);
+      const cargo = cargoEl.value.trim();
+      const partido_postulante = item.querySelector('input[name="partido_postulante"]').value.trim();
+      const modalidad = item.querySelector('select[name="modalidad"]').value.trim();
+
+      const tieneAlgo = periodo || cargo || partido_postulante || modalidad;
+      if (!tieneAlgo) return;
+
+      // si hay registro, exige periodo + cargo
+      const okPeriodo = !!periodo && isPeriodoValido(periodo);
+      const okCargo = !!cargo;
+
+      periodoEl.classList.toggle("is-invalid", !okPeriodo);
+      cargoEl.classList.toggle("is-invalid", !okCargo);
+
+      if (!okPeriodo || !okCargo) { invalidos += 1; return; }
+
+      cargos_eleccion_popular.push({
+        periodo: periodo || null,
+        cargo: cargo || null,
+        partido_postulante: partido_postulante || null,
+        modalidad: modalidad || null
+      });
+    });
+  
+    // Guardar en persona (consistencia)
+    persona.sin_cargos_eleccion_popular = sin_cargos_eleccion_popular;
+    // arreglo final (si marcó "sin cargos" => forzar vacío)
+    const cargosEleccionFinal = sin_cargos_eleccion_popular ? [] : cargos_eleccion_popular;
     return {
       persona,
       datos_ine: datosINEFinal,
@@ -1618,12 +2250,15 @@ function refreshHijosParejasSelects() {
       redes,
       servicio_publico,
       elecciones,
-      capacidad_movilizacion,
+      cargos_eleccion_popular: cargosEleccionFinal,   // ✅ AQUI
+      capacidad_movilizacion_eventos,
       equipos,
       referentes,
       controversias,
       familiares,
       formacion_academica,
+      temas_interes,
+      experiencia_laboral,
       participacion_organizaciones
     };
   }
@@ -1683,15 +2318,271 @@ function refreshPreview() {
     // ✅ Estado UI dependiente de selects/checkboxes
     if (typeof toggleTemaOtroUI === 'function') toggleTemaOtroUI();        // Tema "Otro"
     if (typeof setControversiasUIState === 'function') setControversiasUIState(); // Sin controversias
+    document.getElementById('movEventosContainer').innerHTML = '';
+    document.getElementById('movEventosContainer').appendChild(movEventoBlock());
 
+    // ✅ limpiar foto
+    const inpFoto = document.getElementById("inpFoto");
+    const previewFoto = document.getElementById("previewFoto");
+    const hidFotoUrl = document.getElementById("foto_url");
+
+    if (inpFoto) inpFoto.value = "";          // limpia el file input
+    if (hidFotoUrl) hidFotoUrl.value = "";     // limpia URL guardada
+    if (previewFoto) {
+      previewFoto.src = "";
+      previewFoto.classList.add("d-none");     // oculta preview
+    }
     hideAlert();
     refreshPreview();
   }
+        //domcontainer
+      document.addEventListener("DOMContentLoaded", () => {
+        const chk = document.getElementById("chkSinCargosEleccion");
+        const section = document.getElementById("cargosEleccionSection");
+        const container = document.getElementById("cargosEleccionContainer");
+        const btnAdd = document.getElementById("btnAddCargoEleccion");
 
+        function clearValidationInside(el) {
+          el.querySelectorAll(".is-invalid, .is-valid").forEach(x => {
+            x.classList.remove("is-invalid", "is-valid");
+          });
+        }
+
+        function setSinCargosUI() {
+          if (!chk || !section || !container) return;
+
+          const sin = chk.checked;
+
+          // Oculta / muestra sección
+          section.classList.toggle("d-none", sin);
+
+          // (opcional) deshabilita el botón de agregar
+          if (btnAdd) btnAdd.disabled = sin;
+
+          if (sin) {
+            // Limpia todo el contenido
+            container.innerHTML = "";
+
+            // Limpia cualquier estado visual por si quedó algo en memoria del DOM
+            clearValidationInside(section);
+          } else {
+            // Si vuelven a habilitar, quita estados raros
+            clearValidationInside(section);
+          }
+        }
+
+        chk.addEventListener("change", setSinCargosUI);
+        setSinCargosUI();
+      });
+       //togle ocultar sin servicio publico:
+      document.addEventListener("DOMContentLoaded", () => {
+        const chk = document.getElementById("sin_sp");
+        const section = document.getElementById("servicioPublicoSection");
+        const container = document.getElementById("servicioContainer");
+        const btnAdd = document.getElementById("btnAddServicio");
+
+        function clearValidationInside(el) {
+          el.querySelectorAll(".is-invalid, .is-valid").forEach(x => {
+            x.classList.remove("is-invalid", "is-valid");
+          });
+        }
+
+        function setSinServicioUI() {
+          if (!chk || !section || !container) return;
+
+          const sin = chk.checked;
+
+          section.classList.toggle("d-none", sin);
+          if (btnAdd) btnAdd.disabled = sin;
+
+          if (sin) {
+            container.innerHTML = "";
+            clearValidationInside(section);
+          } else {
+            clearValidationInside(section);
+          }
+        }
+
+        chk.addEventListener("change", setSinServicioUI);
+        setSinServicioUI();
+      });
+      //foto
+      document.addEventListener("DOMContentLoaded", () => {
+        const inpFoto = document.getElementById("inpFoto");
+        const preview = document.getElementById("previewFoto");
+        const hidFotoUrl = document.getElementById("foto_url");
+
+        if (!inpFoto || !preview || !hidFotoUrl) return;
+
+        inpFoto.addEventListener("change", async () => {
+          const file = inpFoto.files?.[0];
+          if (!file) return;
+
+          // preview
+          preview.src = URL.createObjectURL(file);
+          preview.classList.remove("d-none");
+
+          // upload
+          const fd = new FormData();
+          fd.append("foto", file);
+
+          const resp = await fetch("/api/upload/foto", { method: "POST", body: fd });
+          const data = await resp.json().catch(() => ({}));
+
+          if (!resp.ok) {
+            alert(data?.error || "Error al subir foto");
+            return;
+          }
+
+          hidFotoUrl.value = data.foto_url; // ✅ se guarda para el payload
+        });
+      });
+
+    //funcion para validar:
+    function initValidacionDuplicados() {
+      let dupTimer = null;
+
+      const getByName = (name) => document.querySelector(`[name="${name}"]`);
+     
+      const normalize = (v) => (v || "").toString().trim();
+
+      async function checkDuplicado() {
+
+        await checkDuplicadoNow(window.editingId || null);
+        const curp = normalize(getByName("curp")?.value).toUpperCase();
+        const rfc  = normalize(getByName("rfc")?.value).toUpperCase();
+
+        const nombre = normalize(getByName("nombre")?.value);
+        const ap = normalize(getByName("apellido_paterno")?.value);
+        const am = normalize(getByName("apellido_materno")?.value);
+
+        const mun = normalize(getByName("municipio_residencia_legal")?.value);
+
+        const clave_elector = normalize(getByName("clave_elector")?.value).toUpperCase();
+        const seccion_electoral = normalize(getByName("ine_seccion")?.value);
+
+        const exclude_id = (window.editingId || null); // o usa tu variable editingId
+
+        // no molestar si todavía no hay nada relevante
+        if (!curp && !rfc && !clave_elector && !seccion_electoral && !(nombre && ap)) return;
+
+        const qs = new URLSearchParams({
+          curp,
+          rfc,
+          nombre,
+          apellido_paterno: ap,
+          apellido_materno: am,
+          municipio: mun,
+          clave_elector,
+          seccion_electoral,
+          exclude_id: exclude_id ? String(exclude_id) : ""
+        });
+
+        // Usa tu helper apiGet si ya mete Authorization automáticamente
+        // Si no, usa fetch con token.
+        let resp, data;
+
+        try {
+          // Si ya tienes apiGet:
+          if (typeof apiGet === "function") {
+            data = await apiGet(`/personas/check-duplicado?${qs.toString()}`);
+          } else {
+            const token = localStorage.getItem("token");
+            resp = await fetch(`/api/personas/check-duplicado?${qs.toString()}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            data = await resp.json().catch(() => ({}));
+            if (!resp.ok) return;
+          }
+        } catch (e) {
+          console.warn("checkDuplicado error:", e);
+          return;
+        }
+
+        const results = data?.results || [];
+        window.__dupCheck = results;
+
+        if (results.length) {
+          if (typeof showAlert === "function") {
+            showAlert("warning", "Posible duplicado detectado. Revisa antes de guardar.");
+          }
+          console.log("DUPLICADOS:", results);
+        } else {
+          window.__dupCheck = [];
+          // opcional: si quieres quitar alerta cuando ya no hay duplicados
+          // if (typeof hideAlert === "function") hideAlert();
+        }
+      }
+
+      function debounceCheck() {
+        clearTimeout(dupTimer);
+        dupTimer = setTimeout(checkDuplicado, 450);
+      }
+
+      // engancha a los campos principales
+      const fields = [
+        "curp",
+        "rfc",
+        "nombre",
+        "apellido_paterno",
+        "apellido_materno",
+        "municipio_residencia_legal",
+        "clave_elector",
+        "ine_seccion"
+      ];
+
+      fields.forEach(name => {
+        const el = getByName(name);
+        if (!el) return;
+        el.addEventListener("blur", checkDuplicado);
+        el.addEventListener("input", debounceCheck);
+        el.addEventListener("change", debounceCheck);
+      });
+
+      async function checkDuplicadoNow(excludeId) {
+        const curp = normalize(getByName("curp")?.value).toUpperCase();
+        const rfc  = normalize(getByName("rfc")?.value).toUpperCase();
+
+        const nombre = normalize(getByName("nombre")?.value);
+        const ap = normalize(getByName("apellido_paterno")?.value);
+        const am = normalize(getByName("apellido_materno")?.value);
+
+        const mun = normalize(getByName("municipio_residencia_legal")?.value);
+
+        const clave_elector = normalize(getByName("clave_elector")?.value).toUpperCase();
+        // OJO: tu input se llama ine_seccion en el form (no seccion_electoral)
+        const seccion_electoral = normalize(getByName("ine_seccion")?.value);
+
+        if (!curp && !rfc && !(nombre && ap) && !clave_elector && !seccion_electoral) {
+          window.__dupCheck = [];
+          return [];
+        }
+
+        const qs = new URLSearchParams({
+          curp,
+          rfc,
+          nombre,
+          apellido_paterno: ap,
+          apellido_materno: am,
+          municipio: mun,
+          clave_elector,
+          seccion_electoral,
+          exclude_id: excludeId ? String(excludeId) : ""
+        });
+
+        const data = await apiGet(`/personas/check-duplicado?${qs.toString()}`);
+        const results = data?.results || [];
+        window.__dupCheck = results;
+        return results;
+      }
+
+      // 👇 expón para usarlo en submit
+      window.checkDuplicadoNow = checkDuplicadoNow;
+
+    }
   // ---------- init ----------
   (async function init() {
     let partidosCatalog = [];
-    let temasCatalog = [];
     let gruposCatalog = [];
     hideAlert();
     try {
@@ -1708,7 +2599,6 @@ function refreshPreview() {
       fillSelect($('#mun_trabajo'), municipiosCache, 'id_municipio', 'nombre');
 
       fillSelect($('#selPartidoActual'), partidosCatalog, 'id_partido', 'nombre');
-      fillSelect($('#selTemaInteres'), temasCatalog, 'id_tema', 'nombre');
       fillSelect($('#selGrupoPostulacion'), gruposCatalog, 'id_grupo', 'nombre');
       fillSelect($('#selIdeologia'), ideologiasCatalog, 'id_ideologia', 'nombre');
 
@@ -1751,7 +2641,26 @@ function refreshPreview() {
       // seed blocks
       clearAll();
       setControversiasUIState();
-      toggleTemaOtroUI();
+
+      togglePartidoOtroUI();
+      renderTemasInteresCheckboxes();
+
+      document.getElementById('temasInteresChecks')?.addEventListener('change', () => {
+        toggleTemaOtroUI();
+        refreshPreview?.();
+      });
+
+      document.getElementById('selHaContendido')?.addEventListener('change', () => {
+        setEleccionesUIState();
+        refreshPreview?.();
+      });
+      // Estado inicial
+      setEleccionesUIState();
+      //eventos
+      document.getElementById('btnAddMovEvento')?.addEventListener('click', () => {
+        document.getElementById('movEventosContainer')?.appendChild(movEventoBlock());
+        refreshPreview?.();
+      });
 
       document.getElementById('chkSinControversias')?.addEventListener('change', () => {
         setControversiasUIState();
@@ -1786,6 +2695,82 @@ function refreshPreview() {
       // Cargar lista al iniciar
       await cargarListaBorradores();
       setBorradorActual(null);
+      initValidacionDuplicados();
+
+      //editar,eliminar persona
+
+      function setEditing(id_persona) {
+        editingId = Number(id_persona);
+
+        // habilitar botones del offcanvas
+        const btnSalir = document.getElementById('btnSalirEdicion');
+        const btnEliminar = document.getElementById('btnEliminarPersona');
+
+        if (btnSalir) btnSalir.disabled = false;
+        if (btnEliminar) btnEliminar.disabled = false;
+
+        // cambia texto del botón principal (si existe)
+        const btnSubmit = document.getElementById('btnSubmitPersona');
+        if (btnSubmit) btnSubmit.textContent = 'Guardar cambios';
+
+        // guarda id si usas hidden
+        const hid = document.getElementById('id_persona');
+        if (hid) hid.value = String(editingId);
+      }
+
+    async function buscarPersonas(q) {
+      const data = await apiGet(`/personas?search=${encodeURIComponent(q || '')}&limit=30`);
+      return data.items || data;
+    }
+
+    function renderListaPersonas(items) {
+      const cont = document.getElementById("listaPersonas");
+      if (!cont) return;
+      cont.innerHTML = "";
+
+      if (!items.length) {
+        cont.innerHTML = `<div class="text-muted">Sin resultados</div>`;
+        return;
+      }
+
+      items.forEach(p => {
+        const a = document.createElement("button");
+        a.type = "button";
+        a.className = "list-group-item list-group-item-action";
+        a.innerHTML = `
+          <div class="fw-semibold">${p.nombre} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}</div>
+          <div class="small text-muted">ID: ${p.id_persona}</div>
+        `;
+        
+        document.getElementById("btnBuscarPersona")?.addEventListener("click", recargarLista);
+        a.addEventListener("click", async () => {
+          try {
+            const payload = await apiGet(`/personas/${p.id_persona}/payload`); // ✅ aquí
+            applyPayloadToForm(payload);
+            setEditing(p.id_persona);
+            showAlert("info", `Modo edición: #${p.id_persona}`);
+          } catch (e) {
+            console.error(e);
+            showAlert("danger", "No pude cargar para edición: " + e.message);
+          }
+        });
+
+        cont.appendChild(a);
+      });
+    }
+
+      async function recargarLista() {
+        const q = document.getElementById("txtBuscarPersona").value.trim();
+        const items = await buscarPersonas(q);
+        renderListaPersonas(items);
+      }
+
+      document.getElementById("btnBuscarPersona").addEventListener("click", recargarLista);
+      document.getElementById("txtBuscarPersona").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") recargarLista();
+      });
+
+      //final editar eliminar
 
       // Botón recargar
       document.getElementById('btnRecargarBorradores').addEventListener('click', async () => {
@@ -1844,6 +2829,8 @@ function refreshPreview() {
         }
       });
 
+ 
+
       // Eliminar borrador actual
       document.getElementById('btnEliminarBorrador').addEventListener('click', async () => {
         if (!borradorActualId) return;
@@ -1890,28 +2877,75 @@ function refreshPreview() {
 
       $('#btnReset').addEventListener('click', clearAll);
 
-      function toggleTemaOtroUI() {
-        const sel = document.getElementById('selTemaInteres');
-        const wrap = document.getElementById('temaOtroWrap');
-        const inp = document.getElementById('temaOtroTexto');
+      function renderTemasInteresCheckboxes() {
+        const cont = document.getElementById('temasInteresChecks');
+        if (!cont) return;
 
+        cont.innerHTML = '';
+
+        (temasCatalog || []).forEach(t => {
+          const id = Number(t.id_tema);
+          const div = document.createElement('div');
+          div.className = 'form-check';
+
+          div.innerHTML = `
+            <input class="form-check-input tema-interes-chk"
+                  type="checkbox"
+                  id="tema_${id}"
+                  data-id="${id}">
+            <label class="form-check-label" for="tema_${id}">
+              ${t.nombre}
+            </label>
+          `;
+
+          cont.appendChild(div);
+        });
+
+        // listeners
+        cont.querySelectorAll('.tema-interes-chk').forEach(chk => {
+          chk.addEventListener('change', () => {
+            toggleTemaOtroUI();
+            refreshPreview?.();
+          });
+        });
+
+        toggleTemaOtroUI();
+      }
+
+      //otro ocultar partido politico:
+      function togglePartidoOtroUI() {
+        const sel = document.getElementById('selPartidoActual');
+        const wrap = document.getElementById('partidoOtroWrap');
+        const inp  = document.getElementById('partidoOtroTexto');
         if (!sel || !wrap || !inp) return;
 
-        const idTema = Number(sel.value || 0);
-        const tema = temasCatalog.find(t => Number(t.id_tema) === idTema);
-        const requiere = !!tema?.requiere_otro_texto;
+        const id = Number(sel.value || 0);
+        const p = (partidosCatalog || []).find(x => Number(x.id_partido) === id);
 
-        wrap.classList.toggle('d-none', !requiere);
-        inp.required = requiere;
+        const esOtro = (p?.nombre || '').toLowerCase() === 'otro' || (p?.siglas || '').toUpperCase() === 'OTRO';
 
-        if (!requiere) {
+        wrap.classList.toggle('d-none', !esOtro);
+        inp.required = esOtro;
+
+        if (!esOtro) {
           inp.value = '';
           inp.classList.remove('is-invalid');
         }
       }
-      document.getElementById('selTemaInteres')?.addEventListener('change', () => {
-        toggleTemaOtroUI();
+
+      document.getElementById('selPartidoActual')?.addEventListener('change', () => {
+        togglePartidoOtroUI();
         refreshPreview?.();
+      });
+      //btn dom editar y eliminar
+      document.getElementById('btnSalirEdicion')?.addEventListener('click', () => {
+        cancelEditing();
+        showAlert('info', 'Edición cancelada');
+      });
+
+      document.getElementById('btnEliminarPersona')?.addEventListener('click', async () => {
+        if (!editingId) return;
+        await onDeletePersona(editingId);
       });
 
       // submit
@@ -1920,6 +2954,23 @@ function refreshPreview() {
         hideAlert();
 
         const payload = buildPayload();
+        //validacion otro este marcado en temas
+        const temaOtroSel = (payload.temas_interes || []).find(t => t.otro_texto !== undefined);
+        if (temaOtroSel && !temaOtroSel.otro_texto) {
+          document.getElementById('temaOtroTexto')?.classList.add('is-invalid');
+          return showAlert('warning', 'Si seleccionas “Otro”, captura la descripción del tema.');
+        }
+
+          // ✅ VALIDACIÓN: eventos de movilización (evitar incompletos)
+        for (const ev of (payload.capacidad_movilizacion_eventos || [])) {
+          const incompleto = !ev.nombre_evento || !ev.fecha_evento || ev.asistencia == null;
+          if (incompleto) {
+            return showAlert('warning', 'En cada evento de movilización captura: Nombre, Fecha y Asistencia.');
+          }
+          if (Number(ev.asistencia) < 0) {
+            return showAlert('warning', 'La asistencia no puede ser negativa.');
+          }
+        }
 
         // ✅ Sin controversias públicas (mutuo excluyente)
         const chkSin = document.getElementById('chkSinControversias')?.checked ?? false;
@@ -1943,45 +2994,110 @@ function refreshPreview() {
             );
             return; // ⛔ NO envía al backend
           }
+          if (fa0.titulado === null) {
+            return showAlert('warning', 'Indica si la persona está titulada.');
+          }
         }
         // ============================
         if (!payload.persona.nombre) return showAlert('warning', 'El nombre es obligatorio.');
         // Nota: si no tienes usuarios, deja creado_por null.
 
-        if (payload.persona?.id_tema_interes_central) {
-          const tema = temasCatalog.find(t => Number(t.id_tema) === Number(payload.persona.id_tema_interes_central));
-          if (tema?.requiere_otro_texto && !payload.persona.tema_interes_otro_texto) {
-            document.getElementById('temaOtroTexto')?.classList.add('is-invalid');
-            return showAlert('warning', 'Si seleccionas “Otro”, captura la descripción del tema.');
+        const idPartido = payload.persona.id_partido_actual;
+        if (idPartido) {
+          const p = (partidosCatalog || []).find(x => Number(x.id_partido) === Number(idPartido));
+          const esOtro = (p?.nombre || '').toLowerCase() === 'otro' || (p?.siglas || '').toUpperCase() === 'OTRO';
+
+          if (esOtro && !payload.persona.partido_otro_texto) {
+            document.getElementById('partidoOtroTexto')?.classList.add('is-invalid');
+            return showAlert('warning', 'Si seleccionas “Otro”, captura el nombre del partido.');
           }
         }
+        //validacion de datod duplicados
+        // 🔁 Re-checar duplicados justo antes de guardar (con exclude_id en edición)
+        if (typeof checkDuplicadoNow === "function") {
+          await checkDuplicadoNow(editingId);  // <- implementamos abajo
+        }
+        const dup = window.__dupCheck || [];
+        const hayBloqueante = dup.some(x =>
+          ["curp","rfc","clave_elector"].includes(x.match_type)
+        );
 
+        if (hayBloqueante) {
+          showAlert("danger", "No se puede guardar: se detectó un duplicado (CURP/RFC/Clave de elector).");
+          return;
+        }
+        const haySeccion = dup.some(x => x.match_type === "seccion_electoral");
+        if (haySeccion) {
+          showAlert("danger", "No se puede guardar: ya existe alguien con la misma Sección Electoral.");
+          return;
+        }
         try {
-          const resp = await apiPost('/personas', payload);
-          showAlert('success', `Guardado correctamente ✅ id_persona: ${resp.id_persona}`);
-                // después de guardar persona OK
+          const isEdit = !!editingId;
+
+          const url = isEdit ? `/personas/${editingId}` : `/personas`;
+          const resp = isEdit ? await apiPut(url, payload) : await apiPost(url, payload);
+
+          // ✅ Mensaje OK
+          const idGuardado = isEdit ? editingId : resp.id_persona;
+          showAlert('success', isEdit
+            ? `Actualizado correctamente ✅ id_persona: ${idGuardado}`
+            : `Guardado correctamente ✅ id_persona: ${idGuardado}`
+          );
+
+          // ✅ Si venía de borrador, marcar como enviado
           if (borradorActualId) {
             try {
               await apiPut(`/borradores/${borradorActualId}`, { estatus: 'enviado' });
-            } catch(_) {}
+            } catch (_) {}
             setBorradorActual(null);
             await cargarListaBorradores();
           }
-          // si quieres que NO limpie, quita esto:
+
+          // ✅ Salir de edición después de actualizar (importante)
+          if (isEdit) setEditing(null);
+
           clearAll();
+
+          // (opcional) si tienes panel listado, refresca:
+          // if (typeof recargarLista === 'function') recargarLista();
 
         } catch (err) {
           console.error(err);
-          showAlert('danger', 'Error al guardar: ' + err.message);
+          showAlert('danger', 'Error al guardar: ' + (err.message || err));
         }
       });
-
+      
     } catch (e) {
       console.error(e);
       showAlert('danger', 'No pude cargar catálogos (municipios/redes/controversias). Revisa backend.');
     }
   })();
 </script>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasPersonas">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title">Personas capturadas</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+
+  <div class="offcanvas-body">
+    <div class="input-group mb-2">
+      <input class="form-control" id="txtBuscarPersona" placeholder="Buscar (nombre / CURP / RFC)">
+      <button class="btn btn-outline-primary" id="btnBuscarPersona">Buscar</button>
+    </div>
+
+    <div class="small text-muted mb-2">Selecciona una persona para cargarla al formulario.</div>
+
+    <div class="list-group" id="listaPersonas"></div>
+
+    <hr class="my-3">
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-warning w-100" id="btnSalirEdicion" disabled>Salir de edición</button>
+      <button class="btn btn-danger w-100" id="btnEliminarPersona" disabled>Eliminar</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
