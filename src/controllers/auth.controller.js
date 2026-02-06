@@ -16,6 +16,7 @@ exports.login = async (req, res) => {
       `
       SELECT
         u.id_usuario, u.nombre, u.email, u.activo,
+        u.id_oficina,
         array_remove(array_agg(r.nombre), NULL) AS roles
       FROM usuarios u
       LEFT JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
@@ -36,7 +37,8 @@ exports.login = async (req, res) => {
     const token = signToken({
       id_usuario: user.id_usuario,
       email: user.email,
-      roles: user.roles || []
+      roles: user.roles || [],
+      id_oficina: user.id_oficina ?? null
     });
 
     return res.json({
@@ -46,9 +48,11 @@ exports.login = async (req, res) => {
         id_usuario: user.id_usuario,
         nombre: user.nombre,
         email: user.email,
-        roles: user.roles || []
+        roles: user.roles || [],
+        id_oficina: user.id_oficina ?? null
       }
     });
+    
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Error en login', detail: e.message });
