@@ -10,7 +10,7 @@
 </head>
 
 <body>
- <script>
+<script>
   (async function guardCaptura() {
         const token = localStorage.getItem("token");
         if (!token) return (window.location.href = "/");
@@ -1064,8 +1064,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-  
-//validacion de datos solo numeros
+  //validacion de datos solo numeros
   document.querySelectorAll('.number-only').forEach(input => {
       // Bloquea letras al teclear
       input.addEventListener('input', function(e) {
@@ -1101,83 +1100,30 @@
       if (cont) cont.innerHTML = '';
     }
   }
-  
+
   function logout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    window.location.href = "/";
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/';
   }
 
-  document.getElementById("btnLogout")?.addEventListener("click", () => {
-    if (confirm("¿Deseas cerrar sesión?")) logout();
+  document.getElementById('btnLogout')?.addEventListener('click', () => {
+    if (confirm('¿Deseas cerrar sesión?')) {
+      logout();
+    }
   });
 
-  // ✅ Validación real contra backend
-  (async function bootUser() {
-    const token = localStorage.getItem("token");
-    if (!token) return (window.location.href = "/");
 
-    try {
-      const r = await fetch("/api/auth/me", {
-        headers: { Authorization: "Bearer " + token },
-      });
-
-      if (r.status === 401) return logout();
-
-      const data = await r.json();
-      const user = data?.user || {};
-      const roles = user.roles || [];
-
-      // ✅ En captura: permites capturista y analista
-      // (superadmin lo mandas al dashboard)
-      if (roles.includes("superadmin")) {
-        return (window.location.href = "/dashboard");
-      }
-      const ok = roles.includes("capturista") || roles.includes("analista");
-      if (!ok) return logout();
-
-      document.getElementById("lblUsuario").textContent =
-        user.nombre || user.email || "Usuario";
-      document.getElementById("lblRol").textContent = roles.join(", ");
-
-      localStorage.setItem("user", JSON.stringify(user));
-    } catch (e) {
-      console.error("bootUser error:", e);
-      return logout();
-    }
-  })();
-
-  // ✅ Base relativa (funciona local y Render)
-  const API_BASE = "/api";
-
-    // ✅ Único helper para requests (NO dupliques apiGet/apiPost/etc)
-  async function apiFetch(path, options = {}) {
-    const res = await fetch(API_BASE + path, {
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      ...options
-    });
-
-    const text = await res.text();
-    let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error(`Respuesta no-JSON (${res.status}): ${text.slice(0, 120)}`);
-    }
-
-    if (!res.ok) {
-      throw new Error(data?.error || `Error ${res.status}`);
-    }
-
-    return data;
+  const token = localStorage.getItem('token');
+  if (!token) window.location.href = '/';
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    const user = JSON.parse(userStr);
+    document.getElementById('lblUsuario').textContent = user.nombre || user.email;
+    document.getElementById('lblRol').textContent = (user.roles || []).join(', ');
   }
 
-  const apiGet    = (path)       => apiFetch(path);
-  const apiPost   = (path, body) => apiFetch(path, { method: "POST", body: JSON.stringify(body) });
-  const apiPut    = (path, body) => apiFetch(path, { method: "PUT",  body: JSON.stringify(body) });
-  const apiDelete = (path)       => apiFetch(path, { method: "DELETE" });
-
+  const API_BASE = '/api';
   const $ = (sel) => document.querySelector(sel);
 
 
@@ -1198,6 +1144,42 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   function hideAlert(){ $('#alertBox').classList.add('d-none'); }
+
+  async function apiGet(path) {
+    const token = localStorage.getItem('token');
+    const res = await fetch(API_BASE + path, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    if (res.status === 401) window.location.href = '/';
+    if (res.status === 401) {
+      logout();
+    }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+
+
+  async function apiPost(path, body) {
+    const token = localStorage.getItem('token');
+    const res = await fetch(API_BASE + path, {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(body)
+    });
+    if (res.status === 401) window.location.href = '/';
+    if (res.status === 401) {
+      logout();
+    }
+
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error((data.error || 'Error') + (data.detail ? ' | ' + data.detail : ''));
+    return data;
+  }
+
     function getMunicipioNombreById(id) {
     const n = Number(id);
     const m = (municipiosCache || []).find(x => Number(x.id_municipio) === n);
