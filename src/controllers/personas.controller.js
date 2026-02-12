@@ -15,6 +15,52 @@ function isPeriodoValido(p) {
   return true;
 }
 
+  async function assertCanMutatePersona(client, req, id_persona) {
+    const roles = req.user?.roles || [];
+    const isSuperadmin = roles.includes("superadmin");
+    const isAnalista   = roles.includes("analista");
+    const isCapturista = roles.includes("capturista");
+
+    const { rows } = await client.query(
+      `SELECT id_persona, id_oficina, creado_por FROM personas WHERE id_persona = $1`,
+      [id_persona]
+    );
+
+    if (!rows.length) {
+      const err = new Error("Persona no encontrada");
+      err.status = 404;
+      throw err;
+    }
+
+    const p = rows[0];
+    if (isSuperadmin) return p;
+
+    // capturista puro: solo los suyos
+    if (isCapturista && !isAnalista) {
+      if (Number(p.creado_por) !== Number(req.user.id_usuario)) {
+        const err = new Error("No autorizado");
+        err.status = 403;
+        throw err;
+      }
+      return p;
+    }
+
+    // analista (y no-superadmin): solo su oficina
+    if (!req.user?.id_oficina) {
+      const err = new Error("Usuario sin oficina asignada");
+      err.status = 403;
+      throw err;
+    }
+
+    if (Number(p.id_oficina) !== Number(req.user.id_oficina)) {
+      const err = new Error("No autorizado");
+      err.status = 403;
+      throw err;
+    }
+
+    return p;
+  }
+
 //helpers para actualizar:
 async function getPersonaScope(client, id_persona) {
     const { rows } = await client.query(
@@ -147,118 +193,175 @@ exports.listPersonas = async (req, res) => {
 
 //1.1. listar personas usuarios
 exports.listPersonasAdminGrid = async (req, res) => {
+  const client = await pool.connect();
   try {
+    const roles = req.user?.roles || [];
+    const isSuperadmin = roles.includes("superadmin");
+    const isAnalista   = roles.includes("analista");
+    const isCapturista = roles.includes("capturista");
 
-    const page = Math.max(1, Number(req.query.page || 1));
-    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize || 25)));
-    const offset = (page - 1) * pageSize;
+    // -------- paginación
+    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+    const size = Math.min(Math.max(parseInt(req.query.size || "25", 10), 1), 200);
+    const offset = (page - 1) * size;
 
-    const q = (req.query.q || '').trim();
-    const creadoPor = req.query.creado_por ? Number(req.query.creado_por) : null;
-    const municipioTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+    // -------- filtros
+    let oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
+    const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+    const q = (req.query.q || "").trim();
 
-    const sortMap = {
-      created_at: 'p.created_at',
-      nombre: 'p.nombre',
-      municipio: 'mt.nombre',
-      escala_influencia: 'p.escala_influencia',
-      capturista: 'u.nombre'
-    };
-    const sortKey = String(req.query.sort || 'created_at');
-    const sortCol = sortMap[sortKey] || 'p.created_at';
-    const dir = String(req.query.dir || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    // -------- ordenamiento (seguro)
+    const sortDir = (String(req.query.sortDir || "desc").toLowerCase() === "asc") ? "ASC" : "DESC";
+    const sortFieldRaw = String(req.query.sortField || "updated_at").trim();
 
-    const where = [];
-    const params = [];
-    let i = 1;
+    // Campos que sí permitimos ordenar
+    const SORT_WHITELIST = new Set([
+      "id_persona",
+      "created_at",
+      "updated_at",
+      "nombre",
+      "apellido_paterno",
+      "apellido_materno",
+      // Nota: si quieres ordenar por municipio/oficina/capturista, mejor lo hacemos con alias.
+      // Por seguridad, aquí mantenemos solo campos reales de personas.
+    ]);
+    const sortField = SORT_WHITELIST.has(sortFieldRaw) ? sortFieldRaw : "updated_at";
 
-    if (Number.isFinite(creadoPor) && creadoPor > 0) {
-      where.push(`p.creado_por = $${i++}`);
-      params.push(creadoPor);
+    // -------- reglas por rol
+    // analista: siempre forzamos su oficina
+    if (isAnalista && !isSuperadmin) {
+      const forced = Number(req.user.id_oficina || 0);
+      if (!forced) return res.status(403).json({ error: "Usuario sin oficina asignada" });
+      oficinaId = forced;
     }
 
-    if (Number.isFinite(municipioTrabajo) && municipioTrabajo > 0) {
-      where.push(`p.municipio_trabajo_politico = $${i++}`);
-      params.push(municipioTrabajo);
+    // capturista puro: solo sus registros (por si lo habilitas para grid)
+    const forceCreadoPor = (isCapturista && !isAnalista && !isSuperadmin)
+      ? Number(req.user.id_usuario || 0)
+      : null;
+
+    // -------- WHERE dinámico
+    const where = [];
+    const params = [];
+
+    if (oficinaId) {
+      params.push(oficinaId);
+      where.push(`p.id_oficina = $${params.length}`);
+    }
+
+    if (capturistaId) {
+      params.push(capturistaId);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (forceCreadoPor) {
+      params.push(forceCreadoPor);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
+      params.push(idMunTrabajo);
+      where.push(`p.municipio_trabajo_politico = $${params.length}`);
     }
 
     if (q) {
-      where.push(`(
-        p.nombre ILIKE $${i} OR
-        p.curp ILIKE $${i} OR
-        p.rfc ILIKE $${i} OR
-        p.clave_elector ILIKE $${i}
-      )`);
       params.push(`%${q}%`);
-      i++;
+      const i = params.length;
+      where.push(`
+        (
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
+      `);
     }
 
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-    const fromSql = `
+    // -------- TOTAL
+    const totalSql = `
+      SELECT COUNT(*)::int AS total
       FROM personas p
-      LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
-      LEFT JOIN catalogo_partidos cp ON cp.id_partido = p.id_partido_actual
-      LEFT JOIN catalogo_temas_interes cti ON cti.id_tema = p.id_tema_interes_central
-      LEFT JOIN catalogo_grupos_postulacion cgp ON cgp.id_grupo = p.id_grupo_postulacion
-      LEFT JOIN catalogo_ideologia_politica cip ON cip.id_ideologia = p.id_ideologia_politica
-      LEFT JOIN usuarios u ON u.id_usuario = p.creado_por
-      LEFT JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
-      LEFT JOIN roles r ON r.id_rol = ur.id_rol
-      ${whereSql}
+      ${whereSQL}
     `;
+    const { rows: totalRows } = await client.query(totalSql, params);
+    const total = totalRows?.[0]?.total || 0;
+    const last_page = Math.max(Math.ceil(total / size), 1);
 
-    const totalQ = await pool.query(`SELECT COUNT(DISTINCT p.id_persona)::int AS total ${fromSql}`, params);
-    const total = totalQ.rows[0]?.total ?? 0;
-
-    params.push(pageSize, offset);
-
-    const dataQ = await pool.query(
-      `
+    // -------- DATA
+    const dataSql = `
       SELECT
         p.id_persona,
         p.nombre,
-        p.escala_influencia,
-        p.created_at,
-        p.sin_controversias_publicas,
+        p.apellido_paterno,
+        p.apellido_materno,
+        (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
 
-        mt.nombre AS municipio_trabajo_politico,
+        p.curp,
+        p.rfc,
+        p.clave_elector,
 
-        cp.siglas AS partido_actual_siglas,
-        cp.nombre AS partido_actual,
-        cti.nombre AS tema_interes_central,
-        cgp.nombre AS grupo_postulacion,
-        cip.nombre AS ideologia_politica,
+        p.id_oficina,
+        o.nombre AS oficina_nombre,
 
         p.creado_por,
-        u.nombre AS creado_por_nombre,
-        u.email  AS creado_por_email,
+        u_crea.nombre AS creado_por_nombre,
+        u_crea.email  AS creado_por_email,
 
-        COALESCE(
-          jsonb_agg(DISTINCT r.nombre) FILTER (WHERE r.nombre IS NOT NULL),
-          '[]'::jsonb
-        ) AS creado_por_roles
-      ${fromSql}
-      GROUP BY
-        p.id_persona, p.nombre, p.escala_influencia, p.created_at, p.sin_controversias_publicas,
-        mt.nombre,
-        cp.siglas, cp.nombre,
-        cti.nombre,
-        cgp.nombre,
-        cip.nombre,
-        p.creado_por, u.nombre, u.email
-      ORDER BY ${sortCol} ${dir}
-      LIMIT $${i++} OFFSET $${i++}
-      `,
-      params
-    );
+        p.modificado_por,
+        u_mod.nombre AS modificado_por_nombre,
+        u_mod.email  AS modificado_por_email,
 
-    return res.json({ page, pageSize, total, rows: dataQ.rows });
+        p.municipio_trabajo_politico,
+        mt.nombre AS municipio_trabajo_nombre,
+
+        p.created_at,
+        p.updated_at,
+
+        t.telefono AS telefono_principal
+
+      FROM personas p
+      LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
+      LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
+      LEFT JOIN usuarios u_mod  ON u_mod.id_usuario  = p.modificado_por
+      LEFT JOIN municipios mt   ON mt.id_municipio   = p.municipio_trabajo_politico
+
+      LEFT JOIN LATERAL (
+        SELECT telefono
+        FROM telefonos
+        WHERE id_persona = p.id_persona
+        ORDER BY principal DESC, id_telefono ASC
+        LIMIT 1
+      ) t ON true
+
+      ${whereSQL}
+      ORDER BY p.${sortField} ${sortDir}, p.id_persona DESC
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+    `;
+
+    const dataParams = params.concat([size, offset]);
+    const { rows } = await client.query(dataSql, dataParams);
+
+    return res.json({
+      data: rows,
+      total,
+      page,
+      size,
+      last_page
+    });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: 'Error al listar grid', detail: e.message });
+    return res.status(500).json({ error: "Error al obtener grid", detail: e.message });
+  } finally {
+    client.release();
   }
 };
+
 
 // 2) CREAR PERSONA COMPLETA (transacción)
 // Espera un JSON como el que te pongo más abajo
@@ -284,6 +387,8 @@ exports.createPersonaCompleta = async (req, res) => {
       participacion_organizaciones = [],
       cargos_eleccion_popular = [],
       experiencia_laboral = [],
+      empresas_persona = [],
+      fuentes_consulta = []
     } = req.body;
 
       if (persona.sin_controversias_publicas === true && controversias.length > 0) {
@@ -311,10 +416,30 @@ exports.createPersonaCompleta = async (req, res) => {
         }
       }
 
-    // Validación mínima
+    //Validación mínima
     if (!persona?.nombre) {
       return res.status(400).json({ error: 'persona.nombre es obligatorio' });
     }
+    //validadion nivel de confiabilidad
+    const nc = (persona.nivel_confiabilidad || "").toString().trim().toLowerCase() || null;
+
+    if (nc && !["alto","medio","bajo"].includes(nc)) {
+      return res.status(400).json({ error: "nivel_confiabilidad inválido" });
+    }
+
+   /* const curp = validarLongitudOpcional(persona.curp, 18);
+    if (curp === false) return res.status(400).json({ error: "CURP debe tener 18 caracteres" });
+
+    const rfc = validarLongitudOpcional(persona.rfc, 13);
+    if (rfc === false) return res.status(400).json({ error: "RFC debe tener 13 caracteres" });
+
+    const clave = validarLongitudOpcional(persona.clave_elector, 18);
+    if (clave === false) return res.status(400).json({ error: "Clave de elector debe tener 18 caracteres" });
+
+    // si pasó, guarda normalizado
+    persona.curp = curp;               // null o string
+    persona.rfc = rfc;
+    persona.clave_elector = clave;*/
 
     await client.query('BEGIN');
 
@@ -344,9 +469,10 @@ exports.createPersonaCompleta = async (req, res) => {
         id_ideologia_politica,
         sin_cargos_eleccion_popular,
         foto_url,
-        id_oficina
+        id_oficina,
+        nivel_confiabilidad
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
       RETURNING id_persona
       `,
       [
@@ -371,12 +497,34 @@ exports.createPersonaCompleta = async (req, res) => {
         persona.id_ideologia_politica || null,
         persona.sin_cargos_eleccion_popular ?? null,
         persona.foto_url || null,
-        oficinaFinal
+        oficinaFinal,
+        persona.nivel_confiabilidad = nc
       ]
     );
 
 
     const id_persona = insertPersona.rows[0].id_persona;
+
+    if (!persona.nombre) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Nombre es requerido'
+      });
+    }
+
+    if (!persona.apellido_paterno) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Apellido paterno es requerido'
+      });
+    }
+
+    if (!persona.apellido_materno) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Apellido materno es requerido'
+      });
+    }
       
     // Validar "Otro" partido
     if (persona.id_partido_actual) {
@@ -477,11 +625,21 @@ exports.createPersonaCompleta = async (req, res) => {
       }
     }
 
+    const ced = (fa.cedula_profesional || "").toString().trim() || null;
+    // regla: si NO está titulado, forzamos null
+    const cedFinal = (fa.titulado === true) ? ced : null;
+
+    // si titulado=true, exigir cédula (para sup/posgrado o para cualquier nivel, tú decides)
+    if (fa.titulado === true && !cedFinal) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Si está titulado, captura la cédula profesional' });
+    }
+
     await client.query(
       `
-      INSERT INTO formacion_academica
-        (id_persona, nivel, grado_obtenido, institucion, anio_inicio, anio_fin, grado,titulado)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    INSERT INTO formacion_academica
+      (id_persona, nivel, grado_obtenido, institucion, anio_inicio, anio_fin, grado, titulado, cedula_profesional)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       `,
       [
         id_persona,
@@ -491,7 +649,8 @@ exports.createPersonaCompleta = async (req, res) => {
         fa.anio_inicio || null,
         fa.anio_fin || null,
         fa.grado || null,
-        fa.titulado ?? null
+        fa.titulado ?? null,
+        cedFinal
       ]
       
     );
@@ -617,7 +776,6 @@ exports.createPersonaCompleta = async (req, res) => {
       );
     }
 
-    // ✅ EVENTOS DE MOVILIZACIÓN (lista)
     for (const ev of capacidad_movilizacion_eventos) {
       const nombre = (ev?.nombre_evento || '').toString().trim();
       const fecha = ev?.fecha_evento || null;
@@ -649,10 +807,17 @@ exports.createPersonaCompleta = async (req, res) => {
       await client.query(
         `
         INSERT INTO capacidad_movilizacion_eventos
-          (id_persona, nombre_evento, fecha_evento, asistencia)
-        VALUES ($1,$2,$3,$4)
+          (id_persona, nombre_evento, fecha_evento, asistencia, lugar_evento, foto_evento_url)
+        VALUES ($1,$2,$3,$4,$5,$6)
         `,
-        [id_persona, nombre, fecha, asistencia]
+        [
+          id_persona,
+          nombre,
+          fecha,
+          asistencia,
+          (ev?.lugar_evento || '').toString().trim() || null,
+          (ev?.foto_evento_url || '').toString().trim() || null
+        ]
       );
     }
 
@@ -684,16 +849,27 @@ exports.createPersonaCompleta = async (req, res) => {
         ]
       );
     }
+
     // Si se marcó "sin controversias públicas", NO se insertan controversias
     const sinControversias = persona.sin_controversias_publicas === true;
-    // CONTROVERSIAS (requiere id_tipo)
-    // CONTROVERSIAS (solo si NO marcó "sin controversias públicas")
+
     if (!sinControversias) {
       for (const c of controversias) {
+
+        // ✅ VALIDAR ANTES DE INSERTAR
+        if (c.fecha_registro && !isPeriodoValido(c.fecha_registro)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Formato inválido en controversia. Usa AAAA o AAAA-AAAA'
+          });
+        }
+        const tieneAlgo = c?.id_tipo || c?.descripcion || c?.fuente || c?.fecha_registro || c?.estatus;
+        if (!tieneAlgo) continue;
+
         await client.query(
           `
           INSERT INTO controversias_persona
-          (id_persona, id_tipo, descripcion, fuente, fecha_registro, estatus)
+            (id_persona, id_tipo, descripcion, fuente, fecha_registro, estatus)
           VALUES ($1,$2,$3,$4,$5,$6)
           `,
           [
@@ -701,7 +877,7 @@ exports.createPersonaCompleta = async (req, res) => {
             c.id_tipo,
             c.descripcion || null,
             c.fuente || null,
-            c.fecha_registro || null,
+            c.fecha_registro || null, // ahora es VARCHAR
             c.estatus || null
           ]
         );
@@ -796,6 +972,92 @@ exports.createPersonaCompleta = async (req, res) => {
         ]
       );
     }
+    // EMPRESAS (1:N)
+    for (const e of empresas_persona) {
+      const nombre = (e?.nombre_empresa || "").trim();
+      const rol = (e?.rol || "").trim();
+      const periodo = normalizePeriodo(e?.periodo);
+      const notas = (e?.notas || "").trim();
+
+      const tieneAlgo = nombre || rol || periodo || notas;
+      if (!tieneAlgo) continue;
+
+      if (!nombre) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Cada empresa requiere nombre_empresa' });
+      }
+
+      if (periodo && !isPeriodoValido(periodo)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Formato inválido en empresa. Usa AAAA o AAAA-AAAA' });
+      }
+
+      await client.query(
+        `
+        INSERT INTO empresas_persona (id_persona, nombre_empresa, rol, periodo, notas)
+        VALUES ($1,$2,$3,$4,$5)
+        `,
+        [id_persona, nombre, rol || null, periodo || null, notas || null]
+      );
+    }
+    // fuentes_consulta (1:N)
+    await client.query(`DELETE FROM fuentes_persona WHERE id_persona = $1`, [id_persona]);
+
+    for (const f of (fuentes_consulta || [])) {
+      const id_fuente = Number(f?.id_fuente);
+      const detalle = (f?.detalle || '').toString().trim() || null;
+      const fecha_consulta = (f?.fecha_consulta || '').toString().trim() || null; // 'YYYY-MM-DD'
+
+      if (!Number.isFinite(id_fuente) || id_fuente <= 0) continue;
+
+      // 🔒 validar que exista y esté activa
+      const { rows: fr } = await client.query(
+        `SELECT 1 FROM catalogo_fuentes_consulta WHERE id_fuente = $1 AND activo = true`,
+        [id_fuente]
+      );
+      if (!fr[0]) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Fuente de consulta inválida" });
+      }
+
+      await client.query(
+        `INSERT INTO fuentes_persona (id_persona, id_fuente, detalle, fecha_consulta)
+        VALUES ($1,$2,$3,$4)
+        ON CONFLICT (id_persona, id_fuente)
+        DO UPDATE SET detalle = EXCLUDED.detalle, fecha_consulta = EXCLUDED.fecha_consulta`,
+        [id_persona, id_fuente, detalle, fecha_consulta]
+      );
+    }
+    //trabajo politico en varios municipios
+    const municipios_trabajo = Array.isArray(req.body.municipios_trabajo) ? req.body.municipios_trabajo : [];
+
+    await client.query(`DELETE FROM personas_municipios_trabajo WHERE id_persona=$1`, [id_persona]);
+
+    const principal = persona.municipio_trabajo_politico ? Number(persona.municipio_trabajo_politico) : null;
+    const ids = new Set();
+
+    for (const it of municipios_trabajo) {
+      const id_municipio = Number(it?.id_municipio);
+      if (!Number.isFinite(id_municipio) || id_municipio <= 0) continue;
+      if (ids.has(id_municipio)) continue;
+      ids.add(id_municipio);
+
+      await client.query(
+        `INSERT INTO personas_municipios_trabajo (id_persona, id_municipio, es_principal, notas)
+        VALUES ($1,$2,$3,$4)`,
+        [id_persona, id_municipio, principal === id_municipio, (it?.notas || '').toString().trim() || null]
+      );
+    }
+
+    // Forzar que el principal esté en la cobertura si existe
+    if (principal && !ids.has(principal)) {
+      await client.query(
+        `INSERT INTO personas_municipios_trabajo (id_persona, id_municipio, es_principal)
+        VALUES ($1,$2,true)
+        ON CONFLICT (id_persona, id_municipio) DO UPDATE SET es_principal=true`,
+        [id_persona, principal]
+      );
+    }
       await client.query('COMMIT');
       return res.status(201).json({ ok: true, id_persona });
 
@@ -820,19 +1082,27 @@ exports.createPersonaCompleta = async (req, res) => {
 
 // 3) PERFIL COMPLETO (usa tu query consolidado)
 exports.getPerfilCompleto = async (req, res) => {
+  const client = await pool.connect();
   try {
     const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
+    if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ error: "ID inválido" });
     }
 
-    const { rows } = await pool.query(
+    const { rows } = await client.query(
       `
       SELECT
         p.id_persona,
         p.nombre,
         p.apellido_paterno,
         p.apellido_materno,
+        -- NUEVO
+        u_crea.nombre  AS creado_por_nombre,
+        u_mod.nombre   AS modificado_por_nombre,
+        o.nombre       AS oficina_nombre,
+        p.created_at,
+        p.updated_at,
+
         p.curp,
         p.rfc,
         p.clave_elector,
@@ -840,9 +1110,6 @@ exports.getPerfilCompleto = async (req, res) => {
         p.escala_influencia,
         p.sin_servicio_publico,
         p.ha_contendido_eleccion,
-        p.created_at,
-        p.creado_por,
-
         p.sin_controversias_publicas,
 
         p.id_partido_actual,
@@ -861,9 +1128,7 @@ exports.getPerfilCompleto = async (req, res) => {
         mr.nombre AS municipio_residencia_real,
         mt.nombre AS municipio_trabajo_politico,
 
-        -- =========================
-        -- 1) DATOS INE (objeto 1:1)
-        -- =========================
+        -- DATOS INE (objeto)
         (
           SELECT CASE
             WHEN di.id_persona IS NULL THEN NULL
@@ -875,12 +1140,11 @@ exports.getPerfilCompleto = async (req, res) => {
           END
           FROM datos_ine di
           WHERE di.id_persona = p.id_persona
+          ORDER BY di.id_ine DESC
           LIMIT 1
         ) AS datos_ine,
 
-        -- =========================
-        -- 2) TELEFONOS
-        -- =========================
+        -- TELEFONOS
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -895,9 +1159,7 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE t.id_persona = p.id_persona
         ), '[]'::jsonb) AS telefonos,
 
-        -- =========================
-        -- 3) FORMACION ACADEMICA
-        -- =========================
+        -- FORMACION
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -907,7 +1169,9 @@ exports.getPerfilCompleto = async (req, res) => {
               'grado_obtenido', fa.grado_obtenido,
               'institucion',    fa.institucion,
               'anio_inicio',    fa.anio_inicio,
-              'anio_fin',       fa.anio_fin
+              'anio_fin',       fa.anio_fin,
+              'titulado',       fa.titulado,
+              'cedula_profesional', fa.cedula_profesional
             )
             ORDER BY fa.id_formacion ASC
           )
@@ -915,9 +1179,7 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE fa.id_persona = p.id_persona
         ), '[]'::jsonb) AS formacion_academica,
 
-        -- =========================
-        -- 4) REDES (con catálogo)
-        -- =========================
+        -- REDES
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -932,16 +1194,25 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE rsp.id_persona = p.id_persona
         ), '[]'::jsonb) AS redes_sociales,
 
-        -- =========================
-        -- 5) PAREJAS con HIJOS anidados
-        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'nombre_empresa', e.nombre_empresa,
+            'rol', e.rol,
+            'periodo', e.periodo,
+            'notas', e.notas
+          ) ORDER BY e.id_empresa_persona ASC)
+          FROM empresas_persona e
+          WHERE e.id_persona = $1
+        ), '[]'::jsonb) AS empresas,
+
+        -- PAREJAS + HIJOS anidados (usa "periodo" como en tu UI)
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
               'id_pareja',      pa.id_pareja,
               'nombre_pareja',  pa.nombre_pareja,
               'tipo_relacion',  pa.tipo_relacion,
-              'periodo',   pa.periodo,
+              'periodo',        pa.periodo,
               'hijos', COALESCE((
                 SELECT jsonb_agg(
                   jsonb_build_object(
@@ -962,24 +1233,7 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE pa.id_persona = p.id_persona
         ), '[]'::jsonb) AS parejas,
 
-        -- (Opcional) Si tu frontend todavía consume hijos "plano", lo dejamos también:
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_hijo',         h.id_hijo,
-              'id_pareja',       h.id_pareja,
-              'anio_nacimiento', h.anio_nacimiento,
-              'sexo',            h.sexo
-            )
-            ORDER BY h.id_hijo ASC
-          )
-          FROM hijos h
-          WHERE h.id_persona = p.id_persona
-        ), '[]'::jsonb) AS hijos,
-
-        -- =========================
-        -- 6) SERVICIO PUBLICO
-        -- =========================
+        -- SERVICIO PUBLICO
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -994,9 +1248,7 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE sp.id_persona = p.id_persona
         ), '[]'::jsonb) AS servicio_publico,
 
-        -- =========================
-        -- 7) ELECCIONES
-        -- =========================
+        -- ELECCIONES
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1014,9 +1266,7 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE ec.id_persona = p.id_persona
         ), '[]'::jsonb) AS elecciones,
 
-        -- =========================
-        -- 8) CAPACIDAD MOVILIZACION (1:1)
-        -- =========================
+        -- CAPACIDAD MOVILIZACION (1:1)
         (
           SELECT CASE
             WHEN cm.id_persona IS NULL THEN NULL
@@ -1030,9 +1280,7 @@ exports.getPerfilCompleto = async (req, res) => {
           LIMIT 1
         ) AS capacidad_movilizacion,
 
-        -- =========================
-        -- 9) EQUIPOS
-        -- =========================
+        -- EQUIPOS
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1046,35 +1294,31 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE ep.id_persona = p.id_persona
         ), '[]'::jsonb) AS equipos,
 
-        -- =========================
-        -- 10) REFERENTES
-        -- =========================
+        -- REFERENTES (nombres + apellidos, como en tu UI)
         COALESCE((
           SELECT jsonb_agg(
-          jsonb_build_object(
-            'id_referente',     rp.id_referente,
-            'nivel',            rp.nivel,
-            'nombres',          rp.nombres,
-            'apellido_paterno', rp.apellido_paterno,
-            'apellido_materno', rp.apellido_materno
-          )
+            jsonb_build_object(
+              'id_referente',     rp.id_referente,
+              'nivel',            rp.nivel,
+              'nombres',          rp.nombres,
+              'apellido_paterno', rp.apellido_paterno,
+              'apellido_materno', rp.apellido_materno
+            )
             ORDER BY rp.id_referente ASC
           )
           FROM referentes_politicos rp
           WHERE rp.id_persona = p.id_persona
         ), '[]'::jsonb) AS referentes,
 
-        -- =========================
-        -- 11) FAMILIARES
-        -- =========================
+        -- FAMILIARES
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
-              'id_familiar',  fp.id_familiar,
-              'nombre',       fp.nombre,
-              'parentesco',   fp.parentesco,
-              'cargo',        fp.cargo,
-              'institucion',  fp.institucion
+              'id_familiar', fp.id_familiar,
+              'nombre',      fp.nombre,
+              'parentesco',  fp.parentesco,
+              'cargo',       fp.cargo,
+              'institucion', fp.institucion
             )
             ORDER BY fp.id_familiar ASC
           )
@@ -1082,9 +1326,7 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE fp.id_persona = p.id_persona
         ), '[]'::jsonb) AS familiares,
 
-        -- =========================
-        -- 12) PARTICIPACION ORGANIZACIONES
-        -- =========================
+        -- PARTICIPACION
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1101,9 +1343,70 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE po.id_persona = p.id_persona
         ), '[]'::jsonb) AS participacion_organizaciones,
 
-        -- =========================
-        -- 13) CONTROVERSIAS (condicional)
-        -- =========================
+        -- TEMAS DE INTERES (lista con nombre)
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_tema', pti.id_tema,
+              'tema',    cti2.nombre,
+              'otro_texto', pti.otro_texto
+            )
+            ORDER BY cti2.nombre ASC NULLS LAST, pti.id_tema ASC
+          )
+          FROM personas_temas_interes pti
+          LEFT JOIN catalogo_temas_interes cti2 ON cti2.id_tema = pti.id_tema
+          WHERE pti.id_persona = p.id_persona
+        ), '[]'::jsonb) AS temas_interes,
+
+        -- CARGOS DE ELECCION POPULAR (lista)
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_cargo_eleccion', cep.id_cargo_eleccion,
+              'periodo', cep.periodo,
+              'cargo', cep.cargo,
+              'partido_postulante', cep.partido_postulante,
+              'modalidad', cep.modalidad
+            )
+            ORDER BY cep.id_cargo_eleccion ASC
+          )
+          FROM cargos_eleccion_popular cep
+          WHERE cep.id_persona = p.id_persona
+        ), '[]'::jsonb) AS cargos_eleccion_popular,
+
+        -- EXPERIENCIA LABORAL (lista)
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_experiencia', el.id_experiencia,
+              'periodo', el.periodo,
+              'cargo', el.cargo,
+              'organizacion', el.organizacion
+            )
+            ORDER BY el.id_experiencia ASC
+          )
+          FROM experiencia_laboral el
+          WHERE el.id_persona = p.id_persona
+        ), '[]'::jsonb) AS experiencia_laboral,
+
+        -- CAPACIDAD MOVILIZACION EVENTOS (lista)
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_evento', cme.id_evento,
+              'nombre_evento', cme.nombre_evento,
+              'fecha_evento', cme.fecha_evento,
+              'asistencia', cme.asistencia,
+              'lugar_evento', cme.lugar_evento,
+              'foto_evento_url', cme.foto_evento_url
+            )
+            ORDER BY cme.id_evento ASC
+          )
+          FROM capacidad_movilizacion_eventos cme
+          WHERE cme.id_persona = p.id_persona
+        ), '[]'::jsonb) AS capacidad_movilizacion_eventos,
+
+        -- CONTROVERSIAS (condicional)
         CASE
           WHEN p.sin_controversias_publicas = true THEN '[]'::jsonb
           ELSE COALESCE((
@@ -1130,9 +1433,13 @@ exports.getPerfilCompleto = async (req, res) => {
       LEFT JOIN municipios mr ON mr.id_municipio = p.municipio_residencia_real
       LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
 
-      LEFT JOIN catalogo_partidos cp            ON cp.id_partido = p.id_partido_actual
-      LEFT JOIN catalogo_temas_interes cti      ON cti.id_tema    = p.id_tema_interes_central
-      LEFT JOIN catalogo_grupos_postulacion cgp ON cgp.id_grupo   = p.id_grupo_postulacion
+      LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
+      LEFT JOIN usuarios u_mod  ON u_mod.id_usuario = p.modificado_por
+      LEFT JOIN oficinas o      ON o.id_oficina = p.id_oficina
+
+      LEFT JOIN catalogo_partidos cp            ON cp.id_partido   = p.id_partido_actual
+      LEFT JOIN catalogo_temas_interes cti      ON cti.id_tema     = p.id_tema_interes_central
+      LEFT JOIN catalogo_grupos_postulacion cgp ON cgp.id_grupo    = p.id_grupo_postulacion
       LEFT JOIN catalogo_ideologia_politica cip ON cip.id_ideologia = p.id_ideologia_politica
 
       WHERE p.id_persona = $1
@@ -1140,52 +1447,30 @@ exports.getPerfilCompleto = async (req, res) => {
       `,
       [id]
     );
-//edicion
-  if (!rows[0]) return res.status(404).json({ error: "Persona no encontrada" });
 
-  const roles = req.user.roles || [];
-  if (roles.includes('capturista') && rows[0].creado_por !== req.user.id_usuario) {
-    return res.status(403).json({ error: 'No autorizado' });
-  }
+    if (!rows[0]) return res.status(404).json({ error: "Persona no encontrada" });
 
-  return res.json(rows[0]);
- //edicion    
+    // 🔒 seguridad capturista (solo sus registros)
+    const roles = req.user?.roles || [];
+    if (roles.includes("capturista") && !roles.includes("analista") && !roles.includes("superadmin")) {
+      const userId = Number(req.user.id_usuario || 0);
+      if (rows[0].creado_por !== userId) {
+        return res.status(403).json({ error: "No autorizado" });
+      }
+    }
+
+    return res.json(rows[0]);
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Error al obtener perfil", detail: e.message });
+  } finally {
+    client.release();
   }
 };
+
 
 // 4. Usuarios para filtro
 
-exports.listUsuariosParaFiltro = async (req, res) => {
-  try {
-
-
-    const { rows } = await pool.query(`
-      SELECT
-        u.id_usuario,
-        u.nombre,
-        u.email,
-        COALESCE(
-          jsonb_agg(DISTINCT r.nombre) FILTER (WHERE r.nombre IS NOT NULL),
-          '[]'::jsonb
-        ) AS roles,
-        MIN(r.nombre) AS rol_principal
-      FROM usuarios u
-      LEFT JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
-      LEFT JOIN roles r ON r.id_rol = ur.id_rol
-      WHERE u.activo = true
-      GROUP BY u.id_usuario, u.nombre, u.email
-      ORDER BY u.nombre ASC
-    `);
-
-    return res.json(rows);
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Error al listar usuarios', detail: e.message });
-  }
-};
 
 // 5. resumen por usuario
 
@@ -1220,19 +1505,388 @@ exports.resumenPersonasPorUsuario = async (req, res) => {
 };
 
 //pdf 
-const PDFDocument = require("pdfkit");
+const puppeteer = require("puppeteer");
 
+// ===================== helpers =====================
+
+async function imageUrlToDataUri(url) {
+  if (!url) return null;
+  const s = String(url);
+
+  // ya es data-uri
+  if (s.startsWith("data:image/")) return s;
+
+  // solo http(s)
+  if (!/^https?:\/\//i.test(s)) return null;
+
+  const r = await fetch(s, { redirect: "follow" });
+  if (!r.ok) throw new Error(`No pude descargar imagen (${r.status})`);
+
+  const ct = r.headers.get("content-type") || "image/png";
+  const ab = await r.arrayBuffer();
+  const b64 = Buffer.from(ab).toString("base64");
+  return `data:${ct};base64,${b64}`;
+}
+
+
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function fmtDate(v) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
+}
+
+function joinFullName(p) {
+  return [p.nombre, p.apellido_paterno, p.apellido_materno].filter(Boolean).join(" ");
+}
+
+function badge(text, cls = "") {
+  if (!text) return "";
+  return `<span class="badge ${cls}">${esc(text)}</span>`;
+}
+
+function asArray(x) {
+  return Array.isArray(x) ? x : [];
+}
+
+function listSection(title, arr, renderItem) {
+  const items = asArray(arr);
+  if (!items.length) return "";
+  return `
+    <section class="section">
+      <div class="h2">${esc(title)}</div>
+      <div class="grid">
+        ${items.map(renderItem).join("")}
+      </div>
+    </section>
+  `;
+}
+
+
+ function escAttr(s){
+    return String(s ?? "").replace(/"/g, "&quot;");
+  }
+
+
+function buildPerfilHtml(p) {
+
+  const nombreCompleto = joinFullName(p) || "—";
+  const partido = p.partido_actual_siglas || p.partido_actual || "";
+  const municipio = p.municipio_trabajo_politico || p.municipio_residencia_real || p.municipio_residencia_legal || "—";
+  const foto = p.foto_url ? String(p.foto_url) : "";
+
+ 
+  
+
+  const flags = [
+    p.sin_servicio_publico === true ? badge("Sin servicio público", "sec") : "",
+    p.ha_contendido_eleccion === true ? badge("Ha contendió elección", "prim") : "",
+    p.sin_controversias_publicas === true ? badge("Sin controversias", "ok") : "",
+  ].filter(Boolean).join("");
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Perfil - ${esc(nombreCompleto)}</title>
+  <style>
+    :root{
+      --prim:#8b2136;
+      --sec:#b89056;
+      --mut:#6b7280;
+      --bg:#ffffff;
+      --line:#e5e7eb;
+      --ok:#16a34a;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      margin: 0;
+      padding: 22px;
+      color:#111827;
+    }
+    .top{
+      display:flex;
+      gap:16px;
+      align-items:flex-start;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:16px;
+    }
+    .photo{
+      width:110px; height:140px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#f3f4f6;
+      overflow:hidden;
+      flex:0 0 auto;
+      display:flex; align-items:center; justify-content:center;
+      color:var(--mut);
+      font-size:12px;
+    }
+    .photo img{ width:100%; height:100%; object-fit:cover; }
+    .title{ flex:1 1 auto; min-width:0; }
+    .h1{ font-size:20px; margin:0; color:var(--prim); font-weight:800; }
+    .sub{ margin-top:6px; color:var(--mut); font-size:13px; }
+    .badges{ margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; }
+    .badge{
+      display:inline-block;
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:#fafafa;
+      white-space:nowrap;
+    }
+    .badge.prim{ background: rgba(139,33,54,.08); border-color: rgba(139,33,54,.18); }
+    .badge.sec{ background: rgba(184,144,86,.10); border-color: rgba(184,144,86,.22); }
+    .badge.ok{ background: rgba(22,163,74,.10); border-color: rgba(22,163,74,.20); color:#065f46; }
+    .section{
+      margin-top:14px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:14px 16px;
+    }
+    .h2{
+      font-size:12px;
+      letter-spacing:.3px;
+      color:var(--prim);
+      font-weight:800;
+      margin:0 0 10px 0;
+      text-transform:uppercase;
+    }
+    .kv{
+      display:grid;
+      grid-template-columns: 190px 1fr;
+      gap:8px 12px;
+      font-size:12px;
+    }
+    .k{ color:var(--mut); }
+    .v{ color:#111827; }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .item{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px;
+      font-size:12px;
+      break-inside: avoid;
+    }
+    .item .t{ font-weight:800; margin-bottom:4px; }
+    .item .m{ color:var(--mut); font-size:11px; }
+    .foot{
+      margin-top:10px;
+      color:var(--mut);
+      font-size:10px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="photo">
+      ${foto ? `<img src="${escAttr(foto)}" alt="foto"/>` : `Sin foto`}
+    </div>
+
+    <div class="title">
+      <h1 class="h1">${esc(nombreCompleto)}</h1>
+      <div class="sub">• ${esc(municipio)}</div>
+
+      <div class="badges">
+        ${badge(p.grupo_postulacion)}
+        ${partido ? badge(partido, "prim") : ""}
+        ${badge(p.ideologia_politica)}
+        ${badge(p.tema_interes_central, "sec")}
+        ${flags}
+      </div>
+    </div>
+  </div>
+
+  <section class="section">
+    <div class="h2">Datos generales</div>
+    <div class="kv">
+      <div class="k">CURP</div><div class="v mono">${esc(p.curp || "—")}</div>
+      <div class="k">RFC</div><div class="v mono">${esc(p.rfc || "—")}</div>
+      <div class="k">Clave elector</div><div class="v mono">${esc(p.clave_elector || "—")}</div>
+      <div class="k">Estado civil</div><div class="v">${esc(p.estado_civil || "—")}</div>
+
+      <div class="k">Municipio legal</div><div class="v">${esc(p.municipio_residencia_legal || "—")}</div>
+      <div class="k">Municipio real</div><div class="v">${esc(p.municipio_residencia_real || "—")}</div>
+      <div class="k">Municipio trabajo</div><div class="v">${esc(p.municipio_trabajo_politico || "—")}</div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="h2">INE</div>
+    <div class="kv">
+      <div class="k">Sección</div><div class="v">${esc(p?.datos_ine?.seccion_electoral || "—")}</div>
+      <div class="k">Distrito federal</div><div class="v">${esc(p?.datos_ine?.distrito_federal || "—")}</div>
+      <div class="k">Distrito local</div><div class="v">${esc(p?.datos_ine?.distrito_local || "—")}</div>
+    </div>
+  </section>
+
+  ${listSection("Teléfonos", p.telefonos, (t)=>`
+    <div class="item">
+      <div class="t">${esc(t.telefono || "—")} ${t.principal ? badge("Principal", "ok") : ""}</div>
+      <div class="m">${esc(t.tipo || "—")}</div>
+    </div>
+  `)}
+
+  ${listSection("Formación académica", p.formacion_academica, (x)=>`
+    <div class="item">
+      <div class="t">${esc([x.nivel, x.grado_obtenido || x.grado].filter(Boolean).join(" • ") || "—")}</div>
+      <div class="m">${esc(x.institucion || "")}</div>
+      <div class="m">${esc((x.anio_inicio || "—") + " - " + (x.anio_fin || "—"))} ${x.titulado === true ? "• Titulado" : ""}</div>
+    </div>
+  `)}
+
+  ${listSection("Redes sociales", p.redes_sociales, (r)=>`
+    <div class="item">
+      <div class="t">${esc(r.red || "—")}</div>
+      <div class="m">${r.url ? esc(r.url) : "—"}</div>
+    </div>
+  `)}
+
+  ${listSection("Temas de interés", p.temas_interes, (t)=>`
+    <div class="item">
+      <div class="t">${esc(t.tema || (t.id_tema ? ("Tema #" + t.id_tema) : "—"))}</div>
+      ${t.otro_texto ? `<div class="m">${esc(t.otro_texto)}</div>` : `<div class="m">—</div>`}
+    </div>
+  `)}
+
+  ${listSection("Cargos de elección popular", p.cargos_eleccion_popular, (c)=>`
+    <div class="item">
+      <div class="t">${esc(c.cargo || "—")}</div>
+      <div class="m">${esc([c.periodo, c.modalidad, c.partido_postulante].filter(Boolean).join(" • ") || "")}</div>
+    </div>
+  `)}
+
+  ${listSection("Servicio público", p.servicio_publico, (s)=>`
+    <div class="item">
+      <div class="t">${esc(s.cargo || "—")}</div>
+      <div class="m">${esc(s.dependencia || "")}</div>
+      <div class="m">${esc(s.periodo || "")}</div>
+    </div>
+  `)}
+
+  ${listSection("Elecciones contendidas", p.elecciones, (e)=>`
+    <div class="item">
+      <div class="t">${esc([e.anio_eleccion, e.candidatura].filter(Boolean).join(" • ") || "—")}</div>
+      <div class="m">${esc([e.partido_postulacion, e.resultado].filter(Boolean).join(" • ") || "")}</div>
+      ${(e.diferencia_votos || e.diferencia_porcentaje) ? `<div class="m">Diferencia: ${esc(e.diferencia_votos ?? "—")} votos • ${esc(e.diferencia_porcentaje ?? "—")}%</div>` : `<div class="m"></div>`}
+    </div>
+  `)}
+
+  ${listSection("Eventos de movilización", p.capacidad_movilizacion_eventos, (e)=>`
+    <div class="item">
+      <div class="t">${esc(e.nombre_evento || "—")}</div>
+      <div class="m">${esc([e.fecha_evento, (e.asistencia != null ? ("Asistencia: " + e.asistencia) : null)].filter(Boolean).join(" • ") || "")}</div>
+    </div>
+  `)}
+
+  ${listSection("Equipos políticos", p.equipos, (eq)=>`
+    <div class="item">
+      <div class="t">${esc(eq.nombre_equipo || "—")}</div>
+      <div class="m">${eq.activo === true ? "Activo" : "Inactivo"}</div>
+    </div>
+  `)}
+
+  ${listSection("Referentes políticos", p.referentes, (r)=>`
+    <div class="item">
+      <div class="t">${esc([r.nombres, r.apellido_paterno, r.apellido_materno].filter(Boolean).join(" ") || "—")}</div>
+      <div class="m">${esc(r.nivel || "")}</div>
+    </div>
+  `)}
+
+  ${listSection("Familiares en política", p.familiares, (f)=>`
+    <div class="item">
+      <div class="t">${esc([f.nombre, f.parentesco].filter(Boolean).join(" • ") || "—")}</div>
+      <div class="m">${esc([f.cargo, f.institucion].filter(Boolean).join(" • ") || "")}</div>
+    </div>
+  `)}
+
+  ${listSection("Participación en organizaciones", p.participacion_organizaciones, (o)=>`
+    <div class="item">
+      <div class="t">${esc((o.tipo ? (o.tipo + ": ") : "") + (o.nombre || "—"))}</div>
+      <div class="m">${esc([o.rol, o.periodo].filter(Boolean).join(" • ") || "")}</div>
+      ${o.notas ? `<div class="m">${esc(o.notas)}</div>` : ``}
+    </div>
+  `)}
+
+  ${listSection("Experiencia laboral", p.experiencia_laboral, (x)=>`
+    <div class="item">
+      <div class="t">${esc(x.cargo || "—")}</div>
+      <div class="m">${esc(x.organizacion || "")}</div>
+      <div class="m">${esc(x.periodo || "")}</div>
+    </div>
+  `)}
+
+  ${
+    p.sin_controversias_publicas === true
+      ? `<section class="section">
+           <div class="h2">Controversias</div>
+           <div class="item">Marcado como <strong>Sin controversias públicas</strong>.</div>
+         </section>`
+      : listSection("Controversias", p.controversias, (c)=>`
+          <div class="item">
+            <div class="t">${esc(c.tipo || ("Tipo #" + (c.id_tipo ?? "—")))}</div>
+            <div class="m">${esc([c.estatus, c.fecha_registro].filter(Boolean).join(" • ") || "")}</div>
+            ${c.fuente ? `<div class="m">Fuente: ${esc(c.fuente)}</div>` : ``}
+            ${c.descripcion ? `<div class="m">${esc(c.descripcion)}</div>` : ``}
+          </div>
+        `)
+  }
+
+  <div class="foot">
+    <div>Generado: ${esc(fmtDate(new Date()))}</div>
+    <div>ID persona: ${esc(p.id_persona)}</div>
+  </div>
+
+</body>
+</html>`;
+}
+
+// ===================== ENDPOINT =====================
 exports.getPerfilPdf = async (req, res) => {
+  let browser = null;
+ 
+
+
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
 
-    // ✅ TU QUERY COMPLETO (igual que getPerfilCompleto)
-    const { rows } = await pool.query(
-      `
-        SELECT
+    // ✅ Tu SQL consolidado (tal cual)
+    const sql = `
+      ${/* pega tu SQL exacto aquí */""}
+    `;
+
+    // ⬆️ En lugar de pegarlo manualmente dentro de comentario,
+    // pega tu SQL string aquí abajo (ya te lo dejo integrado):
+    const sqlPerfil = `
+      SELECT
         p.id_persona,
         p.nombre,
+        p.apellido_paterno,
+        p.apellido_materno,
         p.curp,
         p.rfc,
         p.clave_elector,
@@ -1240,10 +1894,11 @@ exports.getPerfilPdf = async (req, res) => {
         p.escala_influencia,
         p.sin_servicio_publico,
         p.ha_contendido_eleccion,
-        p.created_at,
-        p.creado_por,
-
         p.sin_controversias_publicas,
+        p.foto_url,
+        p.creado_por,
+        p.created_at,
+        p.updated_at,
 
         p.id_partido_actual,
         p.id_tema_interes_central,
@@ -1261,9 +1916,6 @@ exports.getPerfilPdf = async (req, res) => {
         mr.nombre AS municipio_residencia_real,
         mt.nombre AS municipio_trabajo_politico,
 
-        -- =========================
-        -- 1) DATOS INE (objeto 1:1)
-        -- =========================
         (
           SELECT CASE
             WHEN di.id_persona IS NULL THEN NULL
@@ -1275,12 +1927,10 @@ exports.getPerfilPdf = async (req, res) => {
           END
           FROM datos_ine di
           WHERE di.id_persona = p.id_persona
+          ORDER BY di.id_ine DESC
           LIMIT 1
         ) AS datos_ine,
 
-        -- =========================
-        -- 2) TELEFONOS
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1295,9 +1945,6 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE t.id_persona = p.id_persona
         ), '[]'::jsonb) AS telefonos,
 
-        -- =========================
-        -- 3) FORMACION ACADEMICA
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1307,7 +1954,9 @@ exports.getPerfilPdf = async (req, res) => {
               'grado_obtenido', fa.grado_obtenido,
               'institucion',    fa.institucion,
               'anio_inicio',    fa.anio_inicio,
-              'anio_fin',       fa.anio_fin
+              'anio_fin',       fa.anio_fin,
+              'titulado',       fa.titulado,
+              'cedula_profesional', fa.cedula_profesional
             )
             ORDER BY fa.id_formacion ASC
           )
@@ -1315,9 +1964,6 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE fa.id_persona = p.id_persona
         ), '[]'::jsonb) AS formacion_academica,
 
-        -- =========================
-        -- 4) REDES (con catálogo)
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1332,17 +1978,13 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE rsp.id_persona = p.id_persona
         ), '[]'::jsonb) AS redes_sociales,
 
-        -- =========================
-        -- 5) PAREJAS con HIJOS anidados
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
               'id_pareja',      pa.id_pareja,
               'nombre_pareja',  pa.nombre_pareja,
               'tipo_relacion',  pa.tipo_relacion,
-              'fecha_inicio',   pa.fecha_inicio,
-              'fecha_fin',      pa.fecha_fin,
+              'periodo',        pa.periodo,
               'hijos', COALESCE((
                 SELECT jsonb_agg(
                   jsonb_build_object(
@@ -1363,24 +2005,6 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE pa.id_persona = p.id_persona
         ), '[]'::jsonb) AS parejas,
 
-        -- (Opcional) Si tu frontend todavía consume hijos "plano", lo dejamos también:
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_hijo',         h.id_hijo,
-              'id_pareja',       h.id_pareja,
-              'anio_nacimiento', h.anio_nacimiento,
-              'sexo',            h.sexo
-            )
-            ORDER BY h.id_hijo ASC
-          )
-          FROM hijos h
-          WHERE h.id_persona = p.id_persona
-        ), '[]'::jsonb) AS hijos,
-
-        -- =========================
-        -- 6) SERVICIO PUBLICO
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1395,9 +2019,6 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE sp.id_persona = p.id_persona
         ), '[]'::jsonb) AS servicio_publico,
 
-        -- =========================
-        -- 7) ELECCIONES
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1415,9 +2036,6 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE ec.id_persona = p.id_persona
         ), '[]'::jsonb) AS elecciones,
 
-        -- =========================
-        -- 8) CAPACIDAD MOVILIZACION (1:1)
-        -- =========================
         (
           SELECT CASE
             WHEN cm.id_persona IS NULL THEN NULL
@@ -1431,9 +2049,6 @@ exports.getPerfilPdf = async (req, res) => {
           LIMIT 1
         ) AS capacidad_movilizacion,
 
-        -- =========================
-        -- 9) EQUIPOS
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1447,35 +2062,29 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE ep.id_persona = p.id_persona
         ), '[]'::jsonb) AS equipos,
 
-        -- =========================
-        -- 10) REFERENTES
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
-          jsonb_build_object(
-            'id_referente',     rp.id_referente,
-            'nivel',            rp.nivel,
-            'nombres',          rp.nombres,
-            'apellido_paterno', rp.apellido_paterno,
-            'apellido_materno', rp.apellido_materno
-          )
+            jsonb_build_object(
+              'id_referente',     rp.id_referente,
+              'nivel',            rp.nivel,
+              'nombres',          rp.nombres,
+              'apellido_paterno', rp.apellido_paterno,
+              'apellido_materno', rp.apellido_materno
+            )
             ORDER BY rp.id_referente ASC
           )
           FROM referentes_politicos rp
           WHERE rp.id_persona = p.id_persona
         ), '[]'::jsonb) AS referentes,
 
-        -- =========================
-        -- 11) FAMILIARES
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
-              'id_familiar',  fp.id_familiar,
-              'nombre',       fp.nombre,
-              'parentesco',   fp.parentesco,
-              'cargo',        fp.cargo,
-              'institucion',  fp.institucion
+              'id_familiar', fp.id_familiar,
+              'nombre',      fp.nombre,
+              'parentesco',  fp.parentesco,
+              'cargo',       fp.cargo,
+              'institucion', fp.institucion
             )
             ORDER BY fp.id_familiar ASC
           )
@@ -1483,9 +2092,6 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE fp.id_persona = p.id_persona
         ), '[]'::jsonb) AS familiares,
 
-        -- =========================
-        -- 12) PARTICIPACION ORGANIZACIONES
-        -- =========================
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1502,9 +2108,63 @@ exports.getPerfilPdf = async (req, res) => {
           WHERE po.id_persona = p.id_persona
         ), '[]'::jsonb) AS participacion_organizaciones,
 
-        -- =========================
-        -- 13) CONTROVERSIAS (condicional)
-        -- =========================
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_tema', pti.id_tema,
+              'tema',    cti2.nombre,
+              'otro_texto', pti.otro_texto
+            )
+            ORDER BY cti2.nombre ASC NULLS LAST, pti.id_tema ASC
+          )
+          FROM personas_temas_interes pti
+          LEFT JOIN catalogo_temas_interes cti2 ON cti2.id_tema = pti.id_tema
+          WHERE pti.id_persona = p.id_persona
+        ), '[]'::jsonb) AS temas_interes,
+
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_cargo_eleccion', cep.id_cargo_eleccion,
+              'periodo', cep.periodo,
+              'cargo', cep.cargo,
+              'partido_postulante', cep.partido_postulante,
+              'modalidad', cep.modalidad
+            )
+            ORDER BY cep.id_cargo_eleccion ASC
+          )
+          FROM cargos_eleccion_popular cep
+          WHERE cep.id_persona = p.id_persona
+        ), '[]'::jsonb) AS cargos_eleccion_popular,
+
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_experiencia', el.id_experiencia,
+              'periodo', el.periodo,
+              'cargo', el.cargo,
+              'organizacion', el.organizacion
+            )
+            ORDER BY el.id_experiencia ASC
+          )
+          FROM experiencia_laboral el
+          WHERE el.id_persona = p.id_persona
+        ), '[]'::jsonb) AS experiencia_laboral,
+
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_evento', cme.id_evento,
+              'nombre_evento', cme.nombre_evento,
+              'fecha_evento', cme.fecha_evento,
+              'asistencia', cme.asistencia
+            )
+            ORDER BY cme.id_evento ASC
+          )
+          FROM capacidad_movilizacion_eventos cme
+          WHERE cme.id_persona = p.id_persona
+        ), '[]'::jsonb) AS capacidad_movilizacion_eventos,
+
         CASE
           WHEN p.sin_controversias_publicas = true THEN '[]'::jsonb
           ELSE COALESCE((
@@ -1531,425 +2191,78 @@ exports.getPerfilPdf = async (req, res) => {
       LEFT JOIN municipios mr ON mr.id_municipio = p.municipio_residencia_real
       LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
 
-      LEFT JOIN catalogo_partidos cp            ON cp.id_partido = p.id_partido_actual
-      LEFT JOIN catalogo_temas_interes cti      ON cti.id_tema    = p.id_tema_interes_central
-      LEFT JOIN catalogo_grupos_postulacion cgp ON cgp.id_grupo   = p.id_grupo_postulacion
+      LEFT JOIN catalogo_partidos cp            ON cp.id_partido   = p.id_partido_actual
+      LEFT JOIN catalogo_temas_interes cti      ON cti.id_tema     = p.id_tema_interes_central
+      LEFT JOIN catalogo_grupos_postulacion cgp ON cgp.id_grupo    = p.id_grupo_postulacion
       LEFT JOIN catalogo_ideologia_politica cip ON cip.id_ideologia = p.id_ideologia_politica
 
       WHERE p.id_persona = $1
-      LIMIT 1`
-      , [id]);
-    const p = rows[0];
-    if (!p) return res.status(404).json({ error: "Persona no encontrada" });
+      LIMIT 1
+    `;
 
-    // ✅ Seguridad: capturista solo su registro
-    const roles = req.user.roles || [];
-    if (roles.includes("capturista") && p.creado_por !== req.user.id_usuario) {
+    const { rows } = await pool.query(sqlPerfil, [id]);
+    if (!rows[0]) return res.status(404).json({ error: "Persona no encontrada" });
+
+    // 🔒 regla capturista
+    const roles = req.user?.roles || [];
+    if (roles.includes("capturista") && rows[0].creado_por !== req.user.id_usuario) {
       return res.status(403).json({ error: "No autorizado" });
     }
 
-    // ====== Headers respuesta
-    const safeName = String(p.nombre || `persona_${p.id_persona}`)
-      .replace(/[\\/:*?"<>|]/g, "")
-      .slice(0, 60);
+    const perfil = rows[0];
 
+    // ✅ Foto URL -> base64 data-uri
+    let fotoDataUri = null;
+    try {
+      fotoDataUri = await imageUrlToDataUri(perfil.foto_url);
+    } catch (e) {
+      console.warn("Foto no disponible para PDF:", e.message);
+    }
+    console.log("foto_url:", perfil.foto_url);
+    console.log("fotoDataUri head:", (fotoDataUri || "").slice(0, 30));
+    const html = buildPerfilHtml({ ...perfil, foto_url: fotoDataUri });
+
+    // ✅ Render-friendly
+    browser = await puppeteer.launch({
+      headless: "new",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+      ],
+    });
+
+    const page = await browser.newPage();
+
+    // Si usas base64, waitUntil:"load" es suficiente y más estable
+    await page.setContent(html, { waitUntil: "load", timeout: 60000 });
+
+    const pdf = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "12mm", right: "12mm", bottom: "12mm", left: "12mm" },
+    });
+
+    const pdfBuf = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf);
+
+    if (pdfBuf.length < 100 || pdfBuf.slice(0, 4).toString("utf8") !== "%PDF") {
+      throw new Error("PDF inválido: el buffer no inicia con %PDF");
+    }
+
+    res.status(200);
     res.setHeader("Content-Type", "application/pdf");
-    // inline (abre en navegador) o attachment (descarga)
-    res.setHeader("Content-Disposition", `inline; filename="perfil_${safeName}.pdf"`);
-
-    const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
-    doc.pipe(res);
-
-    // ====== Colores institucionales
-    const C = {
-      prim: "#8b2136",     // vino
-      sec:  "#b89056",     // dorado
-      text: "#111827",     // gris oscuro
-      muted:"#6b7280",
-      line: "#e5e7eb",
-      bg:   "#ffffff"
-    };
-
-    const M = doc.page.margins;
-    const pageW = () => doc.page.width;
-    const pageH = () => doc.page.height;
-    const contentW = () => pageW() - M.left - M.right;
-    const bottomY = () => pageH() - M.bottom;
-
-    const GAP = 14; // gap entre columnas
-    const COL_W = () => (contentW() - GAP) / 2;
-
-    // ====== Helpers paginación
-    function ensure(h = 24) {
-      if (doc.y + h > bottomY()) {
-        doc.addPage();
-        header(); // re-dibuja header en cada página
-      }
-    }
-
-    // ====== Header institucional (se repite en cada página)
-function header() {
-  const x = M.left;
-  const y = M.top;   // ✅ sin negativos
-  const w = contentW();
-
-  doc.save();
-  doc.rect(x, y, w, 36).fill(C.prim);
-  doc.rect(x, y + 33, w, 3).fill(C.sec);
-
-  doc.fillColor("white").font("Helvetica-Bold").fontSize(14)
-    .text("Actores Políticos", x + 10, y + 10, { width: w - 20, align: "left" });
-
-  doc.fillColor("white").font("Helvetica").fontSize(9)
-    .text("Perfil individual", x + 10, y + 24, { width: w - 20, align: "left" });
-
-  doc.restore();
-
-  // cursor fijo debajo del header
-  doc.y = y + 48;
-}
-
-    // ====== Badge de sección
-    function section(title) {
-      ensure(26);
-      const x = M.left;
-      const y = doc.y;
-      const w = contentW();
-
-      doc.save();
-      doc.roundedRect(x, y, w, 22, 8).fill(C.prim);
-      doc.fillColor("white").font("Helvetica-Bold").fontSize(10)
-        .text(title.toUpperCase(), x + 10, y + 6, { width: w - 20, align: "left" });
-      doc.restore();
-      doc.y = y + 28;
-    }
-
-    // ====== Row de 2 columnas (campo + valor con línea)
-    function field2(labelL, valueL, labelR, valueR) {
-      ensure(44);
-      const x0 = M.left;
-      const y0 = doc.y;
-
-      const renderField = (x, label, value) => {
-        doc.save();
-        doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(8).text(String(label || "").toUpperCase(), x, y0);
-        doc.fillColor(C.text).font("Helvetica").fontSize(10).text(String(value ?? "-"), x, y0 + 11, { width: COL_W() });
-        doc.strokeColor(C.line).lineWidth(1).moveTo(x, y0 + 32).lineTo(x + COL_W(), y0 + 32).stroke();
-        doc.restore();
-      };
-
-      renderField(x0, labelL, valueL);
-      renderField(x0 + COL_W() + GAP, labelR, valueR);
-
-      doc.y = y0 + 40;
-    }
-
-    // ====== Campo a 1 columna (para textos largos)
-    function field1(label, value) {
-      ensure(44);
-      const x = M.left;
-      const y = doc.y;
-
-      doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(8).text(String(label || "").toUpperCase(), x, y);
-      doc.fillColor(C.text).font("Helvetica").fontSize(10)
-        .text(String(value ?? "-"), x, y + 11, { width: contentW() });
-
-      doc.strokeColor(C.line).lineWidth(1).moveTo(x, doc.y + 2).lineTo(x + contentW(), doc.y + 2).stroke();
-      doc.moveDown(0.8);
-    }
-
-    // ====== Chips/badges (partido, ideología, etc.)
-    function chips(items) {
-      if (!items.length) return;
-      ensure(18);
-      let x = M.left;
-      let y = doc.y;
-      const h = 16;
-      const padX = 8;
-      const gap = 6;
-
-      items.forEach(it => {
-        const t = String(it.text || "");
-        if (!t) return;
-        doc.font("Helvetica-Bold").fontSize(8);
-        const w = doc.widthOfString(t) + padX * 2;
-
-        if (x + w > M.left + contentW()) {
-          x = M.left;
-          y += h + 6;
-          ensure(h + 12);
-        }
-
-        doc.roundedRect(x, y, w, h, 8).fill(it.color || C.sec);
-        doc.fillColor("white").text(t, x + padX, y + 4);
-        doc.fillColor(C.text);
-
-        x += w + gap;
-      });
-
-      doc.y = y + h + 10;
-    }
-
-    // ====== Tabla simple (auto page-break por renglón)
-    function table(title, headers, rowsData) {
-       if (!Array.isArray(rowsData) || rowsData.length === 0) {
-          section(title);
-          field1("Registro", "-");
-          return;
-        }
-
-        section(title);
-
-      const x = M.left;
-      const w = contentW();
-      const colCount = headers.length;
-      const colW = w / colCount;
-      const rowH = 18;
-
-      // header row
-      ensure(rowH + 10);
-      doc.save();
-      doc.rect(x, doc.y, w, rowH).fill(C.sec);
-      doc.fillColor("white").font("Helvetica-Bold").fontSize(9);
-      headers.forEach((h, i) => {
-        doc.text(h, x + i * colW + 6, doc.y + 5, { width: colW - 12, ellipsis: true });
-      });
-      doc.restore();
-      doc.y += rowH;
-
-      // body rows
-      doc.font("Helvetica").fontSize(9).fillColor(C.text);
-      rowsData.forEach((r, idx) => {
-        ensure(rowH + 10);
-
-        // zebra
-        if (idx % 2 === 0) {
-          doc.save();
-          doc.rect(x, doc.y, w, rowH).fill("#f9fafb");
-          doc.restore();
-        }
-
-        r.forEach((cell, i) => {
-          doc.fillColor(C.text).text(String(cell ?? "-"), x + i * colW + 6, doc.y + 5, {
-            width: colW - 12,
-            ellipsis: true
-          });
-        });
-
-        // line
-        doc.strokeColor(C.line).lineWidth(1).moveTo(x, doc.y + rowH).lineTo(x + w, doc.y + rowH).stroke();
-        doc.y += rowH;
-      });
-
-      doc.moveDown(0.6);
-    }
-
-    // ============ Render PDF ============
-    header();
-
-    // Chips “arriba”
-    chips([
-      p.grupo_postulacion ? { text: p.grupo_postulacion, color: "#0ea5e9" } : null,
-      (p.partido_actual_siglas || p.partido_actual) ? { text: (p.partido_actual_siglas || p.partido_actual), color: C.prim } : null,
-      p.ideologia_politica ? { text: p.ideologia_politica, color: "#374151" } : null,
-      p.tema_interes_central ? { text: p.tema_interes_central, color: "#f59e0b" } : null,
-      p.sin_controversias_publicas === true ? { text: "Sin controversias", color: "#16a34a" } : null
-    ].filter(Boolean));
-
-    // Datos generales (2 columnas)
-    section("Datos generales");
-    field2("Nombre", p.nombre, "CURP", p.curp);
-    field2("RFC", p.rfc, "Clave elector", p.clave_elector);
-    field2("Estado civil", p.estado_civil, "Escala influencia", p.escala_influencia);
-    field2("Mun. residencia legal", p.municipio_residencia_legal, "Mun. residencia real", p.municipio_residencia_real);
-    field1("Municipio trabajo político", p.municipio_trabajo_politico);
-
-    // Datos INE
-    section("Datos INE");
-    if (p.datos_ine) {
-      field2("Sección electoral", p.datos_ine.seccion_electoral, "Distrito federal", p.datos_ine.distrito_federal);
-      field2("Distrito local", p.datos_ine.distrito_local, "—", "—");
-    } else {
-      field1("Registro", "-");
-    }
-
-    // Teléfonos
-    section("Teléfonos");
-    if (Array.isArray(p.telefonos) && p.telefonos.length) {
-      p.telefonos.forEach(t => {
-        ensure(18);
-        doc.fillColor(C.text).font("Helvetica").fontSize(10)
-          .text(`• ${t.telefono || "-"} (${t.tipo || "s/tipo"})${t.principal ? " [principal]" : ""}`);
-      });
-      doc.moveDown(0.6);
-    } else {
-      field1("Registro", "-");
-    }
-
-    // Redes
-    section("Redes sociales");
-    if (Array.isArray(p.redes_sociales) && p.redes_sociales.length) {
-      p.redes_sociales.forEach(r => {
-        ensure(18);
-        doc.fillColor(C.text).font("Helvetica").fontSize(10)
-          .text(`• ${r.red || "-"}: ${r.url || "-"}`);
-      });
-      doc.moveDown(0.6);
-    } else {
-      field1("Registro", "-");
-    }
-
-    // Formación
-    section("Formación académica");
-    if (Array.isArray(p.formacion_academica) && p.formacion_academica.length) {
-      p.formacion_academica.forEach(fa => {
-        ensure(22);
-        const periodo = [fa.anio_inicio, fa.anio_fin].filter(Boolean).join(" - ");
-        doc.fillColor(C.text).font("Helvetica").fontSize(10)
-          .text(`• ${fa.nivel || "-"} | ${fa.grado || "-"} | ${fa.institucion || "-"}${periodo ? ` (${periodo})` : ""}${fa.grado_obtenido ? " [obtenido]" : ""}`);
-      });
-      doc.moveDown(0.6);
-    } else {
-      field1("Registro", "-");
-    }
-
-    // Tablas: Servicio público y Elecciones
-    const spRows = (p.sin_servicio_publico === true) ? [] : (p.servicio_publico || []).map(sp => [
-      sp.periodo || "-",
-      sp.cargo || "-",
-      sp.dependencia || "-"
-    ]);
-
-    table("Servicio público", ["Periodo", "Cargo", "Dependencia"], spRows);
-    if (p.sin_servicio_publico === true) {
-      field1("Registro", "Marcado como: Sin servicio público");
-    }
-
-    const elRows = (p.ha_contendido_eleccion === false) ? [] : (p.elecciones || []).map(ec => [
-      ec.anio_eleccion || "-",
-      ec.candidatura || "-",
-      ec.partido_postulacion || "-",
-      ec.resultado || "-"
-    ]);
-
-    table("Elecciones contendidas", ["Año", "Candidatura", "Partido", "Resultado"], elRows);
-    if (p.ha_contendido_eleccion === false) {
-      field1("Registro", "Marcado como: No ha contendiendo elección");
-    }
-
-    // Movilización (2 columnas)
-    section("Capacidad de movilización");
-    if (p.capacidad_movilizacion) {
-      field2("Eventos últimos 3 años", p.capacidad_movilizacion.eventos_ultimos_3_anios,
-             "Asistencia promedio", p.capacidad_movilizacion.asistencia_promedio);
-    } else {
-      field1("Registro", "-");
-    }
-
-    // Equipos / Referentes (2 columnas como listas cortas)
-    section("Equipos y referentes");
-    const equiposTxt = (p.equipos || []).map(e => `${e.nombre_equipo}${e.activo ? " [activo]" : ""}`).join("\n") || "-";
-    const refTxt = (p.referentes || []).map(r => `${r.nivel || "-"} — ${r.nombre_referente || "-"}`).join("\n") || "-";
-    ensure(70);
-    const xL = M.left, xR = M.left + COL_W() + GAP;
-    const y = doc.y;
-    doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(8).text("EQUIPOS", xL, y);
-    doc.fillColor(C.text).font("Helvetica").fontSize(10).text(equiposTxt, xL, y + 12, { width: COL_W() });
-
-    doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(8).text("REFERENTES", xR, y);
-    doc.fillColor(C.text).font("Helvetica").fontSize(10).text(refTxt, xR, y + 12, { width: COL_W() });
-    doc.y = Math.max(doc.y, y + 60);
-    doc.moveDown(0.4);
-
-    // Familiares
-    section("Familiares");
-    if (Array.isArray(p.familiares) && p.familiares.length) {
-      p.familiares.forEach(f => {
-        ensure(18);
-        doc.font("Helvetica").fontSize(10).fillColor(C.text)
-          .text(`• ${f.nombre || "-"} (${f.parentesco || "-"}) — ${f.cargo || "-"} | ${f.institucion || "-"}`);
-      });
-      doc.moveDown(0.6);
-    } else {
-      field1("Registro", "-");
-    }
-
-    // Participación organizaciones
-    section("Participación en organizaciones");
-    if (Array.isArray(p.participacion_organizaciones) && p.participacion_organizaciones.length) {
-      p.participacion_organizaciones.forEach(o => {
-        ensure(22);
-        doc.font("Helvetica").fontSize(10).fillColor(C.text)
-          .text(`• ${o.tipo || "-"} — ${o.nombre || "-"} | Rol: ${o.rol || "-"} | Periodo: ${o.periodo || "-"}${o.notas ? ` | Notas: ${o.notas}` : ""}`);
-      });
-      doc.moveDown(0.6);
-    } else {
-      field1("Registro", "-");
-    }
-
-    // Parejas e hijos
-    section("Parejas e hijos");
-    if (Array.isArray(p.parejas) && p.parejas.length) {
-      p.parejas.forEach(pa => {
-        ensure(30);
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(C.text)
-          .text(`• ${pa.nombre_pareja || "-"} (${pa.tipo_relacion || "-"})`);
-        doc.font("Helvetica").fontSize(9).fillColor(C.muted)
-          .text(`${pa.fecha_inicio || ""}${pa.fecha_fin ? " a " + pa.fecha_fin : ""}`);
-
-        if (Array.isArray(pa.hijos) && pa.hijos.length) {
-          pa.hijos.forEach(h => {
-            ensure(16);
-            doc.font("Helvetica").fontSize(10).fillColor(C.text)
-              .text(`   - Hijo: ${h.anio_nacimiento || "-"} | Sexo: ${h.sexo || "-"}`);
-          });
-        } else {
-          ensure(16);
-          doc.font("Helvetica").fontSize(10).fillColor(C.text).text(`   - Hijos: -`);
-        }
-        doc.moveDown(0.3);
-      });
-      doc.moveDown(0.4);
-    } else {
-      field1("Registro", "-");
-    }
-
-    // Controversias
-    section("Controversias");
-    if (p.sin_controversias_publicas === true) {
-      field1("Registro", "Marcado como: Sin controversias públicas");
-    } else if (Array.isArray(p.controversias) && p.controversias.length) {
-      p.controversias.forEach(c => {
-        ensure(28);
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(C.text)
-          .text(`• ${c.tipo || "-"}`);
-        doc.font("Helvetica").fontSize(10).fillColor(C.text)
-          .text(`${c.descripcion || "-"}`);
-        if (c.fuente) doc.font("Helvetica").fontSize(9).fillColor(C.muted).text(`Fuente: ${c.fuente}`);
-        doc.moveDown(0.3);
-      });
-      doc.moveDown(0.4);
-    } else {
-      field1("Registro", "-");
-    }
-
-    // ===== Footer con numeración de páginas
-    const range = doc.bufferedPageRange();
-    for (let i = 0; i < range.count; i++) {
-      doc.switchToPage(i);
-      const pageNum = i + 1;
-      const total = range.count;
-
-      doc.fillColor(C.muted).font("Helvetica").fontSize(9)
-        .text(`Página ${pageNum} de ${total}`, M.left, pageH() - M.bottom + 10, { width: contentW(), align: "right" });
-    }
-
-    doc.end();
+    res.setHeader("Content-Length", String(pdfBuf.length));
+    res.setHeader("Content-Disposition", `inline; filename="perfil_${id}.pdf"`);
+    return res.end(pdfBuf);
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Error al generar PDF", detail: e.message });
+  } finally {
+    try { if (browser) await browser.close(); } catch {}
   }
 };
+
+
 
 //kpi completitud de registros 
 exports.kpiCompletitud = async (req, res) => {
@@ -1973,6 +2286,7 @@ exports.kpiCompletitud = async (req, res) => {
           p.sin_servicio_publico,
           p.ha_contendido_eleccion,
           p.sin_controversias_publicas,
+          
 
           -- existence counts
           EXISTS (SELECT 1 FROM datos_ine di WHERE di.id_persona = p.id_persona) AS has_ine,
@@ -2242,14 +2556,15 @@ exports.checkDuplicado = async (req, res) => {
       if (q.rowCount) results.push({ match_type: "clave_elector", candidates: q.rows });
     }
 
-    // 5) Exacto por sección electoral (en datos_ine)
-    if (seccion_electoral) {
-      const params = [seccion_electoral];
+
+    // 5) Sección electoral: SOLO como señal si además hay nombre+apellido_paterno
+    if (seccion_electoral && nombre && ap) {
+      const params = [seccion_electoral, nombre, ap, am || ""];
       let extra = "";
 
       if (excludeOk) {
         params.push(excludeId);
-        extra = ` AND p.id_persona <> $2 `;
+        extra = ` AND p.id_persona <> $5 `;
       }
 
       const q = await pool.query(
@@ -2258,7 +2573,10 @@ exports.checkDuplicado = async (req, res) => {
         FROM datos_ine d
         JOIN personas p ON p.id_persona = d.id_persona
         WHERE d.seccion_electoral = $1
-        ${extra}
+          AND lower(p.nombre) = lower($2)
+          AND lower(p.apellido_paterno) = lower($3)
+          AND ($4 = '' OR lower(coalesce(p.apellido_materno,'')) = lower($4))
+          ${extra}
         LIMIT 10
         `,
         params
@@ -2281,8 +2599,9 @@ exports.updatePersonaCompleta = async (req, res) => {
   const client = await pool.connect();
   const id_persona = Number(req.params.id);
   if (!id_persona) return res.status(400).json({ error: "id inválido" });
-
+  await assertCanMutatePersona(client, req, id_persona);
   try {
+    
     const {
       persona,
       datos_ine = null,
@@ -2302,11 +2621,22 @@ exports.updatePersonaCompleta = async (req, res) => {
       participacion_organizaciones = [],
       cargos_eleccion_popular = [],
       experiencia_laboral = [],
+      empresas_persona=[],
+      fuentes_consulta=[]
     } = req.body;
 
-    if (!persona?.nombre) {
-      return res.status(400).json({ error: "persona.nombre es obligatorio" });
+
+    if (!persona?.apellido_paterno) {
+      return res.status(400).json({ error: "Apellido paterno es obligatorio" });
     }
+    if (!persona?.apellido_materno) {
+      return res.status(400).json({ error: "Apellido materno es obligatorio" });
+    }
+    if (!persona?.nombre) {
+      return res.status(400).json({ error: "Nombre es obligatorio" });
+    }
+
+
 
     // Reglas oficina por usuario (idénticas a create)
     const roles = req.user.roles || [];
@@ -2359,6 +2689,12 @@ exports.updatePersonaCompleta = async (req, res) => {
       if (!esOtro && persona.partido_otro_texto) {
         persona.partido_otro_texto = null;
       }
+    }
+    //validacion nivel de confiabilidad
+    const nc = (persona.nivel_confiabilidad || "").toString().trim().toLowerCase() || null;
+
+    if (nc && !["alto","medio","bajo"].includes(nc)) {
+      return res.status(400).json({ error: "nivel_confiabilidad inválido" });
     }
 
     // Validación no contradicción cargos elección popular
@@ -2430,7 +2766,8 @@ exports.updatePersonaCompleta = async (req, res) => {
         foto_url = $21,
         id_oficina = $22,
         updated_at = now(),
-        modificado_por = $23
+        modificado_por = $23,
+        nivel_confiabilidad = $24
       WHERE id_persona = $1
       `,
       [
@@ -2456,7 +2793,8 @@ exports.updatePersonaCompleta = async (req, res) => {
         persona.sin_cargos_eleccion_popular ?? null,
         persona.foto_url || null,
         oficinaFinal,
-         req.user.id_usuario                         // $23 ✅ modificado_por
+         req.user.id_usuario,                         // $23 ✅ modificado_por
+        persona.nivel_confiabilidad = nc,
       ]
     );
 
@@ -2517,10 +2855,23 @@ exports.updatePersonaCompleta = async (req, res) => {
         }
       }
 
+      const ced = (fa.cedula_profesional || "").toString().trim() || null;
+
+      // regla: si NO está titulado, forzamos null
+      const cedFinal = (fa.titulado === true) ? ced : null;
+
+      // si titulado=true, exigir cédula (para sup/posgrado o para cualquier nivel, tú decides)
+      if (fa.titulado === true && !cedFinal) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Si está titulado, captura la cédula profesional' });
+      }
+
       await client.query(
-        `INSERT INTO formacion_academica
-          (id_persona, nivel, grado_obtenido, institucion, anio_inicio, anio_fin, grado, titulado)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        `
+        INSERT INTO formacion_academica
+          (id_persona, nivel, grado_obtenido, institucion, anio_inicio, anio_fin, grado, titulado, cedula_profesional)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        `,
         [
           id_persona,
           fa.nivel,
@@ -2530,6 +2881,7 @@ exports.updatePersonaCompleta = async (req, res) => {
           fa.anio_fin || null,
           fa.grado || null,
           fa.titulado ?? null,
+          cedFinal
         ]
       );
     }
@@ -2671,14 +3023,49 @@ exports.updatePersonaCompleta = async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "La asistencia no puede ser negativa" });
       }
-
       await client.query(
-        `INSERT INTO capacidad_movilizacion_eventos (id_persona, nombre_evento, fecha_evento, asistencia)
-         VALUES ($1,$2,$3,$4)`,
-        [id_persona, nombre, fecha, asistencia]
+        `
+        INSERT INTO capacidad_movilizacion_eventos
+          (id_persona, nombre_evento, fecha_evento, asistencia, lugar_evento, foto_evento_url)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        `,
+        [
+          id_persona,
+          nombre,
+          fecha,
+          asistencia,
+          (ev?.lugar_evento || '').toString().trim() || null,
+          (ev?.foto_evento_url || '').toString().trim() || null
+        ]
       );
     }
+    // empresas_persona:
+    await del("empresas_persona");
+    for (const em of empresas_persona) {
+      const nombre = (em?.nombre_empresa || "").toString().trim();
+      const rol    = (em?.rol || "").toString().trim() || null;
+      const notas  = (em?.notas || "").toString().trim() || null;
+      const periodo = normalizePeriodo(em?.periodo); // ✅ igual que parejas
 
+      const tieneAlgo = nombre || rol || periodo || notas;
+      if (!tieneAlgo) continue;
+
+      if (!nombre) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Cada empresa requiere nombre_empresa" });
+      }
+
+      if (periodo && !isPeriodoValido(periodo)) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Periodo inválido en empresa. Usa AAAA o AAAA-AAAA" });
+      }
+
+      await client.query(
+        `INSERT INTO empresas_persona (id_persona, nombre_empresa, rol, periodo, notas)
+        VALUES ($1,$2,$3,$4,$5)`,
+        [id_persona, nombre, rol, periodo || null, notas]
+      );
+    }
     // 11) Equipos
     await del("equipos_politicos");
     for (const eq of equipos) {
@@ -2795,6 +3182,65 @@ exports.updatePersonaCompleta = async (req, res) => {
       );
     }
 
+    // 18) Fuentes consulta
+    await client.query(`DELETE FROM fuentes_persona WHERE id_persona = $1`, [id_persona]);
+
+    for (const f of (fuentes_consulta || [])) {
+      const id_fuente = Number(f?.id_fuente);
+      const detalle = (f?.detalle || '').toString().trim() || null;
+      const fecha_consulta = (f?.fecha_consulta || '').toString().trim() || null; // 'YYYY-MM-DD'
+
+      if (!Number.isFinite(id_fuente) || id_fuente <= 0) continue;
+
+      // 🔒 validar que exista y esté activa
+      const { rows: fr } = await client.query(
+        `SELECT 1 FROM catalogo_fuentes_consulta WHERE id_fuente = $1 AND activo = true`,
+        [id_fuente]
+      );
+      if (!fr[0]) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Fuente de consulta inválida" });
+      }
+
+      await client.query(
+        `INSERT INTO fuentes_persona (id_persona, id_fuente, detalle, fecha_consulta)
+        VALUES ($1,$2,$3,$4)
+        ON CONFLICT (id_persona, id_fuente)
+        DO UPDATE SET detalle = EXCLUDED.detalle, fecha_consulta = EXCLUDED.fecha_consulta`,
+        [id_persona, id_fuente, detalle, fecha_consulta]
+      );
+    }
+
+        //trabajo politico en varios municipios
+    const municipios_trabajo = Array.isArray(req.body.municipios_trabajo) ? req.body.municipios_trabajo : [];
+
+    await client.query(`DELETE FROM personas_municipios_trabajo WHERE id_persona=$1`, [id_persona]);
+
+    const principal = persona.municipio_trabajo_politico ? Number(persona.municipio_trabajo_politico) : null;
+    const ids = new Set();
+
+    for (const it of municipios_trabajo) {
+      const id_municipio = Number(it?.id_municipio);
+      if (!Number.isFinite(id_municipio) || id_municipio <= 0) continue;
+      if (ids.has(id_municipio)) continue;
+      ids.add(id_municipio);
+
+      await client.query(
+        `INSERT INTO personas_municipios_trabajo (id_persona, id_municipio, es_principal, notas)
+        VALUES ($1,$2,$3,$4)`,
+        [id_persona, id_municipio, principal === id_municipio, (it?.notas || '').toString().trim() || null]
+      );
+    }
+
+    // Forzar que el principal esté en la cobertura si existe
+    if (principal && !ids.has(principal)) {
+      await client.query(
+        `INSERT INTO personas_municipios_trabajo (id_persona, id_municipio, es_principal)
+        VALUES ($1,$2,true)
+        ON CONFLICT (id_persona, id_municipio) DO UPDATE SET es_principal=true`,
+        [id_persona, principal]
+      );
+    }
     await client.query("COMMIT");
     return res.json({ ok: true, id_persona });
   } catch (e) {
@@ -2819,6 +3265,7 @@ exports.deletePersona = async (req, res) => {
   const client = await pool.connect();
   try {
     const id_persona = Number(req.params.id);
+    await assertCanMutatePersona(client, req, id_persona);
     if (!Number.isFinite(id_persona)) {
       return res.status(400).json({ error: "id_persona inválido" });
     }
@@ -2893,11 +3340,14 @@ exports.deletePersona = async (req, res) => {
 
 exports.getPayloadEdicion = async (req, res) => {
   const id_persona = Number(req.params.id);
-  if (!id_persona) return res.status(400).json({ error: "id inválido" });
+  if (!Number.isFinite(id_persona) || id_persona <= 0) {
+    return res.status(400).json({ error: "id inválido" });
+  }
 
   const client = await pool.connect();
   try {
     // 1️⃣ PERSONA (primero SIEMPRE)
+    await assertCanMutatePersona(client, req, id_persona);
     const { rows: pRows } = await client.query(
       `SELECT
         id_persona,
@@ -2914,7 +3364,8 @@ exports.getPayloadEdicion = async (req, res) => {
         creado_por,
         created_at,
         modificado_por,
-        updated_at
+        updated_at,
+        nivel_confiabilidad
       FROM personas
       WHERE id_persona = $1`,
       [id_persona]
@@ -2971,6 +3422,7 @@ exports.getPayloadEdicion = async (req, res) => {
       parejas,
       hijos,
       redes,
+      empresas_persona,
       servicio_publico,
       elecciones,
       capacidad_movilizacion_eventos,
@@ -2983,6 +3435,8 @@ exports.getPayloadEdicion = async (req, res) => {
       participacion_organizaciones,
       cargos_eleccion_popular,
       experiencia_laboral,
+      fuentes_consulta,
+      municipios_trabajo,
     ] = await Promise.all([
       // telefonos (PK: id_telefono)
       client.query(
@@ -3030,6 +3484,15 @@ exports.getPayloadEdicion = async (req, res) => {
         [id_persona]
       ).then(r => r.rows),
 
+      // empresas_persona (PK: id_empresa_persona)
+      client.query(
+        `SELECT id_empresa_persona, nombre_empresa, rol, periodo, notas
+        FROM empresas_persona
+        WHERE id_persona = $1
+        ORDER BY id_empresa_persona ASC`,
+        [id_persona]
+      ).then(r => r.rows),
+
       // servicio_publico (PK: id_servicio)
       client.query(
         `SELECT periodo, cargo, dependencia
@@ -3050,7 +3513,7 @@ exports.getPayloadEdicion = async (req, res) => {
 
       // capacidad_movilizacion_eventos (PK: id_evento)
       client.query(
-        `SELECT nombre_evento, fecha_evento, asistencia
+        `SELECT nombre_evento, fecha_evento, asistencia, lugar_evento, foto_evento_url
          FROM capacidad_movilizacion_eventos
          WHERE id_persona = $1
          ORDER BY id_evento ASC`,
@@ -3086,7 +3549,7 @@ exports.getPayloadEdicion = async (req, res) => {
 
       // formacion_academica (PK: id_formacion)
       client.query(
-        `SELECT nivel, grado_obtenido, institucion, anio_inicio, anio_fin, grado, titulado
+        `SELECT nivel, grado_obtenido, institucion, anio_inicio, anio_fin, grado, titulado, cedula_profesional
          FROM formacion_academica
          WHERE id_persona = $1
          ORDER BY id_formacion ASC`,
@@ -3137,6 +3600,23 @@ exports.getPayloadEdicion = async (req, res) => {
          ORDER BY id_experiencia ASC`,
         [id_persona]
       ).then(r => r.rows),
+      //consulta de fuentes
+      client.query(
+        `SELECT id_fuente, detalle, fecha_consulta
+        FROM fuentes_persona
+        WHERE id_persona = $1
+        ORDER BY id_fuente_persona ASC`,
+        [id_persona]
+      ).then(r => r.rows),
+
+      client.query(
+      `SELECT id_municipio, es_principal, notas
+      FROM personas_municipios_trabajo
+      WHERE id_persona = $1
+      ORDER BY es_principal DESC, id_municipio ASC`,
+      [id_persona]
+    ).then(r => r.rows),
+
     ]);
 
     return res.json({
@@ -3158,6 +3638,9 @@ exports.getPayloadEdicion = async (req, res) => {
       participacion_organizaciones,
       cargos_eleccion_popular,
       experiencia_laboral,
+      empresas_persona,
+      fuentes_consulta,
+      municipios_trabajo,
     });
   } catch (e) {
     console.error(e);
@@ -3168,269 +3651,283 @@ exports.getPayloadEdicion = async (req, res) => {
 };
 
 
-/*
-exports.getPayloadEdicion = async (req, res) => {
+exports.getAdminCards = async (req, res) => {
+  const client = await pool.connect();
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
-
-    // ===== permisos por rol/oficina/creador =====
-    const sc = await pool.query(
-      `SELECT id_persona, id_oficina, creado_por
-       FROM personas
-       WHERE id_persona = $1`,
-      [id]
-    );
-    if (!sc.rows[0]) return res.status(404).json({ error: "Persona no encontrada" });
-
-    const roles = req.user.roles || [];
+    const roles = req.user?.roles || [];
     const isSuperadmin = roles.includes("superadmin");
-    const isAnalista = roles.includes("analista");
+    const isAnalista   = roles.includes("analista");
     const isCapturista = roles.includes("capturista");
 
-    if (!isSuperadmin) {
-      if (!req.user.id_oficina) return res.status(403).json({ error: "Usuario sin oficina asignada" });
-      if (sc.rows[0].id_oficina !== req.user.id_oficina) return res.status(403).json({ error: "No autorizado (oficina)" });
+    // paginación
+    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+    const size = Math.min(Math.max(parseInt(req.query.size || "24", 10), 1), 500);
+    const offset = (page - 1) * size;
 
-      if (isCapturista && !isAnalista && sc.rows[0].creado_por !== req.user.id_usuario) {
-        return res.status(403).json({ error: "No autorizado (capturista)" });
-      }
+    // filtros
+    let oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
+    const q = (req.query.q || "").trim();
+
+    // ✅ filtro municipio por ID (como listPersonas)
+    const idMun = Number(req.query.municipio_trabajo);
+    const hasMun = Number.isFinite(idMun) && idMun > 0;
+
+    // sort
+    const sortFieldRaw = (req.query.sortField || "updated_at").trim();
+    const sortDir = (req.query.sortDir || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+
+    const SORT_WHITELIST = new Set([
+      "updated_at",
+      "created_at",
+      "id_persona",
+      "nombre",
+      "apellido_paterno",
+      "apellido_materno",
+      "municipio_trabajo_politico",
+    ]);
+    const sortField = SORT_WHITELIST.has(sortFieldRaw) ? sortFieldRaw : "updated_at";
+
+    // reglas por rol
+    if (isAnalista && !isSuperadmin) {
+      oficinaId = Number(req.user.id_oficina || 0) || null; // usa tu campo real
+    }
+    const forceCreadoPor = (isCapturista && !isAnalista && !isSuperadmin)
+      ? Number(req.user.id_usuario || 0) || null
+      : null;
+
+    // WHERE dinámico
+    const where = [];
+    const params = [];
+
+    if (oficinaId) {
+      params.push(oficinaId);
+      where.push(`p.id_oficina = $${params.length}`);
     }
 
-    // ===== query en formato edición (IDs + arrays) =====
-    const { rows } = await pool.query(
-      `
+    if (capturistaId) {
+      params.push(capturistaId);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (forceCreadoPor) {
+      params.push(forceCreadoPor);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (hasMun) {
+      params.push(idMun);
+      where.push(`p.municipio_trabajo_politico = $${params.length}`);
+    }
+
+    if (q) {
+      params.push(`%${q}%`);
+      const i = params.length;
+      where.push(`
+        (
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
+      `);
+    }
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    // TOTAL
+    const totalSql = `
+      SELECT COUNT(*)::int AS total
+      FROM personas p
+      ${whereSQL}
+    `;
+    const { rows: totalRows } = await client.query(totalSql, params);
+    const total = totalRows?.[0]?.total || 0;
+    const last_page = Math.max(Math.ceil(total / size), 1);
+
+    // DATA
+    // ✅ Join a municipios para devolver nombre (y que tu card muestre bonito)
+    const dataSql = `
       SELECT
+        p.id_persona,
         p.nombre,
         p.apellido_paterno,
         p.apellido_materno,
+
         p.curp,
         p.rfc,
         p.clave_elector,
-        p.estado_civil,
-        p.escala_influencia,
-        p.sin_servicio_publico,
-        p.ha_contendido_eleccion,
-        p.municipio_residencia_legal,
-        p.municipio_residencia_real,
-        p.municipio_trabajo_politico,
-        p.sin_controversias_publicas,
-        p.id_partido_actual,
-        p.partido_otro_texto,
-        p.id_grupo_postulacion,
-        p.id_ideologia_politica,
-        p.sin_cargos_eleccion_popular,
+
+        mt.nombre AS municipio_trabajo_politico,
+
         p.foto_url,
+        p.id_oficina,
+        o.nombre AS oficina_nombre,
 
-        (SELECT CASE WHEN di.id_persona IS NULL THEN NULL ELSE jsonb_build_object(
-          'seccion_electoral', di.seccion_electoral,
-          'distrito_federal', di.distrito_federal,
-          'distrito_local', di.distrito_local
-        ) END
-        FROM datos_ine di WHERE di.id_persona = $1 LIMIT 1) AS datos_ine,
+        p.creado_por,
+        u_crea.nombre AS creado_por_nombre,
+        u_crea.email  AS creado_por_email,
 
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'telefono', t.telefono, 'tipo', t.tipo, 'principal', t.principal
-        ) ORDER BY t.principal DESC, t.id_telefono ASC)
-        FROM telefonos t WHERE t.id_persona = $1), '[]'::jsonb) AS telefonos,
+        p.modificado_por,
+        u_mod.nombre AS modificado_por_nombre,
+        u_mod.email  AS modificado_por_email,
 
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'nivel', fa.nivel,
-          'grado', fa.grado,
-          'grado_obtenido', fa.grado_obtenido,
-          'institucion', fa.institucion,
-          'anio_inicio', fa.anio_inicio,
-          'anio_fin', fa.anio_fin,
-          'titulado', fa.titulado
-        ) ORDER BY fa.id_formacion ASC)
-        FROM formacion_academica fa WHERE fa.id_persona = $1), '[]'::jsonb) AS formacion_academica,
+        p.created_at,
+        p.updated_at,
 
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'id_red', rsp.id_red,
-          'url', rsp.url
-        ) ORDER BY rsp.id_red ASC)
-        FROM redes_sociales_persona rsp WHERE rsp.id_persona = $1), '[]'::jsonb) AS redes,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'id_pareja', pa.id_pareja,
-          'nombre_pareja', pa.nombre_pareja,
-          'tipo_relacion', pa.tipo_relacion,
-          'periodo', pa.periodo
-        ) ORDER BY pa.id_pareja ASC)
-        FROM parejas pa WHERE pa.id_persona = $1), '[]'::jsonb) AS parejas,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'id_hijo', h.id_hijo,
-          'id_pareja', h.id_pareja,
-          'anio_nacimiento', h.anio_nacimiento,
-          'sexo', h.sexo
-        ) ORDER BY h.id_hijo ASC)
-        FROM hijos h WHERE h.id_persona = $1), '[]'::jsonb) AS hijos,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'periodo', sp.periodo,
-          'cargo', sp.cargo,
-          'dependencia', sp.dependencia
-        ) ORDER BY sp.id_servicio ASC)
-        FROM servicio_publico sp WHERE sp.id_persona = $1), '[]'::jsonb) AS servicio_publico,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'anio_eleccion', ec.anio_eleccion,
-          'candidatura', ec.candidatura,
-          'partido_postulacion', ec.partido_postulacion,
-          'resultado', ec.resultado,
-          'diferencia_votos', ec.diferencia_votos,
-          'diferencia_porcentaje', ec.diferencia_porcentaje
-        ) ORDER BY ec.id_eleccion ASC)
-        FROM elecciones_contendidas ec WHERE ec.id_persona = $1), '[]'::jsonb) AS elecciones,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'nombre_evento', ev.nombre_evento,
-          'fecha_evento', ev.fecha_evento,
-          'asistencia', ev.asistencia
-        ) ORDER BY ev.id_evento ASC)
-        FROM capacidad_movilizacion_eventos ev WHERE ev.id_persona = $1), '[]'::jsonb) AS capacidad_movilizacion_eventos,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'nombre_equipo', ep.nombre_equipo,
-          'activo', ep.activo
-        ) ORDER BY ep.id_equipo ASC)
-        FROM equipos_politicos ep WHERE ep.id_persona = $1), '[]'::jsonb) AS equipos,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'nivel', rp.nivel,
-          'nombres', rp.nombres,
-          'apellido_paterno', rp.apellido_paterno,
-          'apellido_materno', rp.apellido_materno
-        ) ORDER BY rp.id_referente ASC)
-        FROM referentes_politicos rp WHERE rp.id_persona = $1), '[]'::jsonb) AS referentes,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'nombre', fp.nombre,
-          'parentesco', fp.parentesco,
-          'cargo', fp.cargo,
-          'institucion', fp.institucion
-        ) ORDER BY fp.id_familiar ASC)
-        FROM familiares_politica fp WHERE fp.id_persona = $1), '[]'::jsonb) AS familiares,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'tipo', po.tipo,
-          'nombre', po.nombre,
-          'rol', po.rol,
-          'periodo', po.periodo,
-          'notas', po.notas
-        ) ORDER BY po.id_participacion ASC)
-        FROM participacion_organizaciones po WHERE po.id_persona = $1), '[]'::jsonb) AS participacion_organizaciones,
-
-        CASE WHEN (SELECT sin_controversias_publicas FROM personas WHERE id_persona=$1) = true THEN '[]'::jsonb
-        ELSE COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'id_tipo', cper.id_tipo,
-          'estatus', cper.estatus,
-          'fecha_registro', cper.fecha_registro,
-          'descripcion', cper.descripcion,
-          'fuente', cper.fuente
-        ) ORDER BY cper.id_controversia ASC)
-        FROM controversias_persona cper WHERE cper.id_persona = $1), '[]'::jsonb)
-        END AS controversias,
-
-        COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'id_tema', pti.id_tema,
-          'otro_texto', pti.otro_texto
-        ) ORDER BY pti.id_tema ASC)
-        FROM personas_temas_interes pti WHERE pti.id_persona = $1), '[]'::jsonb) AS temas_interes,
-
-        COALESCE((
-          SELECT jsonb_agg(jsonb_build_object(
-            'periodo', c.periodo,
-            'cargo', c.cargo,
-            'partido_postulante', c.partido_postulante,
-            'modalidad', c.modalidad
-          ) ORDER BY c.id_cargo_eleccion ASC)
-          FROM cargos_eleccion_popular c
-          WHERE c.id_persona = $1
-        ), '[]'::jsonb) AS cargos_eleccion_popular,
-
-        COALESCE((
-          SELECT jsonb_agg(jsonb_build_object(
-            'periodo', ex.periodo,
-            'cargo', ex.cargo,
-            'organizacion', ex.organizacion
-          ) ORDER BY ex.id_experiencia ASC)
-          FROM experiencia_laboral ex
-          WHERE ex.id_persona = $1
-        ), '[]'::jsonb) AS experiencia_laboral
+        t.telefono AS telefono_principal
 
       FROM personas p
-      WHERE p.id_persona = $1
-      LIMIT 1
-      `,
-      [id]
-    );
+      LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
+      LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
+      LEFT JOIN usuarios u_mod  ON u_mod.id_usuario  = p.modificado_por
+      LEFT JOIN municipios mt   ON mt.id_municipio   = p.municipio_trabajo_politico
 
-    const r = rows[0];
+      LEFT JOIN LATERAL (
+        SELECT telefono
+        FROM telefonos
+        WHERE id_persona = p.id_persona
+        ORDER BY principal DESC, id_telefono ASC
+        LIMIT 1
+      ) t ON true
 
-    // ===== payload EXACTO que tu front espera =====
-    const payload = {
-      persona: {
-        nombre: r.nombre,
-        apellido_paterno: r.apellido_paterno,
-        apellido_materno: r.apellido_materno,
-        curp: r.curp,
-        rfc: r.rfc,
-        clave_elector: r.clave_elector,
-        estado_civil: r.estado_civil,
-        escala_influencia: r.escala_influencia,
-        sin_servicio_publico: r.sin_servicio_publico,
-        ha_contendido_eleccion: r.ha_contendido_eleccion,
-        municipio_residencia_legal: r.municipio_residencia_legal,
-        municipio_residencia_real: r.municipio_residencia_real,
-        municipio_trabajo_politico: r.municipio_trabajo_politico,
-        sin_controversias_publicas: r.sin_controversias_publicas,
-        id_partido_actual: r.id_partido_actual,
-        partido_otro_texto: r.partido_otro_texto,
-        id_grupo_postulacion: r.id_grupo_postulacion,
-        id_ideologia_politica: r.id_ideologia_politica,
-        sin_cargos_eleccion_popular: r.sin_cargos_eleccion_popular,
-        foto_url: r.foto_url || null
-      },
-      datos_ine: r.datos_ine,
-      telefonos: r.telefonos,
-      parejas: (r.parejas || []).map(pa => ({
-        // en edición no hay temp_id, lo usamos como "id_pareja" para selects/hijos
-        temp_id: `id_${pa.id_pareja}`,
-        nombre_pareja: pa.nombre_pareja,
-        tipo_relacion: pa.tipo_relacion,
-        periodo: pa.periodo
-      })),
-      hijos: (r.hijos || []).map(h => ({
-        // mapeamos id_pareja al temp_id que creamos arriba
-        pareja_temp_id: h.id_pareja ? `id_${h.id_pareja}` : null,
-        anio_nacimiento: h.anio_nacimiento,
-        sexo: h.sexo
-      })),
-      redes: r.redes,
-      servicio_publico: r.servicio_publico,
-      elecciones: r.elecciones,
-      capacidad_movilizacion_eventos: r.capacidad_movilizacion_eventos,
-      equipos: r.equipos,
-      referentes: r.referentes,
-      controversias: r.controversias,
-      familiares: r.familiares,
-      formacion_academica: r.formacion_academica,
-      temas_interes: r.temas_interes,
-      participacion_organizaciones: r.participacion_organizaciones,
+      ${whereSQL}
+      ORDER BY p.${sortField} ${sortDir}, p.id_persona DESC
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+    `;
 
-      // si ya tienes estos módulos en el front, los llenas igual
-      cargos_eleccion_popular: [],
-      experiencia_laboral: [],
-      cargos_eleccion_popular: r.cargos_eleccion_popular,
-      experiencia_laboral: r.experiencia_laboral
+    const dataParams = params.concat([size, offset]);
+    const { rows } = await client.query(dataSql, dataParams);
 
-    };
+    const data = rows.map(r => ({
+      id_persona: r.id_persona,
+      nombre_completo: [r.nombre, r.apellido_paterno, r.apellido_materno].filter(Boolean).join(" "),
 
-    return res.json(payload);
+      curp: r.curp,
+      rfc: r.rfc,
+      clave_elector: r.clave_elector,
+
+      municipio_trabajo_politico: r.municipio_trabajo_politico || "—",
+
+      foto_url: r.foto_url,
+      telefono_principal: r.telefono_principal,
+
+      id_oficina: r.id_oficina,
+      oficina_nombre: r.oficina_nombre,
+
+      creado_por: r.creado_por,
+      creado_por_nombre: r.creado_por_nombre,
+      creado_por_email: r.creado_por_email,
+
+      modificado_por: r.modificado_por,
+      modificado_por_nombre: r.modificado_por_nombre,
+      modificado_por_email: r.modificado_por_email,
+
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+
+    return res.json({ data, total, page, size, last_page });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: "Error al obtener payload edición", detail: e.message });
+    return res.status(500).json({ error: "Error al obtener cards", detail: e.message });
+  } finally {
+    client.release();
   }
-};*/
+};
+
+//listar oficinas
+exports.listOficinas = async (req, res) => {
+  try {
+    const roles = req.user.roles || [];
+    const isSuperadmin = roles.includes('superadmin');
+    const isAnalista   = roles.includes('analista');
+
+    let sql = `
+      SELECT id_oficina, nombre
+      FROM oficinas
+    `;
+    const params = [];
+
+    if (!isSuperadmin) {
+      // analista / capturista: solo su oficina
+      if (!req.user.id_oficina) {
+        return res.json([]);
+      }
+      sql += ` WHERE id_oficina = $1`;
+      params.push(req.user.id_oficina);
+    }
+
+    sql += ` ORDER BY nombre`;
+
+    const { rows } = await pool.query(sql, params);
+    return res.json(rows);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'Error al listar oficinas' });
+  }
+};
+// ADMIN: listar capturistas por oficina (para filtros del grid)
+// ADMIN: listar capturistas por oficina (para filtros del grid)
+exports.listCapturistasByOficina = async (req, res) => {
+  try {
+    const rolesUser = req.user?.roles || [];
+    const isSuperadmin = rolesUser.includes("superadmin");
+    const isAnalista   = rolesUser.includes("analista");
+
+    let oficinaId = null;
+
+    // 🔒 Regla por rol:
+    // - Analista: siempre su oficina
+    // - Superadmin: puede mandar oficinaId en query (opcional)
+    if (isAnalista && !isSuperadmin) {
+      oficinaId = Number(req.user.id_oficina || 0);
+      if (!Number.isFinite(oficinaId) || oficinaId <= 0) {
+        return res.status(403).json({ error: "Usuario sin oficina asignada" });
+      }
+    } else {
+      oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    }
+
+    const params = [];
+    const where = [];
+
+    if (Number.isFinite(oficinaId) && oficinaId > 0) {
+      params.push(oficinaId);
+      where.push(`u.id_oficina = $${params.length}`);
+    }
+
+    // ✅ Solo usuarios con rol "capturista" (y si quieres incluir analista también, lo agregamos)
+    // Aquí lo dejo: capturista (y opcionalmente analista)
+    where.push(`r.nombre IN ('capturista')`);
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const { rows } = await pool.query(
+      `
+      SELECT DISTINCT
+        u.id_usuario,
+        u.nombre,
+        u.email
+      FROM usuarios u
+      JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
+      JOIN roles r           ON r.id_rol     = ur.id_rol
+      ${whereSQL}
+      ORDER BY u.nombre ASC
+      `,
+      params
+    );
+
+    return res.json(rows);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al listar capturistas por oficina",
+      detail: e.message
+    });
+  }
+};
+
