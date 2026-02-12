@@ -9,12 +9,21 @@ const DISK_MOUNT = process.env.DISK_MOUNT_PATH || "/var/data";
 const UPLOAD_DIR = path.join(DISK_MOUNT, "uploads");
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+function getPrefix(req) {
+  // /foto  => persona
+  // /evento => evento
+  if ((req.path || "").includes("evento")) return "evento";
+  return "persona";
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname || "").toLowerCase();
     const safeExt = [".jpg", ".jpeg", ".png", ".webp"].includes(ext) ? ext : ".jpg";
-    cb(null, `persona_${Date.now()}_${Math.random().toString(16).slice(2)}${safeExt}`);
+
+    const prefix = getPrefix(req);
+    cb(null, `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}${safeExt}`);
   }
 });
 
@@ -29,12 +38,18 @@ const upload = multer({
   limits: { fileSize: 3 * 1024 * 1024 } // 3MB
 });
 
-router.post("/foto", upload.single("foto"), async (req, res) => {
-  // aquí ya tienes req.file
+// PERSONA
+router.post("/foto", upload.single("foto"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No se recibió archivo" });
-
   const publicUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
   return res.status(201).json({ ok: true, foto_url: publicUrl, filename: req.file.filename });
+});
+
+// EVENTO
+router.post("/evento", upload.single("foto"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No se recibió archivo" });
+  const publicUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+  return res.status(201).json({ ok: true, foto_evento_url: publicUrl, filename: req.file.filename });
 });
 
 module.exports = router;
