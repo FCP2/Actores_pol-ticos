@@ -10,7 +10,7 @@
 </head>
 
 <body>
-<script>
+ <script>
   (async function guardCaptura() {
         const token = localStorage.getItem("token");
         if (!token) return (window.location.href = "/");
@@ -1223,9 +1223,7 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   function hideAlert(){ $('#alertBox').classList.add('d-none'); }
-
-
-function getMunicipioNombreById(id) {
+    function getMunicipioNombreById(id) {
     const n = Number(id);
     const m = (municipiosCache || []).find(x => Number(x.id_municipio) === n);
     return m?.nombre || null;
@@ -4372,3 +4370,4 @@ function refreshPreview() {
 
 </body>
 </html>
+
