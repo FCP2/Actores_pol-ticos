@@ -4,15 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Captura Completa - Actores Políticos</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link rel="stylesheet" href="/static/css/main.css">
-  <style>
-    body { visibility: hidden; }
-  </style>
 </head>
 
 <body>
-  <script>
+<script>
   (async function guardCaptura() {
         const token = localStorage.getItem("token");
         if (!token) return (window.location.href = "/");
@@ -80,530 +78,970 @@
 
   <div class="row g-4">
     <div class="col-12 col-lg-10 mx-auto">
-      <div class="card mb-4">
-        <div class="card-body">
-          <div class="d-flex flex-wrap gap-2 align-items-end">
-            <div style="min-width:320px; flex:1;">
-              <label class="form-label">Mis borradores</label>
-              <select class="form-select" id="selBorradores">
-                <option value="">(Cargar borrador...)</option>
-              </select>
-              <div class="small text-muted mt-1" id="lblBorradorActual">Borrador actual: ninguno</div>
-            </div>
-
-            <button type="button" class="btn btn-outline-primary" id="btnGuardarBorrador">
-              Guardar borrador
-            </button>
-
-            <button type="button" class="btn btn-outline-secondary" id="btnRecargarBorradores">
-              Recargar lista
-            </button>
-
-            <button type="button" class="btn btn-outline-danger" id="btnEliminarBorrador" disabled>
-              Eliminar borrador
-            </button>
-
-            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="offcanvas" data-bs-target="#offcanvasPersonas">
-              📋 Editar / Eliminar
-            </button>
-          </div>
-        </div>
-      </div>
-      <form id="personaForm">
-      <!-- ================== PERSONA ================== -->
-      <div class="card mb-4">
-        <div class="card-body">
-          <h5 class="mb-3 card-header-custom">Información personal</h5> <!-- Clase de tu preferencia para Montserrat/blanco [cite:5] -->
-
-          <div class="row g-3">
-            <!-- FOTO A LA IZQUIERDA - Nueva columna dedicada -->
-            <div class="col-md-3">
-              <label class="form-label">Foto</label>
-              <input class="form-control" type="file" id="inpFoto" accept="image/*">
-              <div class="form-text">JPG/PNG/WebP, máximo 3MB.</div>
-              <img id="previewFoto" class="img-thumbnail d-none mt-2" style="max-height:180px; width:150px;">
-              <input type="hidden" name="foto_url" id="foto_url">
-            </div>
-
-            <!-- CAMPOS PERSONALES - Resto del espacio -->
-            <div class="col-md-9">
-              <div class="row g-3">
-                <div class="col-md-4">
-                  <label class="form-label required">Nombre(s)</label>
-                  <input class="form-control" name="nombre" required placeholder="Ej. Juan Carlos">
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Apellido paterno</label>
-                  <input class="form-control" name="apellido_paterno">
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Apellido materno</label>
-                  <input class="form-control" name="apellido_materno">
-                </div>
-
-                <div class="col-md-4">
-                  <label class="form-label">CURP</label>
-                  <input class="form-control" name="curp" maxlength="18">
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">RFC</label>
-                  <input class="form-control" name="rfc" maxlength="13">
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Clave de elector</label>
-                  <input class="form-control" name="clave_elector" maxlength="20">
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Estado civil</label>
-                  <select class="form-select" name="estado_civil">
-                    <option value="">Seleccione</option>
-                    <option value="Soltero">Soltero</option>
-                    <option value="Casado">Casado</option>
-                    <option value="Divorciado">Divorciado</option>
-                    <option value="Viudo">Viudo</option>
-                    <option value="Concubinato">Concubinato</option>
-                  </select>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Nivel de alcance territorial</label>
-                  <select class="form-select" name="escala_influencia">
-                    <option value="">Seleccione</option>
-                    <option value="municipal">Municipal</option>
-                    <option value="regional">Regional</option>
-                    <option value="distrital">Distrital</option>
-                    <option value="estatal">Estatal</option>
-                    <option value="nacional">Nacional</option>
-                  </select>
+      <!-- ================== GESTOR DE BORRADORES ================== -->
+      <div class="card mb-4 border-institucional">
+        <div class="card-body bg-institucional-light p-4">
+          <div class="row g-3 align-items-end">
+            <!-- SELECT DE BORRADORES -->
+            <div class="col-lg-5 col-md-12">
+              <div class="form-group position-relative hover-shadow rounded p-3">
+                <label class="form-label text-institucional mb-2">
+                  <i class="bi bi-journal-text me-1"></i>Mis borradores
+                </label>
+                <select class="form-select form-control-institucional form-select-lg" id="selBorradores">
+                  <option value="">(Cargar borrador...)</option>
+                </select>
+                <div class="small text-muted mt-2" id="lblBorradorActual">
+                  <i class="bi bi-info-circle me-1"></i>Borrador actual: <strong>ninguno</strong>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- SEPARADOR -->
-          <hr class="my-4">
+            <!-- BOTONES PRINCIPALES -->
+            <div class="col-lg-7 col-md-12">
+              <div class="d-flex flex-wrap gap-2 justify-content-lg-end justify-content-md-center">
+                
+                <!-- GUARDAR -->
+                <button type="button" class="btn btn-institucional btn-lg px-4 py-2 flex-fill flex-lg-auto" id="btnGuardarBorrador">
+                  <i class="bi bi-floppy-fill me-2"></i>
+                  Guardar borrador
+                </button>
 
-          <!-- ================== FAMILIARES EN POLITICA ================== -->
-          <!-- Ahora correctamente posicionado DENTRO del card principal -->
-          <div class="card shadow-sm mb-0"> <!-- mb-0 para no duplicar margen -->
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="mb-0"><i class="bi bi-people me-2"></i>Familiares en política / administración pública</h6>
-                <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddFamiliar">
-                  <i class="bi bi-plus-circle me-1"></i>+ Agregar
+                <!-- RECARGAR -->
+                <button type="button" class="btn btn-outline-secondary px-3 py-2" id="btnRecargarBorradores">
+                  <i class="bi bi-arrow-clockwise me-1"></i>
+                  Recargar
+                </button>
+
+                <!-- ELIMINAR -->
+                <button type="button" class="btn btn-outline-danger px-3 py-2" id="btnEliminarBorrador" disabled>
+                  <i class="bi bi-trash-fill me-1"></i>
+                  Eliminar
+                </button>
+
+                <!-- OFFCANVAS -->
+                <button type="button" class="btn btn-outline-gold btn-sm px-3" data-bs-toggle="offcanvas" data-bs-target="#offcanvasPersonas">
+                  <i class="bi bi-clipboard2-check me-1"></i>
+                  Gestión
                 </button>
               </div>
-              <div id="familiaresContainer"></div>
             </div>
           </div>
         </div>
       </div>
 
-        <!-- ================== MUNICIPIOS ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <h5 class="mb-3">Municipios</h5>
+      <form id="personaForm">
+        <!-- ================== PERSONA ================== -->
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <!-- Header -->
+            <h5 class="card-header-custom">
+              <i class="bi bi-person-badge-fill me-2"></i>
+              Información personal
+            </h5>
 
             <div class="row g-3">
-
-              <!-- Residencia legal -->
-              <div class="col-12 col-md-4">
-                <label class="form-label">Residencia legal</label>
-                <select class="form-select" name="municipio_residencia_legal" id="mun_legal"></select>
+              <!-- FOTO - Columna dedicada -->
+              <div class="col-md-3">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-camera-fill me-1"></i>Foto
+                  </label>
+                  <input class="form-control form-control-institucional" type="file" id="inpFoto" accept="image/*">
+                  <div class="form-text text-gold small">
+                    <i class="bi bi-info-circle me-1"></i>JPG/PNG/WebP, máximo 3MB
+                  </div>
+                  <img id="previewFoto" class="img-thumbnail d-none mt-2 border-institucional rounded-3" 
+                      style="max-height:180px; width:100%; object-fit:cover;">
+                  <input type="hidden" name="foto_url" id="foto_url">
+                </div>
               </div>
 
-              <!-- Residencia real -->
-              <div class="col-12 col-md-4">
-                <label class="form-label">Residencia real</label>
-                <select class="form-select" name="municipio_residencia_real" id="mun_real"></select>
+              <!-- CAMPOS PERSONALES -->
+              <div class="col-md-9">
+                <div class="row g-3">
+                  <!-- NOMBRE -->
+                  <div class="col-md-4">
+                    <label class="form-label text-institucional required">
+                      <i class="bi bi-person-fill me-1"></i>Nombre(s)
+                    </label>
+                    <input class="form-control form-control-institucional" name="nombre" 
+                          placeholder="Ej. Juan Carlos" required>
+                  </div>
 
-                <div class="form-check mt-1">
-                  <input class="form-check-input" type="checkbox" id="chkMunRealIgual">
-                  <label class="form-check-label small" for="chkMunRealIgual">
-                    Igual que residencia legal
+                  <!-- APELLIDOS -->
+                  <div class="col-md-4">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-person-badge me-1"></i>Apellido paterno <code class="optional">(Obligatorio)</code>
+                    </label>
+                    <input class="form-control form-control-institucional" name="apellido_paterno" required>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-person-badge-fill me-1"></i>Apellido materno <code class="optional">(Obligatorio)</code>
+                    </label>
+                    <input class="form-control form-control-institucional" name="apellido_materno" required>
+                  </div>
+
+                  <!-- IDENTIFICACIONES -->
+                  <div class="col-md-4">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-card-text me-1"></i>CURP <code class="field-length">(18 caracteres)</code>
+                    </label>
+                    <input class="form-control form-control-institucional" name="curp" maxlength="18">
+                    <div class="form-text text-muted">Ingrese su CURP completa</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-file-earmark-person me-1"></i>RFC <code class="field-length">(13 caracteres)</code>
+                    </label>
+                    <input class="form-control form-control-institucional" name="rfc" maxlength="13">
+                    <div class="form-text text-muted">4 letras + 6 números + 3 homoclave</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-credit-card me-1"></i>Clave de elector <code class="field-length">(18 caracteres)</code>
+                    </label>
+                    <input class="form-control form-control-institucional" name="clave_elector" maxlength="18">
+                    <div class="form-text text-muted">Número completo de credencial INE</div>
+                  </div>
+
+                  <!-- SELECTS -->
+                  <div class="col-md-6">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-heart-fill me-1"></i>Estado civil
+                    </label>
+                    <select class="form-select form-control-institucional" name="estado_civil">
+                      <option value="">Seleccione</option>
+                      <option value="Soltero">Soltero</option>
+                      <option value="Casado">Casado</option>
+                      <option value="Divorciado">Divorciado</option>
+                      <option value="Viudo">Viudo</option>
+                      <option value="Concubinato">Concubinato</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-geo-alt-fill me-1"></i>Nivel territorial
+                    </label>
+                    <select class="form-select form-control-institucional" name="escala_influencia">
+                      <option value="">Seleccione</option>
+                      <option value="municipal">Municipal</option>
+                      <option value="regional">Regional</option>
+                      <option value="distrital">Distrital</option>
+                      <option value="estatal">Estatal</option>
+                      <option value="nacional">Nacional</option>
+                    </select>
+                    <div class="form-text text-muted mt-1">
+                      Si selecciona <strong>Regional</strong> o <strong>Distrital</strong>, podrá indicar los municipios de cobertura en <strong>Trabajo político</strong> 
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SEPARADOR -->
+            <hr class="my-4 border-institucional">
+
+            <!-- FAMILIARES EN POLÍTICA -->
+            <div class="card border-institucional shadow-sm mb-0">
+              <div class="card-body bg-institucional-light">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="mb-0 text-institucional">
+                    <i class="bi bi-people-fill me-2"></i>Familiares en política / administración pública
+                  </h6>
+                  <button type="button" class="btn btn-outline-institucional btn-sm px-3" id="btnAddFamiliar">
+                    <i class="bi bi-plus-circle me-1"></i>+ Agregar
+                  </button>
+                </div>
+                <div id="familiaresContainer" class="border rounded p-3 bg-white"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- ================== MUNICIPIOS ================== -->
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <!-- Header -->
+            <h5 class="card-header-custom mb-4">
+              <i class="bi bi-geo-alt-fill me-2"></i>
+              Ubicación y datos electorales
+            </h5>
+
+            <!-- MUNICIPIOS PRINCIPALES -->
+            <div class="row g-4 mb-5">
+              <!-- Residencia legal -->
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-house-door me-1"></i>Residencia legal
                   </label>
+                  <select class="form-select form-control-institucional" name="municipio_residencia_legal" id="mun_legal">
+                    <!-- Opciones se llenan por JS -->
+                  </select>
+                </div>
+              </div>
+
+              <!-- Residencia actual -->
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-geo-fill me-1"></i>Residencia actual
+                  </label>
+                  <select class="form-select form-control-institucional" name="municipio_residencia_real" id="mun_real">
+                    <!-- Opciones se llenan por JS -->
+                  </select>
+                  <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="chkMunRealIgual">
+                    <label class="form-check-label small text-gold" for="chkMunRealIgual">
+                      <i class="bi bi-arrow-repeat me-1"></i>Igual que residencia legal
+                    </label>
+                  </div>
                 </div>
               </div>
 
               <!-- Trabajo político -->
-              <div class="col-12 col-md-4">
-                <label class="form-label">Trabajo político</label>
-                <select class="form-select" name="municipio_trabajo_politico" id="mun_trabajo"></select>
-
-                <div class="form-check mt-1">
-                  <input class="form-check-input" type="checkbox" id="chkMunTrabajoIgual">
-                  <label class="form-check-label small" for="chkMunTrabajoIgual">
-                    Igual que residencia legal
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-briefcase-fill me-1"></i>Trabajo político
                   </label>
+                  <select class="form-select form-control-institucional" name="municipio_trabajo_politico" id="mun_trabajo">
+                    <!-- Opciones se llenan por JS -->
+                  </select>
+                  <!-- Cobertura trabajo político (solo si escala_influencia != municipal) -->
+                  <div id="wrapCoberturaTrabajo" class="mt-2 d-none">
+                    <div class="d-flex align-items-center justify-content-between">
+                      <label class="form-label mb-1">Cobertura de municipios (Trabajo político)</label>
+                      <span class="badge text-bg-secondary" id="lblCoberturaCount">0 seleccionados</span>
+                    </div>
+
+                    <div class="d-flex gap-2 mb-2">
+                      <input type="text" class="form-control" id="txtBuscarMunicipioCobertura" placeholder="Buscar municipio...">
+                      <button type="button" class="btn btn-outline-secondary" id="btnCoberturaAll">Todos</button>
+                      <button type="button" class="btn btn-outline-secondary" id="btnCoberturaNone">Limpiar</button>
+                    </div>
+
+                    <div id="listaCoberturaMunicipios" class="border rounded p-2 bg-white"
+                        style="max-height:240px; overflow:auto;">
+                    </div>
+
+                    <div class="form-text">
+                      Tip: el municipio “Trabajo político (principal)” se incluirá automáticamente en cobertura.
+                    </div>
+                  </div>
+                  <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="chkMunTrabajoIgual">
+                    <label class="form-check-label small text-gold" for="chkMunTrabajoIgual">
+                      <i class="bi bi-arrow-repeat me-1"></i>Igual que residencia legal
+                    </label>
+                  </div>
                 </div>
               </div>
-              <div class="row g-3">
-                  <div class="col-md-4">
-                    <label class="form-label">Sección electoral</label>
-                    <input class="form-control" name="ine_seccion" maxlength="4" placeholder="Ej. 1234">
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label">Distrito federal</label>
-                    <input class="form-control" name="ine_df" maxlength="2" placeholder="Ej. 05">
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label">Distrito local</label>
-                    <input class="form-control" name="ine_dl" maxlength="2" placeholder="Ej. 12">
-                  </div>
+            </div>
+
+            <!-- SECCIÓN ELECTORAL -->
+            <div class="row g-4">
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional">
+                    <i class="bi bi-hash me-1"></i>Sección electoral <code class="field-length">(4 dígitos)</code>
+                  </label>
+                  <input class="form-control form-control-institucional number-only" 
+                        name="ine_seccion" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" placeholder="1234">
+                  <div class="form-text text-muted">Solo números</div>
+                </div>
+              </div>
+              
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional">
+                    <i class="bi bi-flag-fill me-1"></i>Distrito federal <code class="field-length">(2 dígitos)</code>
+                  </label>
+                  <input class="form-control form-control-institucional number-only" 
+                        name="ine_df" maxlength="2" inputmode="numeric" pattern="[0-9]{2}" placeholder="05">
+                  <div class="form-text text-muted">Ej. 05, 12, 20</div>
+                </div>
+              </div>
+              
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional">
+                    <i class="bi bi-building-check me-1"></i>Distrito local <code class="field-length">(2 dígitos)</code>
+                  </label>
+                  <input class="form-control form-control-institucional number-only" 
+                        name="ine_dl" maxlength="2" inputmode="numeric" pattern="[0-9]{2}" placeholder="12">
+                  <div class="form-text text-muted">Solo números</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <!-- ================== FORMACION ACADEMICA ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <h5 class="mb-3">Formación académica</h5>
 
-            <div class="row g-3">
-              <div class="col-12 col-md-4">
-                <label class="form-label">Nivel</label>
-                <select class="form-select" id="fa_nivel" name="fa_nivel">
-                  <option value="">Seleccione</option>
-                  <option value="Primaria">Primaria</option>
-                  <option value="Secundaria">Secundaria</option>
-                  <option value="Educación Media Superior">Educación Media Superior</option>
-                  <option value="Educación Superior">Educación Superior</option>
-                  <option value="Posgrado">Posgrado</option>
-                </select>
+        <!-- ================== FORMACIÓN ACADÉMICA ================== -->
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <!-- Header -->
+            <h5 class="card-header-custom mb-4">
+              <i class="bi bi-mortarboard-fill me-2"></i>
+              Formación académica
+            </h5>
+
+            <div class="row g-4" id="formacionAcademicaRow">
+              <!-- NIVEL ACADÉMICO -->
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-book-half me-1"></i>Nivel
+                  </label>
+                  <select class="form-select form-control-institucional" id="fa_nivel" name="fa_nivel">
+                    <option value="">Seleccione</option>
+                    <option value="Primaria">Primaria</option>
+                    <option value="Secundaria">Secundaria</option>
+                    <option value="Educación Media Superior">Educación Media Superior</option>
+                    <option value="Educación Superior">Educación Superior</option>
+                    <option value="Posgrado">Posgrado</option>
+                  </select>
+                </div>
               </div>
 
-              <div class="col-12 col-md-4" id="fa_grado_wrap" style="display:none;">
-                <label class="form-label">Grado obtenido</label>
-                <input class="form-control" id="fa_grado_obtenido" name="fa_grado_obtenido" placeholder="Ej. Licenciatura en Derecho">
-                <div class="invalid-feedback">Requerido para Educación Superior o Posgrado.</div>
+              <!-- GRADO OBTENIDO (Condicional) -->
+              <div class="col-md-4" id="fa_grado_wrap" style="display:none;">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-award-fill me-1"></i>Grado obtenido
+                  </label>
+                  <input class="form-control form-control-institucional" id="fa_grado_obtenido" 
+                        name="fa_grado_obtenido" placeholder="Ej. Licenciatura en Derecho">
+                  <div class="invalid-feedback">Requerido para Educación Superior o Posgrado.</div>
+                </div>
               </div>
 
-              <div class="col-12 col-md-4" id="fa_inst_wrap" style="display:none;">
-                <label class="form-label">Institución</label>
-                <input class="form-control" id="fa_institucion" name="fa_institucion" placeholder="Ej. UAEM">
-                <div class="invalid-feedback">Requerido para Educación Superior o Posgrado.</div>
+              <!-- INSTITUCIÓN (Condicional) -->
+              <div class="col-md-4" id="fa_inst_wrap" style="display:none;">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-building-columns-fill me-1"></i>Institución
+                  </label>
+                  <input class="form-control form-control-institucional" 
+                        id="fa_institucion" name="fa_institucion" 
+                        placeholder="Ej. Universidad Autónoma del Estado de México">
+                  <div class="form-text text-gold small field-hint">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Nombre COMPLETO. NO abreviaturas (ej. UAEM, UAEMex)
+                  </div>
+                  <div class="invalid-feedback">Requerido para Educación Superior o Posgrado.</div>
+                </div>
               </div>
 
-              <div class="col-12 col-md-4 d-none" id="faTituladoWrap">
-                <label class="form-label">Titulado</label>
-                <select class="form-select" id="fa_titulado" name="fa_titulado">
-                  <option value="">Seleccione</option>
-                  <option value="true">Sí</option>
-                  <option value="false">No</option>
-                </select>
+              <!-- TITULADO (Condicional) -->
+              <div class="col-md-4 d-none" id="faTituladoWrap">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-check-circle-fill me-1"></i>Titulado
+                  </label>
+                  <select class="form-select form-control-institucional" id="fa_titulado" name="fa_titulado">
+                    <option value="">Seleccione</option>
+                    <option value="true">Sí</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
               </div>
 
+              <!-- CÉDULA PROFESIONAL (Condicional) -->
+              <div class="col-md-4 d-none" id="faCedulaWrap">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-file-earmark-medical-fill me-1"></i>Cédula profesional
+                  </label>
+                  <input class="form-control form-control-institucional" 
+                        name="fa_cedula_profesional" id="fa_cedula_profesional" 
+                        maxlength="25" autocomplete="off">
+                  <div class="invalid-feedback">Captura la cédula profesional.</div>
+                </div>
+              </div>
             </div>
 
-            <div class="small text-muted mt-2">
-              *Si seleccionas Educación Superior o Posgrado, se habilitan “Grado obtenido” e “Institución”.
+            <!-- Ayuda contextual -->
+            <div class="alert alert-info border-0 bg-institucional-light text-institucional small mt-4 mb-0">
+              <i class="bi bi-lightbulb me-2"></i>
+              <strong>Nota:</strong> Si seleccionas <strong>Educación Superior</strong> o <strong>Posgrado</strong>, 
+              se habilitan "Grado obtenido", "Institución", "Titulado" y "Cédula profesional".
             </div>
           </div>
         </div>
-        <!-- ================== TELEFONOS ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="mb-0">Teléfonos</h5>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddTelefono">+ Agregar</button>
+
+        <!-- ================== TELÉFONOS ================== -->
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0 card-header-custom d-inline-block">
+                <i class="bi bi-telephone-fill me-2"></i>Teléfonos
+              </h5>
+              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddTelefono">
+                <i class="bi bi-plus-circle me-1"></i>Agregar
+              </button>
             </div>
-            <div class="small-muted mb-3">Recomendado: solo uno marcado como <b>principal</b>.</div>
-            <div id="telefonosContainer"></div>
+            <div class="small-muted mb-3">
+              <i class="bi bi-info-circle me-1"></i>
+              Recomendado: solo uno marcado como <strong>principal</strong>.
+            </div>
+            <div id="telefonosContainer" class="border rounded p-3 bg-white"></div>
           </div>
         </div>
 
         <!-- ================== PAREJAS ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="mb-0">Parejas</h5>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddPareja">+ Agregar</button>
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0 card-header-custom d-inline-block">
+                <i class="bi bi-heart-fill me-2"></i>Parejas
+              </h5>
+              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddPareja">
+                <i class="bi bi-plus-circle me-1"></i>Agregar
+              </button>
             </div>
-            <div class="small-muted mb-3">Tipo relación: <code>actual</code> o <code>anterior</code>.</div>
-            <div id="parejasContainer"></div>
+            <div class="small-muted mb-3">
+              <i class="bi bi-info-circle me-1"></i>
+              Tipo relación: <code class="text-gold">actual</code> o <code class="text-gold">anterior</code>.
+            </div>
+            <div id="parejasContainer" class="border rounded p-3 bg-white"></div>
           </div>
         </div>
 
         <!-- ================== HIJOS ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="mb-0">Hijos</h5>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddHijo">+ Agregar</button>
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0 card-header-custom d-inline-block">
+                <i class="bi bi-children me-2"></i>Hijos
+              </h5>
+              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddHijo">
+                <i class="bi bi-plus-circle me-1"></i>Agregar
+              </button>
             </div>
-            <div id="hijosContainer"></div>
+            <div id="hijosContainer" class="border rounded p-3 bg-white"></div>
           </div>
         </div>
 
+
         <!-- ================== REDES ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="mb-0">Redes sociales</h5>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddRed">+ Agregar</button>
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0 card-header-custom d-inline-block">
+                <i class="bi bi-share-fill me-2"></i>Redes sociales
+              </h5>
+              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddRed">
+                <i class="bi bi-plus-circle me-1"></i>Agregar
+              </button>
             </div>
-            <div id="redesContainer"></div>
+            <div id="redesContainer" class="border rounded p-3 bg-white"></div>
           </div>
         </div>
 
         <!-- ================== TRAYECTORIA POLÍTICA ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
             <!-- ===== ELECCIÓN POPULAR ===== -->
-            <div class="mb-4">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Cargos de elección popular</h5>
-                <div class="form-check mb-0">
+            <div class="mb-5">
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0 card-header-custom d-inline-block">
+                  <i class="bi bi-star-fill me-2"></i>Cargos de elección popular
+                </h5>
+                <div class="form-check form-switch mb-0">
                   <input class="form-check-input" type="checkbox" id="chkSinCargosEleccion">
-                  <label class="form-check-label" for="chkSinCargosEleccion">
-                    No ha ocupado cargos de elección popular
+                  <label class="form-check-label text-institucional" for="chkSinCargosEleccion">
+                    <i class="bi bi-x-circle me-1"></i>No ha ocupado cargos
                   </label>
                 </div>
               </div>
 
               <div id="cargosEleccionSection">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                  <h6 class="mb-0">Detalle de cargos</h6>
-                  <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddCargoEleccion">
-                    + Agregar
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="mb-0 text-institucional">
+                    <i class="bi bi-list-ul me-2"></i>Detalle de cargos
+                  </h6>
+                  <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddCargoEleccion">
+                    <i class="bi bi-plus-circle me-1"></i>Agregar
                   </button>
                 </div>
-
-                <div class="small text-muted mb-2">
-                  Indica únicamente cargos obtenidos por elección popular.
+                <div class="small-muted mb-3">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Indica únicamente cargos obtenidos por <strong>elección popular</strong>.
                 </div>
-
-                <div id="cargosEleccionContainer"></div>
+                <div id="cargosEleccionContainer" class="border rounded p-3 bg-white"></div>
               </div>
             </div>
 
-            <hr class="my-4">
+            <hr class="my-4 border-institucional">
 
             <!-- ===== SERVICIO PÚBLICO ===== -->
-            <div class="mb-4">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Servicio Público</h5>
-                <div class="form-check mb-0">
+            <div class="mb-5">
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0 card-header-custom d-inline-block">
+                  <i class="bi bi-building-check-fill me-2"></i>Servicio público, experiencia laboral y antecedentes
+                </h5>
+                <div class="form-check form-switch mb-0">
                   <input class="form-check-input" type="checkbox" id="sin_sp" name="sin_servicio_publico">
-                  <label class="form-check-label" for="sin_sp">
-                    No ha ocupado cargos en el servicio público
+                  <label class="form-check-label text-institucional" for="sin_sp">
+                    <i class="bi bi-x-circle me-1"></i>No ha ocupado cargos
                   </label>
                 </div>
               </div>
 
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddServicio" style="margin-bottom: 1rem;">
-                + Agregar
+              <button type="button" class="btn btn-institucional btn-sm px-3 mb-3" id="btnAddServicio">
+                <i class="bi bi-plus-circle me-1"></i>Agregar
               </button>
 
               <div id="servicioPublicoSection">
-                <div class="small text-muted mb-3">
-                  Registra cargos desempeñados en la administración pública (no necesariamente de elección).
+                <div class="small-muted mb-3">
+                  <i class="bi bi-info-circle me-1"></i>
+                  <code class="text-gold">Registre cargos en administración pública municipal, estatal o federal.</code>
                 </div>
-                <div id="servicioContainer"></div>
+                <div id="servicioContainer" class="border rounded p-3 bg-white"></div>
               </div>
             </div>
-            <hr class="my-4">
-            <!-- ===== EXPERIENCIA LABORAL (FUERA SP) ===== -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="mb-0">Experiencia laboral relevante (fuera del servicio público)</h5>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddExpLab">
-                + Agregar
+
+            <hr class="my-4 border-institucional">
+
+            <!-- ===== EXPERIENCIA LABORAL ===== -->
+            <div class="mb-4">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0 text-institucional">
+                  <i class="bi bi-briefcase-fill me-2"></i>Experiencia laboral (fuera del servicio público)
+                </h5>
+                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddExpLab">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+              </div>
+              <div class="small-muted mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                Empleos relevantes en empresas, organizaciones, asociaciones, etc.
+              </div>
+              <div id="expLabContainer" class="border rounded p-3 bg-white"></div>
+            </div>
+
+            <!-- ===== EMPRESAS ===== -->
+            <hr class="my-4 border-institucional">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-9">
+                <label class="form-label text-institucional mb-2">
+                  <i class="bi bi-building-gear me-1"></i>Participación o socio de alguna empresa
+                </label>
+                <select class="form-select form-control-institucional" id="selTieneEmpresa" name="tiene_empresa">
+                  <option value="">Seleccione</option>
+                  <option value="no">No</option>
+                  <option value="si">Sí</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <button type="button" class="btn btn-institucional btn-sm w-100 px-3" id="btnAddEmpresa" disabled>
+                  <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+              </div>
+            </div>
+            <div id="empresasContainer" class="border rounded p-3 bg-white mt-3"></div>
+          </div>
+        </div>
+        <!-- ================== MILITANCIA E IDEOLOGÍA ================== -->
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <!-- Header Principal -->
+            <h5 class="card-header-custom mb-4">
+              <i class="bi bi-shield-check me-2"></i>
+              Militancia e ideología / Trabajo político
+            </h5>
+
+            <!-- CAMPOS PRINCIPALES -->
+            <div class="row g-4 mb-5">
+              <!-- Ideología política -->
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-compass me-1"></i>Ideología política
+                  </label>
+                  <select class="form-select form-control-institucional" id="selIdeologia" name="id_ideologia_politica">
+                    <option value="">Seleccione</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Partido político actual -->
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-building-flag me-1"></i>Partido político actual
+                  </label>
+                  <select class="form-select form-control-institucional" id="selPartidoActual" name="id_partido_actual">
+                    <option value="">Seleccione</option>
+                  </select>
+                  
+                  <!-- Campo "Otro" partido -->
+                  <div class="mt-3 d-none" id="partidoOtroWrap">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-pencil me-1"></i>Especifique partido
+                    </label>
+                    <input class="form-control form-control-institucional" id="partidoOtroTexto"
+                          name="partido_otro_texto" placeholder="Captura el nombre del partido">
+                    <div class="form-text text-gold">
+                      <i class="bi bi-info-circle me-1"></i>Solo aplica si seleccionas "Otro".
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Grupo postulación -->
+              <div class="col-md-4">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-check2-square me-1"></i>Acción afirmativa aplicable
+                  </label>
+                  <select class="form-select form-control-institucional" id="selGrupoPostulacion" name="id_grupo_postulacion">
+                    <option value="">Seleccione</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Temas de interés (FULL WIDTH) -->
+              <div class="col-12">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional mb-2">
+                    <i class="bi bi-lightning-charge me-1"></i>Tema(s) de interés político central
+                  </label>
+                  <div id="temasInteresChecks" class="border rounded p-3 bg-white" style="max-height: 200px; overflow:auto;">
+                    <div class="text-muted small">
+                      <i class="bi bi-hourglass-split me-1"></i>Cargando temas…
+                    </div>
+                  </div>
+                  
+                  <!-- Campo "Otro" tema (CORREGIDO: solo uno) -->
+                  <div class="mt-3 d-none" id="temaOtroWrap">
+                    <label class="form-label text-institucional">
+                      <i class="bi bi-plus-circle me-1"></i>Especifique "Otro"
+                    </label>
+                    <input class="form-control form-control-institucional" id="temaOtroTexto" 
+                          name="tema_interes_otro_texto" placeholder="Describe el tema de interés">
+                    <div class="form-text text-gold">
+                      <i class="bi bi-info-circle me-1"></i>Solo aplica si seleccionas "Otro".
+                    </div>
+                    <div class="invalid-feedback d-block">Este campo es obligatorio cuando seleccionas "Otro".</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <hr class="my-4 border-institucional">
+
+            <!-- Participación en otros partidos -->
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+              <h6 class="mb-0 text-institucional">
+                <i class="bi bi-people-fill me-2"></i>Antecedentes de participación en otros partidos u organizaciones
+              </h6>
+              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddParticipacion">
+                <i class="bi bi-plus-circle me-1"></i>Agregar
+              </button>
+            </div>
+            
+            <div id="participacionContainer" class="border rounded p-3 bg-white"></div>
+          </div>
+        </div>
+        <!-- ================== EFECTIVIDAD ELECTORAL ================== -->
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <!-- PREGUNTA PRINCIPAL -->
+            <div class="row g-4 align-items-end mb-5">
+              <div class="col-md-8 col-lg-6">
+                <div class="form-group position-relative hover-shadow rounded p-3">
+                  <label class="form-label text-institucional h6 mb-2">
+                    <i class="bi bi-ballot-check me-1"></i>¿Ha sido candidato(a) en algún proceso electoral?
+                  </label>
+                  <select class="form-select form-control-institucional" name="ha_contendido_eleccion" id="selHaContendido">
+                    <option value="">Seleccione...</option>
+                    <option value="true">Sí</option>
+                    <option value="false">No</option>
+                  </select>
+                  <div class="form-text text-gold">
+                    <i class="bi bi-info-circle me-1"></i>Si responde "Sí", se habilitará la sección de detalle
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ✅ SECCIÓN CONDICIONAL: EFECTIVIDAD ELECTORAL -->
+            <div id="eleccionesWrap" class="d-none">
+              <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+                <div>
+                  <h5 class="mb-1 card-header-custom d-inline-block">
+                    <i class="bi bi-graph-up-arrow me-2"></i>Efectividad electoral
+                  </h5>
+                  <div class="text-muted small">
+                    <i class="bi bi-list-check me-1"></i>Elecciones contendidas
+                  </div>
+                </div>
+                <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddEleccion">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar elección
+                </button>
+              </div>
+
+              <div id="eleccionesContainer" class="border rounded p-4 bg-white mb-4"></div>
+              
+              <hr class="my-4 border-institucional">
+            </div>
+
+            <!-- EVENTOS DE MOVILIZACIÓN -->
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+              <div>
+                <h6 class="mb-1 text-institucional">
+                  <i class="bi bi-megaphone-fill me-2"></i>Eventos de movilización
+                </h6>
+                <div class="text-muted small">
+                  <i class="bi bi-calendar-event me-1"></i>Nombre, fecha y asistencia por evento
+                </div>
+              </div>
+              <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddMovEvento">
+                <i class="bi bi-plus-circle me-1"></i>Agregar evento
               </button>
             </div>
 
-            <div class="small text-muted mb-3">
-              Incluye empleos o cargos relevantes en empresas, organizaciones, asociaciones, etc.
-            </div>
-
-            <div id="expLabContainer"></div>
+            <div id="movEventosContainer" class="border rounded p-4 bg-white"></div>
           </div>
         </div>
-
- 
-        <!-- ================== MILITANCIA E IDEOLOGÍA / TRABAJO POLÍTICO ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <h5 class="mb-3">Militancia e ideología / Trabajo político</h5>
-
-            <div class="row g-3">
-            <div class="col-12 col-md-4">
-              <label class="form-label">Ideología política</label>
-              <select class="form-select" id="selIdeologia" name="id_ideologia_politica">
-                <option value="">Seleccione</option>
-              </select>
-            </div>
-              <!-- Partido actual -->
-              <div class="col-12 col-md-4">
-                <label class="form-label">Partido político actual</label>
-                <select class="form-select" id="selPartidoActual" name="id_partido_actual">
-                  <option value="">Seleccione</option>
-                </select>
-
-                <div class="mt-2 d-none" id="partidoOtroWrap">
-                  <label class="form-label">Especifique partido</label>
-                  <input
-                    class="form-control"
-                    id="partidoOtroTexto"
-                    name="partido_otro_texto"
-                    placeholder="Captura el nombre del partido"
-                  >
-                  <div class="form-text">Solo aplica si seleccionas “Otro”.</div>
-                </div>
-              </div>
-
-              <!-- Tema(s) de interés político central -->
-              <div class="col-12">
-                <label class="form-label">Tema(s) de interés político central</label>
-                <div id="temasInteresChecks" class="border rounded p-2 bg-light" style="max-height: 180px; overflow:auto;">
-                  <div class="text-muted small">Cargando temas…</div>
-                </div>
-                <!-- “Otro” -->
-                <div class="mt-2 d-none" id="temaOtroWrap">
-                  <label class="form-label">Especifique “Otro”</label>
-                  <input class="form-control" id="temaOtroTexto" placeholder="Captura el tema">
-                  <div class="form-text">Solo aplica si seleccionas “Otro”.</div>
-                </div>
-              </div>
-
-              <!-- Grupo postulación (single) -->
-              <div class="col-12 col-md-4">
-                <label class="form-label">Accion afirmativa aplicable</label>
-                <select class="form-select" id="selGrupoPostulacion" name="id_grupo_postulacion">
-                  <option value="">Seleccione</option>
-                </select>
-              </div>
-
-              <!-- “Otro” tema -->
-              <div class="col-12 d-none" id="temaOtroWrap">
-                <label class="form-label">Especifique “Otro”</label>
-                <input class="form-control" id="temaOtroTexto" name="tema_interes_otro_texto"
-                      placeholder="Describe el tema de interés">
-                <div class="invalid-feedback">Este campo es obligatorio cuando seleccionas “Otro”.</div>
-              </div>
-            </div>
-
-            <hr class="my-4">
-
-            <!-- Participación en otros partidos / organizaciones -->
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
-              <h6 class="mb-0">Antecedentes de Participación en otros partidos u organizaciones</h6>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddParticipacion">+ Agregar</button>
-            </div>
-            <div id="participacionContainer"></div>
-          </div>
-        </div>
-
-        <!-- ================== EFECTIVIDAD ELECTORAL ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-
-            <div class="row g-3 align-items-end mb-3">
-              <div class="col-12 col-md-4">
-                <label class="form-label">¿Participó en la contienda electoral?</label>
-                <select class="form-select" name="ha_contendido_eleccion" id="selHaContendido">
-                  <option value="">Seleccione...</option>
-                  <option value="true">Sí</option>
-                  <option value="false">No</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- ✅ SOLO SE MUESTRA SI RESPUESTA = SÍ -->
-            <div id="eleccionesWrap">
-              <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
-                <div>
-                  <h5 class="mb-0">Efectividad electoral</h5>
-                  <div class="text-muted small">Elecciones contendidas</div>
-                </div>
-
-                <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddEleccion">
-                  + Agregar elección
-                </button>
-              </div>
-
-              <div id="eleccionesContainer" class="mb-3"></div>
-
-              <hr class="my-3">
-            </div>
-
-            <div class="row g-3">
-              <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-2">
-                <div>
-                  <h6 class="mb-0">Eventos de movilización</h6>
-                  <div class="text-muted small">Nombre, fecha y asistencia por evento</div>
-                </div>
-                <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddMovEvento">
-                  + Agregar evento
-                </button>
-              </div>
-
-              <div id="movEventosContainer"></div>
-            </div>
-
-          </div>
-        </div>
-
-
         <!-- ================== EQUIPOS Y REFERENTES ================== -->
-        <div class="card mb-4">
-          <div class="card-body">
-            <h5 class="mb-3">Equipo<code> (Opcional)</code> y referentes políticos</h5>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Equipos políticos</h6>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddEquipo">+ Agregar</button>
-            </div>
-            <div id="equiposContainer" class="mb-3"></div>
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <!-- Header Principal -->
+            <h5 class="card-header-custom mb-4">
+              <i class="bi bi-people-gear me-2"></i>
+              Equipos <code class="text-gold ms-1">(Opcional)</code> y referentes políticos <code class="text-gold ms-1">(Opcional)</code>
+            </h5>
 
-            <hr class="my-3">
-
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Referentes políticos</h6>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddReferente">+ Agregar</button>
+            <!-- EQUIPOS POLÍTICOS -->
+            <div class="mb-5">
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                <h6 class="mb-0 text-institucional">
+                  <i class="bi bi-diagram-3-fill me-2"></i>Equipos políticos
+                </h6>
+                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddEquipo">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar equipo
+                </button>
+              </div>
+              <div id="equiposContainer" class="border rounded p-4 bg-white"></div>
             </div>
-            <div id="referentesContainer"></div>
+
+            <hr class="my-4 border-institucional">
+
+            <!-- REFERENTES POLÍTICOS -->
+            <div>
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                <h6 class="mb-0 text-institucional">
+                  <i class="bi bi-star-fill me-2"></i>Referentes políticos
+                </h6>
+                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddReferente">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar referente
+                </button>
+              </div>
+              <div id="referentesContainer" class="border rounded p-4 bg-white"></div>
+            </div>
           </div>
         </div>
+        <!-- ================== CONTROVERSIAS ================== -->
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <!-- Header + botón (responsive) -->
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+              <h5 class="mb-0 card-header-custom d-inline-block">
+                <i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>
+                Controversias
+              </h5>
+              <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddControversia">
+                <i class="bi bi-plus-circle me-1"></i>Agregar
+              </button>
+            </div>
 
-<!-- ================== CONTROVERSIAS ================== -->
-      <div class="card mb-4">
-        <div class="card-body">
-          <!-- Header + botón (responsive) -->
-          <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
-            <h5 class="mb-0">Controversias</h5>
-            <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddControversia">
-              + Agregar
-            </button>
-          </div>
-
-          <!-- Checkbox “sin controversias” -->
-          <div class="form-check form-switch mb-3">
-              <input class="form-check-input" type="checkbox" id="chkSinControversias">
-              <label class="form-check-label" for="chkSinControversias">
+            <!-- Checkbox "sin controversias" - MEJORADO -->
+            <div class="form-check form-switch mb-4 p-3 border rounded hover-shadow bg-white">
+              <input class="form-check-input shadow-none" type="checkbox" id="chkSinControversias">
+              <label class="form-check-label text-institucional fw-medium" for="chkSinControversias">
+                <i class="bi bi-check-circle-fill me-2 text-success"></i>
                 No se detectaron controversias públicas
               </label>
-              <div class="form-text">
+              <div class="form-text mt-1">
+                <i class="bi bi-info-circle me-1 text-gold"></i>
                 Si activas esta opción, se deshabilita la captura de controversias.
               </div>
             </div>
 
-              <!-- Mensaje cuando está activo -->
-              <div id="sinControversiasMsg" class="alert alert-success py-2 d-none" role="alert">
-                  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div>
-                      <strong>Sin controversias públicas</strong>
-                    </div>
-                    <span class="badge text-bg-success">Validado</span>
+            <!-- Mensaje cuando está activo - MEJORADO -->
+            <div id="sinControversiasMsg" class="alert alert-success border-0 bg-white shadow-sm d-none mb-4" role="alert">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-shield-check fs-5 text-success"></i>
+                  <div>
+                    <strong class="text-institucional">Sin controversias públicas</strong>
                   </div>
                 </div>
-
-                <!-- Contenedor normal -->
-                <div id="controversiasContainer"></div>
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                  <i class="bi bi-check-lg me-1"></i>Validado
+                </span>
               </div>
-      </div>
+            </div>
+
+            <!-- Contenedor normal -->
+            <div id="controversiasContainer" class="border rounded p-4 bg-white"></div>
+          </div>
+          
+          <!-- Fuentes de consulta (placeholder para tu bloque mejorado) -->
+          <div id="fuentesWrap"></div>
+        </div>
+
+        <!-- ================== FUENTES DE CONSULTA ================== -->
+        <div class="card mb-4 border-institucional">
+          <div class="card-body bg-institucional-light">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0 text-institucional">
+                <i class="bi bi-book-half me-2"></i>
+                Fuentes de consulta
+              </h5>
+            </div>
+
+            <!-- Checkboxes con iconos mejorados -->
+            <div class="row g-3 mb-4">
+              <div class="col-md-6">
+                <div class="form-check d-flex align-items-center p-2 rounded hover-shadow">
+                  <i class="bi bi-mic-fill text-institucional me-3 fs-3"></i>
+                  <div class="flex-grow-1">
+                    <input class="form-check-input fuenteChk me-2" type="checkbox" value="1" id="fuente_1">
+                    <label class="form-check-label mb-0 fw-medium" for="fuente_1">
+                      Entrevista directa
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="form-check d-flex align-items-center p-2 rounded hover-shadow">
+                  <i class="bi bi-newspaper text-institucional me-3 fs-3"></i>
+                  <div class="flex-grow-1">
+                    <input class="form-check-input fuenteChk me-2" type="checkbox" value="2" id="fuente_2">
+                    <label class="form-check-label mb-0 fw-medium" for="fuente_2">
+                      Medios
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-12">
+                <div class="form-check d-flex align-items-center p-2 rounded hover-shadow">
+                  <i class="bi bi-file-earmark-text text-institucional me-3 fs-3"></i>
+                  <div class="flex-grow-1">
+                    <input class="form-check-input fuenteChk me-2" type="checkbox" value="3" id="fuente_3">
+                    <label class="form-check-label mb-0 fw-medium" for="fuente_3">
+                      Documentos oficiales
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Detalle -->
+            <div class="mb-3">
+              <label class="form-label small text-institucional">
+                <i class="bi bi-card-text me-1"></i>
+                Detalle (opcional)
+              </label>
+              <input class="form-control form-control-institucional" id="fuentesDetalle" maxlength="250" 
+                    placeholder="Ej: entrevista telefónica / nota / oficio...">
+            </div>
+
+            <!-- Fecha con badge dorado -->
+            <div class="mb-0">
+              <label class="form-label small text-institucional">
+                <i class="bi bi-calendar3 me-1"></i>
+                Fecha consulta (opcional)
+              </label>
+              <input type="date" class="form-control form-control-institucional" id="fuentesFecha" max="2026-12-31">
+              <div class="form-text text-gold">
+                <i class="bi bi-info-circle me-1"></i>
+                Usa la fecha más reciente de consulta
+              </div>
+            </div>
+          </div>
+        </div>
+            <!-- ================== SEMÁFORO CONFIABILIDAD ================== -->
+        <div class="card mb-4 border-institucional" id="confiabilidadCard">
+          <div class="card-body bg-institucional-light">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0 text-institucional">
+                <i class="bi bi-traffic-light me-2"></i>
+                Nivel de confiabilidad
+              </h5>
+
+              <!-- Vista rápida del valor actual -->
+              <span class="badge rounded-pill text-bg-secondary" id="badgeConfiabilidad">
+                Sin seleccionar
+              </span>
+            </div>
+
+            <div class="text-muted small mb-3">
+              Selecciona el nivel según la consistencia de los datos y sus fuentes.
+            </div>
+
+            <!-- Opciones -->
+            <div class="d-flex flex-wrap gap-2" role="group" aria-label="Nivel de confiabilidad">
+              <!-- Alto -->
+              <input class="btn-check" type="radio" name="nivel_confiabilidad" id="conf_alto" value="alto" autocomplete="off">
+              <label class="btn btn-outline-success d-flex align-items-center gap-2" for="conf_alto">
+                <span class="badge text-bg-success">ALTO</span>
+                <span>Confiable</span>
+              </label>
+
+              <!-- Medio -->
+              <input class="btn-check" type="radio" name="nivel_confiabilidad" id="conf_medio" value="medio" autocomplete="off">
+              <label class="btn btn-outline-warning d-flex align-items-center gap-2" for="conf_medio">
+                <span class="badge text-bg-warning">MEDIO</span>
+                <span>Parcial</span>
+              </label>
+
+              <!-- Bajo -->
+              <input class="btn-check" type="radio" name="nivel_confiabilidad" id="conf_bajo" value="bajo" autocomplete="off">
+              <label class="btn btn-outline-danger d-flex align-items-center gap-2" for="conf_bajo">
+                <span class="badge text-bg-danger">BAJO</span>
+                <span>Por confirmar</span>
+              </label>
+
+              <!-- Limpiar -->
+              <button type="button" class="btn btn-outline-secondary ms-auto" id="btnConfClear">
+                <i class="bi bi-x-circle me-1"></i>Limpiar
+              </button>
+            </div>
+
+            <div class="form-text mt-3" id="helpConfiabilidad">
+              Consejo: si la mayoría proviene de <b>documentos oficiales</b> o <b>entrevista directa</b>, suele ser <b>Alto</b>.
+            </div>
+
+            <!-- Mensaje de validación (si lo haces obligatorio) -->
+            <div class="invalid-feedback d-block d-none" id="confInvalid">
+              Selecciona un nivel de confiabilidad.
+            </div>
+          </div>
+        </div>
         <!-- ================== SUBMIT ================== -->
-        <div class="d-flex justify-content-end gap-2 mb-5">
-          <button type="button" class="btn btn-outline-secondary" id="btnReset">Limpiar</button>
-          <button type="submit" class="btn btn-primary btn-lg">Guardar todo</button>
+        <div class="d-flex justify-content-end gap-3 mb-5">
+          <!-- LIMPIAR -->
+          <button type="button" class="btn btn-outline-institucional px-4 py-2" id="btnReset">
+            <i class="bi bi-arrow-repeat me-2"></i>
+            Limpiar
+          </button>
+          
+          <!-- GUARDAR TODO (Principal) -->
+          <button type="submit" class="btn btn-institucional btn-lg px-5 py-3 shadow-sm">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            Guardar todo
+          </button>
         </div>
 
       </form>
@@ -626,7 +1064,27 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    //funcion para ocultar efectividad electoral
+  
+//validacion de datos solo numeros
+  document.querySelectorAll('.number-only').forEach(input => {
+      // Bloquea letras al teclear
+      input.addEventListener('input', function(e) {
+          this.value = this.value.replace(/[^0-9]/g, '');
+      });
+      
+      // Bloquea pegar texto no numérico
+      input.addEventListener('paste', function(e) {
+          e.preventDefault();
+      });
+      
+      // Bloquea teclas no numéricas
+      input.addEventListener('keydown', function(e) {
+          if (e.key.length === 1 && !/[0-9]/.test(e.key)) {
+              e.preventDefault();
+          }
+      });
+  });
+  //funcion para ocultar efectividad electoral
   function setEleccionesUIState() {
     const sel = document.getElementById('selHaContendido');
     const wrap = document.getElementById('eleccionesWrap');
@@ -767,66 +1225,93 @@
   function hideAlert(){ $('#alertBox').classList.add('d-none'); }
 
 
-    function getMunicipioNombreById(id) {
+function getMunicipioNombreById(id) {
     const n = Number(id);
     const m = (municipiosCache || []).find(x => Number(x.id_municipio) === n);
     return m?.nombre || null;
   }
-
-  //editar persona cargar datos
+//editar persona cargar datos
     function cancelEditing() {
-        // deja tu estado de edición limpio
-        editingId = null;
-  
-        // deshabilita botones
-        const btnSalir = document.getElementById('btnSalirEdicion');
-        const btnEliminar = document.getElementById('btnEliminarPersona');
-        if (btnSalir) btnSalir.disabled = true;
-        if (btnEliminar) btnEliminar.disabled = true;
-  
-        // opcional: reset del submit
-        const btnSubmit = document.getElementById('btnSubmitPersona');
-        if (btnSubmit) btnSubmit.textContent = 'Guardar';
-  
-        // limpia formulario
-        if (typeof clearAll === 'function') clearAll();
-        if (typeof refreshPreview === 'function') refreshPreview();
-      }
-    async function onEditPersona(id_persona) {
-    try {
-      const payload = await apiGet(`/personas/${id_persona}/payload`);
-      applyPayloadToForm(payload);     // 👈 tu función actual
-      setEditing(id_persona);          // 👈 activa modo edición
-      showAlert("info", `Editando registro #${id_persona}`);
-    } catch (e) {
-      console.error(e);
-      showAlert("danger", "No pude cargar el registro para editar: " + e.message);
+      // deja tu estado de edición limpio
+      editingId = null;
+
+      // deshabilita botones
+      const btnSalir = document.getElementById('btnSalirEdicion');
+      const btnEliminar = document.getElementById('btnEliminarPersona');
+      if (btnSalir) btnSalir.disabled = true;
+      if (btnEliminar) btnEliminar.disabled = true;
+
+      // opcional: reset del submit
+      const btnSubmit = document.getElementById('btnSubmitPersona');
+      if (btnSubmit) btnSubmit.textContent = 'Guardar';
+
+      // limpia formulario
+      if (typeof clearAll === 'function') clearAll();
+      if (typeof refreshPreview === 'function') refreshPreview();
     }
+  async function onEditPersona(id_persona) {
+  try {
+    const payload = await apiGet(`/personas/${id_persona}/payload`);
+    applyPayloadToForm(payload);     // 👈 tu función actual
+    setEditing(id_persona);          // 👈 activa modo edición
+    showAlert("info", `Editando registro #${id_persona}`);
+  } catch (e) {
+    console.error(e);
+    showAlert("danger", "No pude cargar el registro para editar: " + e.message);
   }
-  //detele
-  async function onDeletePersona(id_persona) {
-    const ok = confirm(`¿Eliminar el registro #${id_persona}? Esta acción no se puede deshacer.`);
-    if (!ok) return;
-  
-    try {
-      await apiDelete(`/personas/${id_persona}`);
-      showAlert("success", `Eliminado ✅ (#${id_persona})`);
-  
-      // si justo estabas editando ese registro
-      if (editingId === Number(id_persona)) cancelEditing();
-  
-      if (typeof reloadPanelPersonas === "function") await reloadPanelPersonas();
-    } catch (e) {
-      console.error(e);
-      showAlert("danger", "No pude eliminar: " + e.message);
-    }
+}
+//detele
+async function onDeletePersona(id_persona) {
+  const ok = confirm(`¿Eliminar el registro #${id_persona}? Esta acción no se puede deshacer.`);
+  if (!ok) return;
+
+  try {
+    await apiDelete(`/personas/${id_persona}`);
+    showAlert("success", `Eliminado ✅ (#${id_persona})`);
+
+    // si justo estabas editando ese registro
+    if (editingId === Number(id_persona)) cancelEditing();
+
+    if (typeof reloadPanelPersonas === "function") await reloadPanelPersonas();
+  } catch (e) {
+    console.error(e);
+    showAlert("danger", "No pude eliminar: " + e.message);
   }
+}
 
   function generarTituloBorrador(payload) {
     const nombre = payload?.persona?.nombre?.trim() || 'SIN NOMBRE';
     const munId = payload?.persona?.municipio_trabajo_politico;
     const munNombre = munId ? (getMunicipioNombreById(munId) || `Municipio ${munId}`) : 'SIN MUNICIPIO';
     return `${nombre} - ${munNombre}`;
+  }
+
+  async function apiPut(path, body) {
+    const token = localStorage.getItem('token');
+    const res = await fetch(API_BASE + path, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(body)
+    });
+    if (res.status === 401) window.location.href = '/';
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error((data.error || 'Error') + (data.detail ? ' | ' + data.detail : ''));
+    return data;
+  }
+
+  async function apiDelete(path) {
+    const token = localStorage.getItem('token');
+    const res = await fetch(API_BASE + path, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    if (res.status === 401) window.location.href = '/';
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error((data.error || 'Error') + (data.detail ? ' | ' + data.detail : ''));
+    return data;
   }
 
   async function cargarListaBorradores() {
@@ -838,7 +1323,7 @@
       const opt = document.createElement('option');
       opt.value = b.id_borrador;
       const fecha = (b.updated_at || b.created_at || '').toString().slice(0, 19).replace('T',' ');
-      opt.textContent = `${b.titulo || '(sin título)'}  —  ${b.estatus}  —  ${fecha}`;
+      opt.textContent = `${b.titulo || '(sin título)'}  —  ${fecha}`;
       sel.appendChild(opt);
     });
   }
@@ -890,6 +1375,21 @@
     setVal('ine_df', ine.distrito_federal);
     setVal('ine_dl', ine.distrito_local);
 
+    // ✅ Rehidratar cobertura de municipios trabajo (si viene del payload)
+    const cov = Array.isArray(payload.municipios_trabajo) ? payload.municipios_trabajo : [];
+    const ids = cov.map(x => x.id_municipio);
+
+    window.__setCoberturaTrabajoIds?.(ids);
+
+    //nivel de confiabilidad
+    const nc = (payload.persona?.nivel_confiabilidad || "").toLowerCase();
+
+    if (nc) {
+      const radio = document.querySelector(
+        `input[name="nivel_confiabilidad"][value="${nc}"]`
+      );
+      if (radio) radio.checked = true;
+    }
     // Helpers para reconstruir listas
     document.getElementById('chkSinControversias').checked =
       payload?.persona?.sin_controversias_publicas === true;
@@ -1040,38 +1540,100 @@
     const inpInst  = document.querySelector('[name="fa_institucion"]') || document.getElementById('fa_institucion');
     const selTit   = document.querySelector('[name="fa_titulado"]') || document.getElementById('fa_titulado');
 
+    // ✅ NUEVO: cédula
+    const inpCed   = document.querySelector('[name="fa_cedula_profesional"]') || document.getElementById('fa_cedula_profesional');
+
     // 1) set valores
     if (selNivel) selNivel.value = fa.nivel || '';
     if (inpGrado) inpGrado.value = fa.grado_obtenido || '';
     if (inpInst)  inpInst.value  = fa.institucion || '';
     if (selTit)   selTit.value   = (fa.titulado == null) ? '' : String(!!fa.titulado);
 
-    // 2) FORZAR UI (mostrar/ocultar) igual que cuando el usuario cambia el select
-    //    - si tienes una función, llámala
-    if (typeof toggleFormacionUI === 'function') {
-      toggleFormacionUI();
-    } else if (selNivel) {
-      // si no tienes función, fuerza el change para que se ejecute el listener que ya tengas
-      selNivel.dispatchEvent(new Event('change', { bubbles: true }));
+    // ✅ NUEVO: set cédula (solo si titulado=true; si no, limpia)
+    if (inpCed) {
+      inpCed.value = (fa.titulado === true) ? (fa.cedula_profesional || '') : '';
+      inpCed.classList.remove('is-invalid');
     }
-    //✅ EVENTOS DE MOVILIZACION
-    rebuildList('movEventosContainer', payload.capacidad_movilizacion_eventos || [], movEventoBlock, (b, it) => {
-      b.querySelector('input[name="mov_nombre_evento"]').value = it.nombre_evento || '';
 
-      const inpFecha = b.querySelector('input[name="mov_fecha_evento"]');
-      if (inpFecha) {
-        const raw = it.fecha_evento;
-        // normaliza: "2026-02-05T..." -> "2026-02-05"
-        inpFecha.value = raw ? String(raw).slice(0, 10) : '';
+    // 2) FORZAR UI (mostrar/ocultar)
+    if (typeof toggleFormacionUI === 'function') {
+      toggleFormacionUI(); // aquí adentro debe decidir si se ve cédula o no
+    } else {
+      // fuerza change para disparar listeners
+      selNivel?.dispatchEvent(new Event('change', { bubbles: true }));
+      selTit?.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // ✅ EVENTOS DE MOVILIZACION (con lugar + fotos[])
+    rebuildList(
+      'movEventosContainer',
+      payload.capacidad_movilizacion_eventos || [],
+      movEventoBlock,
+      (b, it) => {
+        b.querySelector('input[name="mov_nombre_evento"]').value = it.nombre_evento || '';
+
+        const inpFecha = b.querySelector('input[name="mov_fecha_evento"]');
+        if (inpFecha) {
+          const raw = it.fecha_evento;
+          inpFecha.value = raw ? String(raw).slice(0, 10) : '';
+        }
+
+        b.querySelector('input[name="mov_asistencia_evento"]').value = (it.asistencia ?? '');
+
+        // ✅ lugar del evento
+        const inpLugar = b.querySelector('input[name="mov_lugar_evento"]');
+        if (inpLugar) inpLugar.value = it.lugar_evento || '';
+
+        // ✅ fotos (array)
+        const urls = Array.isArray(it.fotos) ? it.fotos : [];
+
+        const hid = b.querySelector('input[name="foto_evento_urls"]');
+        if (hid) hid.value = JSON.stringify(urls);
+
+        // ✅ previews
+        const prevWrap = b.querySelector('[data-preview="fotos_evento"]');
+        if (prevWrap) {
+          prevWrap.innerHTML = "";
+          urls.forEach(url => {
+            const img = document.createElement("img");
+            img.src = url;
+            img.className = "img-thumbnail";
+            img.style.maxHeight = "90px";
+            img.style.maxWidth = "120px";
+            prevWrap.appendChild(img);
+          });
+        }
       }
-
-      b.querySelector('input[name="mov_asistencia_evento"]').value = (it.asistencia ?? '');
-    });
+    );
     //✅ EXPERIENCIA LABORAL
     rebuildList('expLabContainer', payload.experiencia_laboral || [], expLabBlock, (b, it) => {
       b.querySelector('input[name="periodo"]').value = it.periodo || '';
       b.querySelector('input[name="cargo"]').value = it.cargo || '';
       b.querySelector('input[name="organizacion"]').value = it.organizacion || '';
+    });
+
+    // ✅ EMPRESAS (empresas_persona)
+    const selTieneEmpresa = document.getElementById('selTieneEmpresa');
+    const empresas_persona = Array.isArray(payload.empresas_persona) ? payload.empresas_persona : [];
+
+    if (selTieneEmpresa) selTieneEmpresa.value = empresas_persona.length ? 'si' : 'no';
+
+    rebuildList('empresasContainer', empresas_persona, empresaBlock, (b, it) => {
+      const $ = (q) => b.querySelector(q);
+
+      const inpNombre  = $('input[name="empresa_nombre"]');
+      const inpRol     = $('input[name="empresa_rol"]');
+      const inpPeriodo = $('input[name="empresa_periodo"]');
+      const inpNotas   = $('input[name="empresa_notas"]');
+
+      if (inpNombre)  inpNombre.value  = it?.nombre_empresa ?? '';
+      if (inpRol)     inpRol.value     = it?.rol ?? '';
+      if (inpPeriodo) inpPeriodo.value = it?.periodo ?? '';
+      if (inpNotas)   inpNotas.value   = it?.notas ?? '';
+
+      // opcional: si tu bloque trae hidden id para futuro (no estorba)
+      const hidId = $('input[name="id_empresa_persona"]');
+      if (hidId) hidId.value = it?.id_empresa_persona ?? '';
     });
 
     //SIN SERVICIO PUBLICO
@@ -1150,9 +1712,32 @@
     document.getElementById('selIdeologia').value = payload?.persona?.id_ideologia_politica ?? '';
 
     refreshPreview();
+    // ✅ Fuentes de consulta
+    document.querySelectorAll('.fuenteChk').forEach(chk => chk.checked = false);
+
+    const fuentes = Array.isArray(payload.fuentes_consulta) ? payload.fuentes_consulta : [];
+    fuentes.forEach(f => {
+      const chk = document.querySelector(`.fuenteChk[value="${f.id_fuente}"]`);
+      if (chk) chk.checked = true;
+    });
+
+    // si usas un detalle/fecha "general" para todas
+    // si usas un detalle/fecha "general" para todas
+    const detalle = fuentes[0]?.detalle ?? "";
+    const fechaRaw = fuentes[0]?.fecha_consulta ?? "";
+
+    const inpDet = document.getElementById("fuentesDetalle");
+    const inpFec = document.getElementById("fuentesFecha");
+
+    if (inpDet) inpDet.value = detalle || "";
+
+    // ✅ date input necesita YYYY-MM-DD
+    if (inpFec) {
+      inpFec.value = fechaRaw ? String(fechaRaw).slice(0, 10) : "";
+    }
   }
 
- function fillSelect(el, rows, valueKey, textKey, placeholder = 'Seleccione') {
+  function fillSelect(el, rows, valueKey, textKey, placeholder = 'Seleccione') {
     if (!el) return; // ✅ evita error si el elemento no existe
 
     el.innerHTML = `<option value="">${placeholder}</option>`;
@@ -1168,83 +1753,307 @@
   const toBoolOrNull = (v) => (v === 'true') ? true : (v === 'false') ? false : null;
 
   // ---------- UI Blocks ----------
-  function movEventoBlock() {
-    const div = document.createElement('div');
-    div.className = 'list-item mb-2';
-
-    div.innerHTML = `
-      <div class="row g-2 align-items-end">
-        <div class="col-12 col-md-6">
-          <label class="form-label">Nombre del evento</label>
-          <input class="form-control" name="mov_nombre_evento" placeholder="Ej. Asamblea regional">
-        </div>
-
-        <div class="col-12 col-md-3">
-          <label class="form-label">Fecha</label>
-          <input type="date" class="form-control" name="mov_fecha_evento">
-        </div>
-
-        <div class="col-12 col-md-2">
-          <label class="form-label">Asistencia</label>
-          <input type="number" min="0" class="form-control" name="mov_asistencia_evento" inputmode="numeric" placeholder="Ej. 220">
-        </div>
-
-        <div class="col-12 col-md-1 text-md-end">
-          <button type="button" class="btn btn-outline-danger btn-sm w-100 btnRemove">X</button>
-        </div>
-      </div>
-    `;
-
-    div.querySelector('.btnRemove').addEventListener('click', () => {
-      div.remove();
-      refreshPreview?.();
-    });
-
-    // refrescar preview con input/change en ese bloque
-    div.addEventListener('input', () => refreshPreview?.());
-    div.addEventListener('change', () => refreshPreview?.());
-
-    return div;
-  }
-
-
-  function telefonoBlock() {
+    //empresa block
+  function empresaBlock() {
     const div = document.createElement('div');
     div.className = 'list-item';
+
     div.innerHTML = `
       <div class="row g-2 align-items-end">
-        <div class="col-md-5">
-          <label class="form-label">Teléfono</label>
-          <input class="form-control" name="telefono" placeholder="Ej. 7221234567">
-        </div>
         <div class="col-md-4">
-          <label class="form-label">Tipo</label>
-          <select class="form-select" name="tipo">
-            <option value="">Seleccione</option>
-            <option value="personal">Personal</option>
-            <option value="trabajo">Trabajo</option>
-          </select>
+          <label class="form-label">Nombre de la empresa</label>
+          <input class="form-control" name="empresa_nombre" maxlength="200" autocomplete="off">
         </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Rol (opcional)</label>
+          <input class="form-control" name="empresa_rol" maxlength="120" placeholder="Socio / Colaborador">
+        </div>
+
         <div class="col-md-2">
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="principal">
-            <label class="form-check-label">Principal</label>
-          </div>
+          <label class="form-label">Periodo (opcional)</label>
+          <input class="form-control" name="empresa_periodo" placeholder="2025 o 2025-2026" maxlength="9">
+          <div class="invalid-feedback">Usa 2025 o 2025-2026.</div>
         </div>
+
+        <div class="col-md-2">
+          <label class="form-label">Notas (opcional)</label>
+          <input class="form-control" name="empresa_notas" maxlength="200">
+        </div>
+
         <div class="col-md-1 text-end">
           <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
         </div>
       </div>
     `;
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
-    div.querySelector('input[name="principal"]').addEventListener('change', (e) => {
-      if (e.target.checked) {
-        document.querySelectorAll('#telefonosContainer input[name="principal"]').forEach(ch => {
-          if (ch !== e.target) ch.checked = false;
+    const inpPeriodo = div.querySelector('input[name="empresa_periodo"]');
+
+    if (inpPeriodo) {
+      inpPeriodo.addEventListener('blur', () => {
+        const val = inpPeriodo.value.trim();
+        if (!val) {
+          inpPeriodo.classList.remove('is-invalid');
+          return;
+        }
+
+        const re = /^\d{4}(-\d{4})?$/;
+
+        if (!re.test(val)) {
+          inpPeriodo.classList.add('is-invalid');
+        } else {
+          inpPeriodo.classList.remove('is-invalid');
+        }
+      });
+    }
+    div.querySelector('.btnRemove').addEventListener('click', () => {
+      div.remove();
+      refreshPreview?.();
+    });
+
+    // valida periodo en vivo (si ya tienes isPeriodoValido/normalizePeriodo)
+    const inpPer = div.querySelector('input[name="empresa_periodo"]');
+    inpPer?.addEventListener('input', () => {
+      const v = (inpPer.value || '').trim();
+      if (!v) {
+        inpPer.classList.remove('is-invalid');
+        return;
+      }
+      inpPer.classList.toggle('is-invalid', !isPeriodoValido(v));
+    });
+
+    div.addEventListener('input', () => refreshPreview?.());
+    div.addEventListener('change', () => refreshPreview?.());
+    return div;
+  }
+//eventos
+function movEventoBlock() {
+  const div = document.createElement('div');
+  div.className = 'list-item mb-2';
+
+  div.innerHTML = `
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-6">
+        <label class="form-label">Nombre del evento</label>
+        <input class="form-control" name="mov_nombre_evento" placeholder="Ej. Asamblea regional">
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">Lugar del evento</label>
+        <input class="form-control" name="mov_lugar_evento" maxlength="200" autocomplete="off">
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">
+          Evidencia fotográfica <code class="field-length">Movilización</code>
+          <br><small class="text-muted d-inline-block ms-2">Máximo 10 fotos (opcional)</small>
+        </label>
+
+        <input class="form-control"
+              type="file"
+              name="foto_evento_file"
+              accept="image/*"
+              multiple>
+
+        <input type="hidden" name="foto_evento_urls">
+
+        <div class="d-flex flex-wrap gap-2 mt-2" data-preview="fotos_evento"></div>
+        <div class="invalid-feedback">Máximo 10 fotos.</div>
+      </div>
+
+      <div class="col-12 col-md-3">
+        <label class="form-label">Fecha</label>
+        <input type="date" class="form-control" name="mov_fecha_evento">
+      </div>
+
+      <div class="col-12 col-md-2">
+        <label class="form-label">Movilización estimada</label>
+        <input type="number" min="0" class="form-control" name="mov_asistencia_evento" inputmode="numeric" placeholder="Ej. 220">
+      </div>
+
+      <div class="col-12 col-md-1 text-md-end">
+        <button type="button" class="btn btn-outline-danger btn-sm w-100 btnRemove">X</button>
+      </div>
+    </div>
+  `;
+
+    const fileInp  = div.querySelector('input[name="foto_evento_file"]');
+    const hidUrls  = div.querySelector('input[name="foto_evento_urls"]');
+    const prevWrap = div.querySelector('[data-preview="fotos_evento"]');
+
+    function renderPreviews(urls) {
+      prevWrap.innerHTML = "";
+      urls.forEach((url, idx) => {
+        const wrap = document.createElement("div");
+        wrap.className = "position-relative";
+
+        const img = document.createElement("img");
+        img.src = url;
+        img.className = "img-thumbnail";
+        img.style.maxHeight = "90px";
+        img.style.maxWidth = "120px";
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-sm btn-danger position-absolute top-0 end-0";
+        btn.style.transform = "translate(35%,-35%)";
+        btn.innerHTML = "×";
+        btn.addEventListener("click", () => {
+          const cur = safeParseUrls(hidUrls.value);
+          cur.splice(idx, 1);
+          hidUrls.value = JSON.stringify(cur);
+          renderPreviews(cur);
+          refreshPreview?.();
         });
+
+        wrap.appendChild(img);
+        wrap.appendChild(btn);
+        prevWrap.appendChild(wrap);
+      });
+    }
+
+    function safeParseUrls(v) {
+      try {
+        const arr = JSON.parse(v || "[]");
+        return Array.isArray(arr) ? arr.filter(Boolean) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    fileInp.addEventListener("change", async () => {
+      const files = Array.from(fileInp.files || []);
+      fileInp.classList.remove("is-invalid");
+
+      if (!files.length) return;
+
+      if (files.length > 10) {
+        fileInp.classList.add("is-invalid");
+        showAlert?.("warning", "Máximo 10 fotos por evento.");
+        fileInp.value = "";
+        return;
+      }
+
+      try {
+        const urls = [];
+
+        for (const file of files) {
+          const fd = new FormData();
+          fd.append("foto", file);
+
+          const token = localStorage.getItem("token");
+          const r = await fetch("/api/upload/foto", {
+            method: "POST",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: fd
+          });
+
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data?.error || "Error subiendo foto");
+
+          urls.push(data.foto_url);
+        }
+
+        // merge con existentes (por si vuelven a subir)
+        const cur = safeParseUrls(hidUrls.value);
+        const merged = [...cur, ...urls].slice(0, 10); // máx 10 total
+        hidUrls.value = JSON.stringify(merged);
+
+        renderPreviews(merged);
+        fileInp.value = "";
+        refreshPreview?.();
+      } catch (e) {
+        console.error(e);
+        showAlert?.("danger", "No pude subir las fotos del evento: " + e.message);
       }
     });
-    return div;
+
+  div.querySelector('.btnRemove').addEventListener('click', () => {
+    div.remove();
+    refreshPreview?.();
+  });
+
+  div.addEventListener('input', () => refreshPreview?.());
+  div.addEventListener('change', () => refreshPreview?.());
+
+  return div;
+}
+  //helper para subir foto a evento
+  async function apiPostFormData(path, formData) {
+    const token = localStorage.getItem('token');
+    const r = await fetch(`/api${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData
+    });
+
+    const txt = await r.text();
+    let data = {};
+    try { data = JSON.parse(txt); } catch {}
+    if (!r.ok) throw new Error(txt || 'Upload error');
+    return data;
+  }
+
+  function telefonoBlock() {
+      const div = document.createElement('div');
+      div.className = 'list-item';
+        div.innerHTML = `
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label">
+                    Teléfono <code class="field-length">(10 dígitos)</code>
+                    <br><small class="text-muted d-inline-block ms-2 mt-1">Solo números</small>
+                </label>
+                <input class="form-control number-only" 
+                      name="telefono" 
+                      maxlength="10" 
+                      inputmode="numeric"
+                      pattern="[0-9]{10}"
+                      placeholder="Ej. 7221234567">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Tipo</label>
+              <select class="form-select" name="tipo">
+                <option value="">Seleccione</option>
+                <option value="personal">Personal</option>
+                <option value="trabajo">Trabajo</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="principal">
+                <label class="form-check-label small">Principal</label>
+              </div>
+            </div>
+            <div class="col-md-1 text-end">
+              <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+            </div>
+          </div>
+        `;
+      // ✅ AGREGA ESTO: Validación para el input recién creado
+      const telefonoInput = div.querySelector('input[name="telefono"]');
+      telefonoInput.addEventListener('input', function(e) {
+          this.value = this.value.replace(/[^0-9]/g, '');
+      });
+      telefonoInput.addEventListener('paste', function(e) {
+          e.preventDefault();
+      });
+      telefonoInput.addEventListener('keydown', function(e) {
+          if (e.key.length === 1 && !/[0-9]/.test(e.key)) {
+              e.preventDefault();
+          }
+      });
+      
+      // Tus event listeners existentes
+      div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+      div.querySelector('input[name="principal"]').addEventListener('change', (e) => {
+          if (e.target.checked) {
+              document.querySelectorAll('#telefonosContainer input[name="principal"]').forEach(ch => {
+                  if (ch !== e.target) ch.checked = false;
+              });
+          }
+      });
+      
+      return div;
   }
   function participacionBlock() {
     const div = document.createElement('div');
@@ -1483,33 +2292,71 @@ function refreshHijosParejasSelects() {
     div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
     return div;
   }
-
+//servicio publico
   function servicioBlock() {
-    const div = document.createElement('div');
-    div.className = 'list-item';
-    div.innerHTML = `
-      <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-          <label class="form-label">Periodo</label>
-          <input class="form-control" name="periodo" placeholder="2018-2021">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Cargo</label>
-          <input class="form-control" name="cargo">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Dependencia</label>
-          <input class="form-control" name="dependencia">
-        </div>
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-        </div>
-      </div>
-    `;
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
-    return div;
-  }
+      const div = document.createElement('div');
+      div.className = 'list-item';
 
+      div.innerHTML = `
+        <div class="row g-2 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label">Periodo <code class="field-length">(AAAA o AAAA-AAAA)</code></label>
+            <input class="form-control" name="periodo" placeholder="2018 o 2018-2021" maxlength="9">
+            <div class="form-text">Formato: 2018 o 2018-2021</div>
+            <div class="invalid-feedback">Usa formato correcto: 2018 o 2018-2021</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Cargo</label>
+            <input class="form-control" name="cargo">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Dependencia</label>
+            <input class="form-control" name="dependencia">
+          </div>
+          <div class="col-md-1 text-end">
+            <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+          </div>
+        </div>
+      `;
+
+      const inpPeriodo = div.querySelector('input[name="periodo"]');
+
+      // ✅ FUNCIÓN DE VALIDACIÓN FALTANTE
+      function isPeriodoValido(val) {
+          // Formato: 2018 o 2018-2021
+          const singleYear = /^\d{4}$/;  // Solo 4 dígitos
+          const rangeYear = /^\d{4}-\d{4}$/;  // AAAA-AAAA
+          
+          return singleYear.test(val) || rangeYear.test(val);
+      }
+
+      function validatePeriodoUI() {
+          const val = inpPeriodo.value.trim();
+          const ok = val === '' || isPeriodoValido(val);
+          inpPeriodo.classList.toggle('is-invalid', val !== '' && !ok);
+          return ok;
+      }
+
+      // ✅ Sanitiza y valida en vivo
+      inpPeriodo.addEventListener('input', () => {
+          // Solo números y guiones, máximo 1 guión
+          let val = inpPeriodo.value.replace(/[^\d-]/g, '');
+          if ((val.match(/-/g) || []).length > 1) {
+              val = val.replace(/-+/g, '-'); // Solo 1 guión
+          }
+          inpPeriodo.value = val.slice(0, 9);
+          validatePeriodoUI();
+      });
+
+      inpPeriodo.addEventListener('blur', validatePeriodoUI);
+
+      div.querySelector('.btnRemove').addEventListener('click', () => {
+          div.remove();
+      });
+
+      return div;
+  }
+//elecciones block
   function eleccionBlock() {
     const div = document.createElement('div');
     div.className = 'list-item border rounded-3 p-3 mb-2';
@@ -1672,11 +2519,26 @@ function refreshHijosParejasSelects() {
       // Si tienes preview, refresca:
       // refreshPreview();
     }
+    function isPeriodoValido(v) {
+      const s = (v || "").trim();
 
-  function controversiaBlock() {
-    const div = document.createElement('div');
-    div.className = 'list-item';
-    div.innerHTML = `
+      // AAAA
+      if (/^\d{4}$/.test(s)) return true;
+
+      // AAAA-AAAA
+      if (/^\d{4}-\d{4}$/.test(s)) {
+        const [inicio, fin] = s.split('-').map(Number);
+        return fin >= inicio; // evita 2025-2020
+      }
+
+      return false;
+    }
+
+    function controversiaBlock() {
+      const div = document.createElement('div');
+      div.className = 'list-item';
+
+      div.innerHTML = `
       <div class="row g-2">
         <div class="col-md-4">
           <label class="form-label">Tipo</label>
@@ -1685,7 +2547,17 @@ function refreshHijosParejasSelects() {
 
         <div class="col-md-4">
           <label class="form-label">Periodo</label>
-          <input type="date" class="form-control" name="fecha_registro">
+          <input
+            type="text"
+            class="form-control"
+            name="fecha_registro"
+            placeholder="2025 o 2025-2026"
+            inputmode="numeric"
+            maxlength="9"
+            autocomplete="off"
+          >
+          <div class="form-text">Formato: AAAA o AAAA-AAAA</div>
+          <div class="invalid-feedback">Usa 2025 o 2025-2026.</div>
         </div>
 
         <div class="col-md-8">
@@ -1702,10 +2574,31 @@ function refreshHijosParejasSelects() {
         </div>
       </div>
     `;
+
+      const inp = div.querySelector('input[name="fecha_registro"]');
+
+      // Solo permitir dígitos y guion
+      inp.addEventListener("input", () => {
+        inp.value = inp.value.replace(/[^\d\-]/g, "");
+        // Validación suave
+        if (!inp.value.trim() || isPeriodoValido(inp.value)) {
+          inp.classList.remove("is-invalid");
+        } else {
+          inp.classList.add("is-invalid");
+        }
+      });
+
+      inp.addEventListener("blur", () => {
+        if (inp.value.trim() && !isPeriodoValido(inp.value)) {
+          inp.classList.add("is-invalid");
+        } else {
+          inp.classList.remove("is-invalid");
+        }
+      });
     fillSelect(div.querySelector('select[name="id_tipo"]'), controversiasCatalog, 'id_tipo', 'tipo');
     div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
-    return div;
-  }
+      return div;
+    }
 
   function familiarBlock() {
     const div = document.createElement('div');
@@ -1820,7 +2713,29 @@ function refreshHijosParejasSelects() {
       inpGrado.classList.remove('is-invalid');
       inpInst.classList.remove('is-invalid');
     }
+    
   }
+
+  function toggleCedulaUI() {
+    const selTit = document.querySelector('[name="fa_titulado"]') || document.getElementById('fa_titulado');
+    const inpCed = document.querySelector('[name="fa_cedula_profesional"]') || document.getElementById('fa_cedula_profesional');
+    const wrap   = document.getElementById('faCedulaWrap'); // ponle este id al contenedor del input (div)
+
+    if (!selTit || !inpCed || !wrap) return;
+
+    const show = (selTit.value === "true");
+    wrap.classList.toggle('d-none', !show);
+
+    if (!show) {
+      inpCed.value = "";
+      inpCed.classList.remove("is-invalid");
+    }
+  }
+
+  document.querySelector('[name="fa_titulado"]')?.addEventListener('change', toggleCedulaUI);
+  toggleCedulaUI();
+
+
   function toggleTemaOtroUI() {
     const wrap = document.getElementById('temaOtroWrap');
     const inp  = document.getElementById('temaOtroTexto');
@@ -1851,7 +2766,7 @@ function refreshHijosParejasSelects() {
 
       return ids;
     }
-  // ---------- Build payload ----------
+  // ---------- Build payload ----------insercion en el formulario y validacion 
   function buildPayload() {
   const fd = new FormData($('#personaForm'));
 
@@ -1895,34 +2810,109 @@ function refreshHijosParejasSelects() {
     id_partido_actual: toIntOrNull(fd.get('id_partido_actual')),
     id_grupo_postulacion: toIntOrNull(fd.get('id_grupo_postulacion')),
     id_ideologia_politica: toIntOrNull(fd.get('id_ideologia_politica')),
+    nivel_confiabilidad: (fd.get("nivel_confiabilidad") || "").toString().trim().toLowerCase() || null,
   };
-  const formacion_academica = [];
-  if (fa_nivel) {
-    const requiere = (fa_nivel === 'Educación Superior' || fa_nivel === 'Posgrado');
-    const fa_titulado_raw = fd.get('fa_titulado');
-    const fa_titulado =
-      fa_titulado_raw === '' ? null : (fa_titulado_raw === 'true');
+    function validarLenField(formEl, fieldName, len, label) {
+      const el = formEl.querySelector(`[name="${fieldName}"]`);
+      if (!el) return true;
 
-    // validación front rápida (backend también valida)
-    if (requiere) {
-      const ok = !!fa_grado_obtenido && !!fa_institucion;
-      $('#fa_grado_obtenido')?.classList.toggle('is-invalid', !fa_grado_obtenido);
-      $('#fa_institucion')?.classList.toggle('is-invalid', !fa_institucion);
+      const v = (el.value || "").trim().toUpperCase();
+      el.value = v;
+      el.classList.remove("is-invalid");
 
-      if (!ok) {
-        // OJO: aquí no hacemos throw para no romper el preview,
-        // se validará al submit también (abajo te digo).
+      if (!v) return true; // vacío permitido
+      if (v.length !== len) {
+        el.classList.add("is-invalid");
+        return false;
       }
+      return true;
     }
 
-    formacion_academica.push({
-      nivel: fa_nivel,
-      grado_obtenido: requiere ? (fa_grado_obtenido || null) : null,
-      institucion: requiere ? (fa_institucion || null) : null,
-      titulado: requiere ? fa_titulado : null
-      // anio_inicio/anio_fin si luego los agregas
-    });
-  }
+    const formEl = document.getElementById("personaForm");
+
+    const okCurp  = validarLenField(formEl, "curp", 18, "CURP");
+    const okRfc   = validarLenField(formEl, "rfc", 13, "RFC");
+    const okClave = validarLenField(formEl, "clave_elector", 18, "Clave de elector");
+
+    if (!okCurp || !okRfc || !okClave) {
+      showAlert?.("Revisa CURP/RFC/Clave de elector: longitud inválida.", "warning");
+      return null;
+    }
+    // ✅ Solo letras (nombres y apellidos)
+    const SOLO_LETRAS_RE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+$/;
+
+    function validarSoloLetrasField(formEl, fieldName, obligatorio = false) {
+      const el = formEl.querySelector(`[name="${fieldName}"]`);
+      if (!el) return true;
+
+      const v = (el.value || "").toString().trim();
+      el.value = v;
+      el.classList.remove("is-invalid");
+
+      if (!v) {
+        if (obligatorio) {
+          el.classList.add("is-invalid");
+          return false;
+        }
+        return true; // vacío permitido si no es obligatorio
+      }
+
+      if (!SOLO_LETRAS_RE.test(v)) {
+        el.classList.add("is-invalid");
+        return false;
+      }
+      return true;
+    }
+
+    const okNombre  = validarSoloLetrasField(formEl, "nombre", true);
+    const okApPat   = validarSoloLetrasField(formEl, "apellido_paterno", true);
+    const okApMat   = validarSoloLetrasField(formEl, "apellido_materno", true);
+
+    if (!okNombre || !okApPat || !okApMat) {
+      showAlert?.("Nombre y apellidos solo pueden contener letras (con acentos), espacios, guion o apóstrofe.", "warning");
+      return null;
+    }    
+    const formacion_academica = [];
+    if (fa_nivel) {
+      const requiere = (fa_nivel === 'Educación Superior' || fa_nivel === 'Posgrado');
+      const fa_titulado_raw = fd.get('fa_titulado');
+      const fa_titulado =
+        fa_titulado_raw === '' ? null : (fa_titulado_raw === 'true');
+
+      // ✅ NUEVO: cédula (solo si titulado=true)
+      let fa_cedula_profesional = (fd.get('fa_cedula_profesional') || '').toString().trim();
+
+      // validación front rápida (backend también valida)
+      if (requiere) {
+        const ok = !!fa_grado_obtenido && !!fa_institucion;
+        $('#fa_grado_obtenido')?.classList.toggle('is-invalid', !fa_grado_obtenido);
+        $('#fa_institucion')?.classList.toggle('is-invalid', !fa_institucion);
+
+        if (!ok) {
+          // aquí no hacemos throw (se valida al submit)
+        }
+
+        // ✅ si requiere y titulado=true, cédula obligatoria
+        const cedOk = (fa_titulado !== true) ? true : !!fa_cedula_profesional;
+        $('#fa_cedula_profesional')?.classList.toggle('is-invalid', !cedOk);
+
+        // ✅ si NO es titulado, no mandes cédula
+        if (fa_titulado !== true) fa_cedula_profesional = '';
+      } else {
+        // si NO requiere (básica/media), no guardamos titulado ni cédula
+        fa_cedula_profesional = '';
+      }
+
+      formacion_academica.push({
+        nivel: fa_nivel,
+        grado_obtenido: requiere ? (fa_grado_obtenido || null) : null,
+        institucion: requiere ? (fa_institucion || null) : null,
+        titulado: requiere ? fa_titulado : null,
+
+        // ✅ NUEVO
+        cedula_profesional: (requiere && fa_titulado === true) ? (fa_cedula_profesional || null) : null
+      });
+    }
 
     const telefonos = [];
     document.querySelectorAll('#telefonosContainer .list-item').forEach(item => {
@@ -1995,7 +2985,58 @@ function refreshHijosParejasSelects() {
       const dependencia = item.querySelector('input[name="dependencia"]').value.trim();
       if (periodo || cargo || dependencia) servicio_publico.push({ periodo: periodo||null, cargo: cargo||null, dependencia: dependencia||null });
     });
+    // empresas_persona
+    const empresas_persona = [];
+    let hasEmpresasError = false;
 
+    document.querySelectorAll('#empresasContainer .list-item').forEach(item => {
+      const inpNombre  = item.querySelector('input[name="empresa_nombre"]');
+      const inpRol     = item.querySelector('input[name="empresa_rol"]');
+      const inpPeriodo = item.querySelector('input[name="empresa_periodo"]');
+      const inpNotas   = item.querySelector('input[name="empresa_notas"]');
+
+      const nombre_empresa = (inpNombre?.value || '').trim();
+      const rolRaw         = (inpRol?.value || '').trim();
+      const notasRaw       = (inpNotas?.value || '').trim();
+
+      // ✅ normaliza periodo como backend
+      const periodoNorm = normalizePeriodo(inpPeriodo?.value || '');
+      const periodo = (periodoNorm || '').trim();
+
+      // ✅ limpiar invalid previo
+      inpNombre?.classList.remove('is-invalid');
+      inpPeriodo?.classList.remove('is-invalid');
+
+      const tieneAlgo = nombre_empresa || rolRaw || periodo || notasRaw;
+      if (!tieneAlgo) return;
+
+      if (!nombre_empresa) {
+        inpNombre?.classList.add('is-invalid');
+        hasEmpresasError = true;
+        return;
+      }
+
+      if (periodo && !isPeriodoValido(periodo)) {
+        inpPeriodo?.classList.add('is-invalid');
+        hasEmpresasError = true;
+        return;
+      }
+
+      empresas_persona.push({
+        nombre_empresa,
+        rol: rolRaw || null,
+        periodo: periodo || null,
+        notas: notasRaw || null
+      });
+    });
+
+    // ✅ si hay errores, aborta el submit antes de enviar al backend
+    if (hasEmpresasError) {
+      throw new Error('Revisa el módulo Empresas: hay campos inválidos.');
+      // o si tú usas showAlert:
+      // showAlert('Revisa el módulo Empresas: hay campos inválidos.', 'warning');
+      // return null;
+    }
     //elecciones
     const haContendido = toBoolOrNull(fd.get('ha_contendido_eleccion'));
     const elecciones = [];
@@ -2036,25 +3077,53 @@ function refreshHijosParejasSelects() {
         });
       }
     });
-    //movilizacion
-
+    // movilizacion
     const capacidad_movilizacion_eventos = [];
-    document.querySelectorAll('#movEventosContainer .list-item').forEach(item => {
-      const nombre_evento = item.querySelector('input[name="mov_nombre_evento"]').value.trim();
-      const fecha_evento  = item.querySelector('input[name="mov_fecha_evento"]').value;
 
-      const asisVal = item.querySelector('input[name="mov_asistencia_evento"]').value;
+    document.querySelectorAll('#movEventosContainer .list-item').forEach(item => {
+      const nombre_evento = item.querySelector('input[name="mov_nombre_evento"]')?.value.trim() || "";
+      const fecha_evento  = item.querySelector('input[name="mov_fecha_evento"]')?.value || "";
+
+      const asisVal = item.querySelector('input[name="mov_asistencia_evento"]')?.value;
       const asistencia = (asisVal === '' ? null : Number(asisVal));
 
-      const tieneAlgo = nombre_evento || fecha_evento || asistencia != null;
+      const lugar_evento = item.querySelector('input[name="mov_lugar_evento"]')?.value.trim() || null;
 
-      if (tieneAlgo) {
-        capacidad_movilizacion_eventos.push({
-          nombre_evento: nombre_evento || null,
-          fecha_evento: fecha_evento || null,
-          asistencia: (asistencia == null || Number.isNaN(asistencia)) ? null : asistencia
-        });
+      // ✅ NUEVO: fotos (0..10) guardadas como JSON en hidden
+      let fotos = [];
+      const hid = item.querySelector('input[name="foto_evento_urls"]');
+      if (hid) {
+        try {
+          const arr = JSON.parse(hid.value || "[]");
+          fotos = Array.isArray(arr) ? arr.filter(u => (u || "").toString().trim()) : [];
+        } catch {
+          fotos = [];
+        }
       }
+
+      // ✅ validar max 10
+      if (fotos.length > 10) {
+        // marca invalid si existe el input file
+        item.querySelector('input[name="foto_evento_file"]')?.classList.add('is-invalid');
+        return; // no agregues este evento al payload
+      }
+
+      const tieneAlgo =
+        nombre_evento ||
+        fecha_evento ||
+        asistencia != null ||
+        lugar_evento ||
+        (fotos.length > 0);
+
+      if (!tieneAlgo) return;
+
+      capacidad_movilizacion_eventos.push({
+        nombre_evento: nombre_evento || null,
+        fecha_evento: fecha_evento || null,
+        asistencia: (asistencia == null || Number.isNaN(asistencia)) ? null : asistencia,
+        lugar_evento,
+        fotos // ✅ array de urls
+      });
     });
 
     // si “Otro” está seleccionado, agrega texto
@@ -2241,6 +3310,29 @@ function cleanText(v) {
     persona.sin_cargos_eleccion_popular = sin_cargos_eleccion_popular;
     // arreglo final (si marcó "sin cargos" => forzar vacío)
     const cargosEleccionFinal = sin_cargos_eleccion_popular ? [] : cargos_eleccion_popular;
+    // ✅ Fuentes de consulta (UNIQUE por persona+fuente)
+    const fuentes_consulta = [];
+    const detalle = (document.getElementById("fuentesDetalle")?.value || "").trim() || null;
+    const fecha_consulta = (document.getElementById("fuentesFecha")?.value || "").trim() || null;
+
+    document.querySelectorAll(".fuenteChk:checked").forEach(chk => {
+      const id_fuente = Number(chk.value);
+      if (!Number.isFinite(id_fuente) || id_fuente <= 0) return;
+
+      fuentes_consulta.push({
+        id_fuente,
+        detalle,
+        fecha_consulta
+      });
+    });
+
+    // ✅ Cobertura municipios trabajo (1:N)
+    const coberturaIds = (typeof window.__getCoberturaTrabajoIds === "function")
+      ? window.__getCoberturaTrabajoIds()
+      : [];
+
+    const municipios_trabajo = coberturaIds.map(id_municipio => ({ id_municipio }));
+
     return {
       persona,
       datos_ine: datosINEFinal,
@@ -2259,7 +3351,10 @@ function cleanText(v) {
       formacion_academica,
       temas_interes,
       experiencia_laboral,
-      participacion_organizaciones
+      participacion_organizaciones,
+      empresas_persona, 
+      fuentes_consulta,
+      municipios_trabajo, // ✅ nuevo
     };
   }
 
@@ -2443,74 +3538,33 @@ function refreshPreview() {
       let dupTimer = null;
 
       const getByName = (name) => document.querySelector(`[name="${name}"]`);
-     
       const normalize = (v) => (v || "").toString().trim();
 
+      // Tipos de match que SÍ deben disparar warning
+      const strongTypes = new Set(["curp", "rfc", "clave_elector", "nombre"]);
+
       async function checkDuplicado() {
+        // ✅ Solo 1 llamada: usamos checkDuplicadoNow
+        const results = await checkDuplicadoNow(window.editingId || null);
 
-        await checkDuplicadoNow(window.editingId || null);
-        const curp = normalize(getByName("curp")?.value).toUpperCase();
-        const rfc  = normalize(getByName("rfc")?.value).toUpperCase();
+        if (!Array.isArray(results)) return;
 
-        const nombre = normalize(getByName("nombre")?.value);
-        const ap = normalize(getByName("apellido_paterno")?.value);
-        const am = normalize(getByName("apellido_materno")?.value);
+        const hasStrong = results.some(r => strongTypes.has(r.match_type));
 
-        const mun = normalize(getByName("municipio_residencia_legal")?.value);
-
-        const clave_elector = normalize(getByName("clave_elector")?.value).toUpperCase();
-        const seccion_electoral = normalize(getByName("ine_seccion")?.value);
-
-        const exclude_id = (window.editingId || null); // o usa tu variable editingId
-
-        // no molestar si todavía no hay nada relevante
-        if (!curp && !rfc && !clave_elector && !seccion_electoral && !(nombre && ap)) return;
-
-        const qs = new URLSearchParams({
-          curp,
-          rfc,
-          nombre,
-          apellido_paterno: ap,
-          apellido_materno: am,
-          municipio: mun,
-          clave_elector,
-          seccion_electoral,
-          exclude_id: exclude_id ? String(exclude_id) : ""
-        });
-
-        // Usa tu helper apiGet si ya mete Authorization automáticamente
-        // Si no, usa fetch con token.
-        let resp, data;
-
-        try {
-          // Si ya tienes apiGet:
-          if (typeof apiGet === "function") {
-            data = await apiGet(`/personas/check-duplicado?${qs.toString()}`);
-          } else {
-            const token = localStorage.getItem("token");
-            resp = await fetch(`/api/personas/check-duplicado?${qs.toString()}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            data = await resp.json().catch(() => ({}));
-            if (!resp.ok) return;
-          }
-        } catch (e) {
-          console.warn("checkDuplicado error:", e);
+        if (hasStrong) {
+          showAlert?.("warning", "Posible duplicado detectado. Revisa antes de guardar.");
+          console.log("DUPLICADOS (FUERTE):", results);
           return;
         }
 
-        const results = data?.results || [];
-        window.__dupCheck = results;
-
+        // Si solo hay sección u otras señales débiles:
         if (results.length) {
-          if (typeof showAlert === "function") {
-            showAlert("warning", "Posible duplicado detectado. Revisa antes de guardar.");
-          }
-          console.log("DUPLICADOS:", results);
+          // opcional: muestra info sin asustar
+          // showAlert?.("info", "Coincidencias por sección electoral (solo referencia).");
+          console.log("DUPLICADOS (DÉBIL/INFO):", results);
         } else {
           window.__dupCheck = [];
-          // opcional: si quieres quitar alerta cuando ya no hay duplicados
-          // if (typeof hideAlert === "function") hideAlert();
+          // opcional: hideAlert?.();
         }
       }
 
@@ -2550,9 +3604,9 @@ function refreshPreview() {
         const mun = normalize(getByName("municipio_residencia_legal")?.value);
 
         const clave_elector = normalize(getByName("clave_elector")?.value).toUpperCase();
-        // OJO: tu input se llama ine_seccion en el form (no seccion_electoral)
         const seccion_electoral = normalize(getByName("ine_seccion")?.value);
 
+        // no molestar si todavía no hay nada relevante
         if (!curp && !rfc && !(nombre && ap) && !clave_elector && !seccion_electoral) {
           window.__dupCheck = [];
           return [];
@@ -2570,15 +3624,20 @@ function refreshPreview() {
           exclude_id: excludeId ? String(excludeId) : ""
         });
 
-        const data = await apiGet(`/personas/check-duplicado?${qs.toString()}`);
-        const results = data?.results || [];
-        window.__dupCheck = results;
-        return results;
+        try {
+          const data = await apiGet(`/personas/check-duplicado?${qs.toString()}`);
+          const results = data?.results || [];
+          window.__dupCheck = results;
+          return results;
+        } catch (e) {
+          console.warn("checkDuplicadoNow error:", e);
+          window.__dupCheck = [];
+          return [];
+        }
       }
 
       // 👇 expón para usarlo en submit
       window.checkDuplicadoNow = checkDuplicadoNow;
-
     }
   // ---------- init ----------
   (async function init() {
@@ -2608,6 +3667,120 @@ function refreshPreview() {
 
       const chkMunRealIgual = document.getElementById('chkMunRealIgual');
       const chkMunTrabajoIgual = document.getElementById('chkMunTrabajoIgual');
+
+      // ================== COBERTURA MUNICIPIOS (TRABAJO POLÍTICO) ==================
+      function initCoberturaMunicipiosUI(municipios) {
+        const selEscala = document.querySelector('[name="escala_influencia"]'); // tu select de escala
+        const selPrincipal = document.getElementById("mun_trabajo");
+
+        const wrap = document.getElementById("wrapCoberturaTrabajo");
+        const list = document.getElementById("listaCoberturaMunicipios");
+        const txt = document.getElementById("txtBuscarMunicipioCobertura");
+        const btnAll = document.getElementById("btnCoberturaAll");
+        const btnNone = document.getElementById("btnCoberturaNone");
+        const lblCount = document.getElementById("lblCoberturaCount");
+
+        const selected = new Set(); // ids seleccionados
+
+        function refreshCount() {
+          if (lblCount) lblCount.textContent = `${selected.size} seleccionados`;
+        }
+
+        function renderList(filter = "") {
+          const q = (filter || "").toLowerCase();
+          const items = municipios.filter(m => (m.nombre || "").toLowerCase().includes(q));
+
+          list.innerHTML = items.map(m => {
+            const checked = selected.has(m.id_municipio) ? "checked" : "";
+            return `
+              <div class="form-check">
+                <input class="form-check-input covChk" type="checkbox" value="${m.id_municipio}" id="cov_${m.id_municipio}" ${checked}>
+                <label class="form-check-label" for="cov_${m.id_municipio}">${m.nombre}</label>
+              </div>
+            `;
+          }).join("");
+
+          list.querySelectorAll(".covChk").forEach(chk => {
+            chk.addEventListener("change", () => {
+              const id = Number(chk.value);
+              if (chk.checked) selected.add(id);
+              else selected.delete(id);
+              refreshCount();
+            });
+          });
+
+          refreshCount();
+        }
+
+        function shouldEnableMulti() {
+          const escala = (selEscala?.value || "").toLowerCase();
+          // 👇 ajusta aquí si quieres incluir estatal/nacional
+          return ["regional", "distrital"].includes(escala);
+        }
+
+        function ensurePrincipalInside() {
+          const principal = Number(selPrincipal?.value);
+          if (Number.isFinite(principal) && principal > 0) selected.add(principal);
+        }
+
+        function showOrHide() {
+          const enable = shouldEnableMulti();
+          wrap.classList.toggle("d-none", !enable);
+
+          if (!enable) {
+            // si no aplica multi, limpiamos cobertura
+            selected.clear();
+            renderList(txt?.value || "");
+            return;
+          }
+
+          // si aplica multi, aseguramos principal
+          ensurePrincipalInside();
+          renderList(txt?.value || "");
+        }
+
+        // Buscar
+        txt?.addEventListener("input", () => renderList(txt.value));
+
+        // Todos / Limpiar
+        btnAll?.addEventListener("click", () => {
+          municipios.forEach(m => selected.add(m.id_municipio));
+          renderList(txt?.value || "");
+        });
+
+        btnNone?.addEventListener("click", () => {
+          selected.clear();
+          ensurePrincipalInside();
+          renderList(txt?.value || "");
+        });
+
+        // cambios de escala / principal
+        selEscala?.addEventListener("change", showOrHide);
+        selPrincipal?.addEventListener("change", () => {
+          if (!wrap.classList.contains("d-none")) {
+            ensurePrincipalInside();
+            renderList(txt?.value || "");
+          }
+        });
+
+        // Exponer para build/apply
+        window.__getCoberturaTrabajoIds = () => Array.from(selected);
+        window.__setCoberturaTrabajoIds = (ids = []) => {
+          selected.clear();
+          ids.forEach(id => {
+            const n = Number(id);
+            if (Number.isFinite(n) && n > 0) selected.add(n);
+          });
+          showOrHide();
+        };
+
+        // init
+        renderList("");
+        showOrHide();
+      }
+
+      // ✅ llama esto al final de tu init (cuando ya tienes municipiosCache y fills)
+      initCoberturaMunicipiosUI(municipiosCache);
 
       function syncMunicipio(selectTarget, checked) {
         if (checked) {
@@ -2722,7 +3895,109 @@ function refreshPreview() {
       const data = await apiGet(`/personas?search=${encodeURIComponent(q || '')}&limit=30`);
       return data.items || data;
     }
+    // init empresas
+    const selTieneEmpresa = document.getElementById('selTieneEmpresa');
+    const btnAddEmpresa = document.getElementById('btnAddEmpresa');
+    const empresasContainer = document.getElementById('empresasContainer');
 
+    function setEmpresasUI() {
+      const v = selTieneEmpresa?.value || '';
+      const enabled = (v === 'si');
+
+      btnAddEmpresa.disabled = !enabled;
+
+      if (!enabled) {
+        empresasContainer.innerHTML = '';
+      } else {
+        if (!empresasContainer.children.length) {
+          empresasContainer.appendChild(empresaBlock());
+        }
+      }
+      refreshPreview?.();
+    }
+
+    selTieneEmpresa?.addEventListener('change', setEmpresasUI);
+
+    btnAddEmpresa?.addEventListener('click', () => {
+      empresasContainer.appendChild(empresaBlock());
+      refreshPreview?.();
+    });
+
+    // estado inicial
+    setEmpresasUI();
+    //init refresh fuentes
+    function refreshFuentesUI() {
+      const anyChecked = !!document.querySelector(".fuenteChk:checked");
+      if (!anyChecked) {
+        const inpDet = document.getElementById("fuentesDetalle");
+        const inpFec = document.getElementById("fuentesFecha");
+        if (inpDet) inpDet.value = "";
+        if (inpFec) inpFec.value = "";
+      }
+    }
+
+    document.querySelectorAll(".fuenteChk").forEach(chk => {
+      chk.addEventListener("change", refreshFuentesUI);
+    });
+    // init semaforo
+    function initConfiabilidadUI() {
+      const badge = document.getElementById("badgeConfiabilidad");
+      const btnClear = document.getElementById("btnConfClear");
+      const invalid = document.getElementById("confInvalid");
+
+      function setBadge(value) {
+        if (!badge) return;
+
+        badge.className = "badge rounded-pill"; // reset
+        if (!value) {
+          badge.classList.add("text-bg-secondary");
+          badge.textContent = "Sin seleccionar";
+          return;
+        }
+
+        if (value === "alto") {
+          badge.classList.add("text-bg-success");
+          badge.textContent = "ALTO";
+        } else if (value === "medio") {
+          badge.classList.add("text-bg-warning");
+          badge.textContent = "MEDIO";
+        } else if (value === "bajo") {
+          badge.classList.add("text-bg-danger");
+          badge.textContent = "BAJO";
+        } else {
+          badge.classList.add("text-bg-secondary");
+          badge.textContent = "Sin seleccionar";
+        }
+      }
+
+      function getSelected() {
+        const el = document.querySelector('input[name="nivel_confiabilidad"]:checked');
+        return el ? el.value : "";
+      }
+
+      // Actualiza badge cuando cambien radios
+      document.querySelectorAll('input[name="nivel_confiabilidad"]').forEach(r => {
+        r.addEventListener("change", () => {
+          const v = getSelected();
+          setBadge(v);
+          if (invalid) invalid.classList.add("d-none");
+        });
+      });
+
+      // Limpiar selección
+      btnClear?.addEventListener("click", () => {
+        document.querySelectorAll('input[name="nivel_confiabilidad"]').forEach(r => (r.checked = false));
+        setBadge("");
+        if (invalid) invalid.classList.add("d-none");
+      });
+
+      // Inicial
+      setBadge(getSelected());
+    }
+
+    // llama esto en tu init()
+    initConfiabilidadUI();
+    //renderlistpersonas
     function renderListaPersonas(items) {
       const cont = document.getElementById("listaPersonas");
       if (!cont) return;
@@ -3026,11 +4301,7 @@ function refreshPreview() {
           showAlert("danger", "No se puede guardar: se detectó un duplicado (CURP/RFC/Clave de elector).");
           return;
         }
-        const haySeccion = dup.some(x => x.match_type === "seccion_electoral");
-        if (haySeccion) {
-          showAlert("danger", "No se puede guardar: ya existe alguien con la misma Sección Electoral.");
-          return;
-        }
+
         try {
           const isEdit = !!editingId;
 
