@@ -4,9 +4,19 @@ function isSuperadmin(req) {
   return (req.user?.roles || []).includes("superadmin");
 }
 
-function requireOffice(req, res, next) {
+/*function requireOffice(req, res, next) {
   if (isSuperadmin(req)) return next();
   if (!req.user?.id_oficina) return res.status(403).json({ error: "Usuario sin oficina asignada" });
+  next();
+}*/
+
+function requireOffice(req, res, next) {
+  const roles = req.user?.roles || [];
+  if (roles.includes("superadmin")) return next();
+
+  if (!req.user?.id_oficina) {
+    return res.status(403).json({ error: "Usuario sin oficina asignada" });
+  }
   next();
 }
 
