@@ -1150,58 +1150,33 @@
   // ✅ Base relativa (funciona local y Render)
   const API_BASE = "/api";
 
-  // ✅ Único helper para requests (NO dupliques apiGet/apiPost/etc)
-  async function apiFetch(path, opts = {}) {
-    const token = localStorage.getItem("token");
-
-    const headers = {
-      ...(opts.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-
-    const res = await fetch(API_BASE + path, { ...opts, headers });
-
-    if (res.status === 401) {
-      logout();
-      return null; // por si alguien intenta usarlo después del redirect
-    }
+    // ✅ Único helper para requests (NO dupliques apiGet/apiPost/etc)
+  async function apiFetch(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      ...options
+    });
 
     const text = await res.text();
-    let data = {};
+    let data = null;
     try {
-      data = text ? JSON.parse(text) : {};
+      data = text ? JSON.parse(text) : null;
     } catch {
-      data = { raw: text };
+      throw new Error(`Respuesta no-JSON (${res.status}): ${text.slice(0, 120)}`);
     }
 
     if (!res.ok) {
-      const msg = data?.error || data?.message || text || "Error";
-      throw new Error(msg);
+      throw new Error(data?.error || `Error ${res.status}`);
     }
 
     return data;
   }
 
-  const apiGet = (path) => apiFetch(path);
-
-  const apiPost = (path, body) =>
-    apiFetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-  const apiPut = (path, body) =>
-    apiFetch(path, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-  const apiDelete = (path) =>
-    apiFetch(path, {
-      method: "DELETE",
-    });
+  const apiGet    = (path)       => apiFetch(path);
+  const apiPost   = (path, body) => apiFetch(path, { method: "POST", body: JSON.stringify(body) });
+  const apiPut    = (path, body) => apiFetch(path, { method: "PUT",  body: JSON.stringify(body) });
+  const apiDelete = (path)       => apiFetch(path, { method: "DELETE" });
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -4370,4 +4345,3 @@ function refreshPreview() {
 
 </body>
 </html>
-
