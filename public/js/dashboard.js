@@ -14,14 +14,32 @@ let gridState = {
   q: '',
   pageSize: 25
 };
-
+let currentMunicipioTrabajoId = null;
 //kpi compeltitud
 let chartCompleto = null;
 let chartUsuarios = null;
 
 //kpi municipios con o sin actores municipio_trabajo_politico
 let chartMunTop = null;
+let editPersonaModalInstance = null;
+//Modal edit 
 
+function showEditAlert(type, msg){
+  const el = document.getElementById("editPersonaAlert");
+  if (!el) return;
+  el.className = `alert alert-${type}`;
+  el.textContent = msg || "";
+  el.classList.toggle("d-none", !msg);
+}
+//helpers
+async function refreshCards(){
+  if (!currentMunicipioTrabajoId) {
+    // si no hay municipio seleccionado, al menos repinta lo que haya
+    applySearch();
+    return;
+  }
+  await loadPersonasByMunicipioId(currentMunicipioTrabajoId);
+}
 //debounce (para búsqueda)
 function debounce(fn, wait = 300) {
   let t = null;
@@ -40,6 +58,21 @@ function normalizeName(s) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .replace(/[^\w\s.-]/g, '');
+}
+function setHtmlIfExists(id, html){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = html;
+}
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  }[c]));
+}
+function escAttr(s){
+  // para atributos HTML como src=""
+  return esc(s).replace(/"/g, "&quot;");
 }
 
 function fillSelectById(selectEl, rows){
@@ -104,23 +137,32 @@ function renderCards(list){
   }
 
   cont.innerHTML = list.map(p => {
-    const partido = p.partido_actual_siglas || p.partido_actual;
     const badges = [
-      badge(p.grupo_postulacion, 'text-bg-info'),
-      badge(partido, 'text-bg-dark'),
-      badge(p.ideologia_politica, 'text-bg-secondary'),
-      badge(p.tema_interes_central, 'text-bg-warning'),
-      (p.sin_controversias_publicas === true ? badge('Sin controversias', 'text-bg-success') : '')
-    ].join('');
+      badge(p.oficina_nombre, 'text-bg-light'),
+      badge(`Capturista: ${p.creado_por_nombre || '—'}`, 'text-bg-secondary'),
+      (p.modificado_por_nombre ? badge(`Mod: ${p.modificado_por_nombre}`, 'text-bg-light') : '')
+    ].filter(Boolean).join('');
 
     return `
       <div class="card mb-2 shadow-sm">
         <div class="card-body py-2">
           <div class="d-flex justify-content-between align-items-start gap-2">
-            <div class="min-w-0">
-              <div class="fw-semibold text-truncate">${p.nombre}</div>
-              <div class="small text-muted">${labelEscalaInfluencia(p.escala_influencia)}</div>
-              <div class="mt-2 d-flex flex-wrap">${badges}</div>
+
+            <div class="d-flex gap-2 min-w-0">
+              <img
+                src="${escAttr(p.foto_url || '/img/user.png')}"
+                alt="foto"
+                class="rounded"
+                style="width:44px;height:44px;object-fit:cover"
+              />
+
+              <div class="min-w-0">
+                <div class="fw-semibold text-truncate">${esc(p.nombre_completo || '—')}</div>
+                <div class="small text-muted text-truncate">
+                  ${esc(p.municipio_trabajo_politico || '—')}
+                </div>
+                <div class="mt-2 d-flex flex-wrap gap-1">${badges}</div>
+              </div>
             </div>
 
             <div class="flex-shrink-0 d-flex gap-2">
@@ -135,6 +177,9 @@ function renderCards(list){
                       data-id="${p.id_persona}">
                 Ver
               </button>
+              <button class="btn btn-outline-warning btn-sm" data-action="edit" data-id="${p.id_persona}">
+                <i class="bi bi-pencil"></i>
+              </button>
             </div>
 
           </div>
@@ -143,18 +188,39 @@ function renderCards(list){
     `;
   }).join('');
 
-  cont.querySelectorAll('button[data-action][data-id]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const id = btn.getAttribute('data-id');
-      const action = btn.getAttribute('data-action');
+    cont.querySelectorAll('button[data-action][data-id]').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        e.preventDefault();
 
-      if (action === 'ver') {
-        await openPerfilModal(id);
-      } else if (action === 'pdf') {
-        await generarPDFPersona(id);
-      }
+        const id = Number(btn.getAttribute('data-id'));
+        const action = btn.getAttribute('data-action');
+
+        if (!Number.isFinite(id) || id <= 0) {
+          console.warn("Botón sin id válido:", action, btn.outerHTML);
+          return;
+        }
+
+        if (action === 'ver') {
+          await openPerfilModal(id);
+          return;
+        }
+
+        if (action === 'pdf') {
+          await generarPDFPersona(id);
+          return;
+        }
+
+        if (action === 'edit') {
+          await openEditPersonaModal(id);
+          return;
+        }
+
+        if (action === 'del') {
+          await confirmDeletePersona(id); // te dejo abajo esta función
+          return;
+        }
+      });
     });
-  });
 }
 //GENERAR PDF
 async function generarPDFPersona(idPersona){
@@ -163,18 +229,24 @@ async function generarPDFPersona(idPersona){
     headers: { Authorization: `Bearer ${token}` }
   });
 
-  if (res.status === 401) { localStorage.clear(); location.href='/'; return; }
-  if (!res.ok) { alert("No se pudo generar el PDF"); return; }
+  
 
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `perfil_${idPersona}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
+
+  // lee los primeros bytes para ver si empieza con %PDF
+  const ab = await blob.slice(0, 20).arrayBuffer();
+  const head = new TextDecoder().decode(ab);
+
+
+  if (res.status === 401) { localStorage.clear(); location.href='/'; return; }
+  if (res.status === 403) { alert("No tienes permisos."); return; }
+  if (!res.ok) { alert("No se pudo generar el PDF"); return; }
+
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 
 function applySearch(){
@@ -185,11 +257,14 @@ function applySearch(){
 }
 
 async function loadPersonasByMunicipioId(idMunicipio){
+  currentMunicipioTrabajoId = Number(idMunicipio) || null;  // ✅ guarda estado
+
   document.getElementById('countBadge').textContent = '...';
-  const rows = await apiGet(`/personas?municipio_trabajo=${idMunicipio}`);
-  personasCache = rows || [];
-  document.getElementById('countBadge').textContent = personasCache.length;
-  applySearch();
+
+  const resp = await apiGet(`/personas/admin/cards?municipio_trabajo=${idMunicipio}&page=1&size=500`);
+  personasCache = resp.data || [];
+  document.getElementById('countBadge').textContent = String(resp?.total ?? personasCache.length);
+  applySearch(); // mantiene tu filtro por texto
 }
 
   (function guardDashboard() {
@@ -197,9 +272,9 @@ async function loadPersonasByMunicipioId(idMunicipio){
     const u = JSON.parse(localStorage.getItem('user') || '{}');
     const roles = u.roles || (u.rol ? [u.rol] : []);
 
-    if (!token || !roles.includes('superadmin')) {
-      window.location.href = '/';
-    }
+if (!token || !(roles.includes('superadmin') || roles.includes('analista'))) {
+  window.location.href = '/';
+}
   })();
 
 async function initDashboard(){
@@ -358,7 +433,6 @@ function renderSimpleList(items, renderRow){
 }
 
 async function openPerfilModal(idPersona){
-  // abre modal inmediatamente
   const el = document.getElementById('perfilModal');
   if (!perfilModalInstance) perfilModalInstance = new bootstrap.Modal(el);
   perfilModalInstance.show();
@@ -370,16 +444,20 @@ async function openPerfilModal(idPersona){
   showPerfilState({loading:true, error:null});
 
   try {
-    const p = await apiGet(`/personas/${idPersona}/perfil`);
+      const p = await apiGet(`/personas/${idPersona}/perfil`);
+      
+    // Nombre completo
+    const nombreCompleto = [p.nombre, p.apellido_paterno, p.apellido_materno].filter(Boolean).join(' ');
+    document.getElementById('perfilModalTitle').textContent = nombreCompleto || 'Perfil';
 
-    // Header
-    document.getElementById('perfilModalTitle').textContent = p.nombre || 'Perfil';
-    document.getElementById('perfilModalSubtitle').textContent =
-      `• ${p.municipio_trabajo_politico || '—'}`;
+    // Municipio subtitle (prioridad: trabajo > real > legal)
+    const mun = p.municipio_trabajo_politico || p.municipio_residencia_real || p.municipio_residencia_legal || '—';
+    document.getElementById('perfilModalSubtitle').textContent = `• ${mun}`;
 
     // Badges principales
-    const partido = p.partido_actual_siglas || p.partido_actual;
-    const badges = [
+    const partido = p.partido_actual_siglas || p.partido_actual || null;
+
+    const badgesPerfil = [
       badgeHtml(p.grupo_postulacion, 'text-bg-info'),
       badgeHtml(partido, 'text-bg-dark'),
       badgeHtml(p.ideologia_politica, 'text-bg-secondary'),
@@ -387,37 +465,73 @@ async function openPerfilModal(idPersona){
       (p.sin_controversias_publicas === true ? badgeHtml('Sin controversias', 'text-bg-success') : '')
     ].filter(Boolean).join(' ');
 
-    //deshabilitar u ocultar el tab cuando sin_controversias_publicas === true.
-    const tabCont = document.getElementById('tab-controversias');
-    if (p.sin_controversias_publicas === true) {
-      tabCont.classList.add('disabled');
-      tabCont.setAttribute('tabindex', '-1');
-      tabCont.setAttribute('aria-disabled', 'true');
-    } else {
-      tabCont.classList.remove('disabled');
-      tabCont.removeAttribute('tabindex');
-      tabCont.removeAttribute('aria-disabled');
+    // Badges meta (captura/modificación)
+
+
+    // Render final
+    document.getElementById('perfilBadges').innerHTML = `
+      <div class="d-flex flex-wrap gap-1">
+        ${badgesPerfil || `<span class="text-muted small">—</span>`}
+      </div>
+    `;
+
+    function fmtDateMX(dt) {
+      if (!dt) return '—';
+      const d = new Date(dt);
+      if (Number.isNaN(d.getTime())) return '—';
+      return new Intl.DateTimeFormat('es-MX', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }).format(d);
     }
 
-    document.getElementById('perfilBadges').innerHTML = badges || `<span class="text-muted small">—</span>`;
+    const metaParts = [
+      `Oficina: <b>${esc(p.oficina_nombre || '—')}</b>`,
+      `Capturó: <b>${esc(p.creado_por_nombre || '—')}</b>`,
+      `Creado: <b>${fmtDateMX(p.created_at)}</b>`,
+      (p.modificado_por_nombre ? `Modificó: <b>${esc(p.modificado_por_nombre)}</b>` : null),
+      `Actualizado: <b>${fmtDateMX(p.updated_at)}</b>`
+    ].filter(Boolean);
+
+    document.getElementById('perfilMeta').innerHTML = metaParts.join(' &nbsp;•&nbsp; ');
+
+    // Tab controversias: disable si aplica (con guard)
+    const tabCont = document.getElementById('tab-controversias');
+    if (tabCont) {
+      if (p.sin_controversias_publicas === true) {
+        tabCont.classList.add('disabled');
+        tabCont.setAttribute('tabindex', '-1');
+        tabCont.setAttribute('aria-disabled', 'true');
+      } else {
+        tabCont.classList.remove('disabled');
+        tabCont.removeAttribute('tabindex');
+        tabCont.removeAttribute('aria-disabled');
+      }
+    }
 
     // General
-    document.getElementById('v_curp').textContent  = p.curp || '—';
-    document.getElementById('v_rfc').textContent   = p.rfc || '—';
-    document.getElementById('v_clave').textContent = p.clave_elector || '—';
-    document.getElementById('v_ecivil').textContent = p.estado_civil || '—';
+    setText('v_curp',  p.curp);
+    setText('v_rfc',   p.rfc);
+    setText('v_clave', p.clave_elector);
+    setText('v_ecivil', p.estado_civil);
 
-    document.getElementById('v_mun_legal').textContent = p.municipio_residencia_legal || '—';
-    document.getElementById('v_mun_real').textContent  = p.municipio_residencia_real || '—';
-    document.getElementById('v_mun_trab').textContent  = p.municipio_trabajo_politico || '—';
+    setText('v_mun_legal', p.municipio_residencia_legal);
+    setText('v_mun_real',  p.municipio_residencia_real);
+    setText('v_mun_trab',  p.municipio_trabajo_politico);
 
+    // Flags
     const flags = [];
-    flags.push(p.sin_servicio_publico === true ? badgeHtml('Sin servicio público', 'text-bg-secondary') : '');
-    flags.push(p.ha_contendido_eleccion === true ? badgeHtml('Ha contendió elección', 'text-bg-primary') : '');
-    flags.push(p.sin_controversias_publicas === true ? badgeHtml('Sin controversias públicas', 'text-bg-success') : '');
-    document.getElementById('v_flags').innerHTML = flags.filter(Boolean).join(' ') || `<span class="text-muted small">—</span>`;
+    if (p.sin_servicio_publico === true) flags.push(badgeHtml('Sin servicio público', 'text-bg-secondary'));
+    if (p.ha_contendido_eleccion === true) flags.push(badgeHtml('Ha contendió elección', 'text-bg-primary'));
+    if (p.sin_controversias_publicas === true) flags.push(badgeHtml('Sin controversias públicas', 'text-bg-success'));
+    document.getElementById('v_flags').innerHTML = flags.join(' ') || `<span class="text-muted small">—</span>`;
 
-    // Contacto: Teléfonos
+    // INE
+    setText('v_ine_seccion', p?.datos_ine?.seccion_electoral);
+    setText('v_ine_df',      p?.datos_ine?.distrito_federal);
+    setText('v_ine_dl',      p?.datos_ine?.distrito_local);
+
+    // Teléfonos
     const tels = listOrEmpty(p.telefonos);
     document.getElementById('v_telefonos').innerHTML = renderSimpleList(tels, (t) => {
       const tipo = t.tipo ? `<span class="text-muted small">(${esc(t.tipo)})</span>` : '';
@@ -432,23 +546,19 @@ async function openPerfilModal(idPersona){
       `;
     });
 
-    // Datos INE (ojo: tu query perfil NO agrega json de datos_ine, así que si no existe, queda en —)
-    // Si luego lo agregas, aquí ya queda listo.
-    document.getElementById('v_ine_seccion').textContent = p?.datos_ine?.seccion_electoral || '—';
-    document.getElementById('v_ine_df').textContent      = p?.datos_ine?.distrito_federal || '—';
-    document.getElementById('v_ine_dl').textContent      = p?.datos_ine?.distrito_local || '—';
-
     // Formación
     const fa = listOrEmpty(p.formacion_academica);
     document.getElementById('v_formacion').innerHTML = renderSimpleList(fa, (x) => {
       const line1 = [x.nivel, x.grado_obtenido || x.grado].filter(Boolean).join(' • ');
       const inst = x.institucion ? `<div class="text-muted small">${esc(x.institucion)}</div>` : '';
       const years = (x.anio_inicio || x.anio_fin) ? `<div class="text-muted small">${esc(x.anio_inicio || '—')} - ${esc(x.anio_fin || '—')}</div>` : '';
+      const tit = (x.titulado === true) ? `<span class="badge text-bg-success mt-1">Titulado</span>` : '';
       return `
         <div class="border rounded p-2">
           <div class="fw-semibold">${esc(line1 || '—')}</div>
           ${inst}
           ${years}
+          ${tit}
         </div>
       `;
     });
@@ -456,7 +566,7 @@ async function openPerfilModal(idPersona){
     // Redes
     const redes = listOrEmpty(p.redes_sociales);
     document.getElementById('v_redes').innerHTML = renderSimpleList(redes, (r) => {
-      const url = r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` : '—';
+      const url = r.url ? `<a href="${escAttr(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` : '—';
       return `
         <div class="border rounded p-2">
           <div class="fw-semibold">${esc(r.red || '—')}</div>
@@ -464,6 +574,60 @@ async function openPerfilModal(idPersona){
         </div>
       `;
     });
+
+    // Temas de interés
+    const temas = listOrEmpty(p.temas_interes);
+    setHtmlIfExists('v_temas_interes', renderSimpleList(temas, (t) => {
+      const head = t.tema ? esc(t.tema) : (t.id_tema ? `Tema #${esc(t.id_tema)}` : 'Tema');
+      const otro = t.otro_texto ? `<div class="text-muted small">${esc(t.otro_texto)}</div>` : '';
+      return `
+        <div class="border rounded p-2">
+          <div class="fw-semibold">${head}</div>
+          ${otro}
+        </div>
+      `;
+    }) || `<span class="text-muted small">—</span>`);
+    // Cargos elección popular
+    const cargosEP = listOrEmpty(p.cargos_eleccion_popular);
+    setHtmlIfExists('v_cargos_ep', renderSimpleList(cargosEP, (c) => {
+      const head = esc(c.cargo || '—');
+      const meta = [c.periodo, c.modalidad, c.partido_postulante].filter(Boolean).map(esc).join(' • ');
+      return `
+        <div class="border rounded p-2">
+          <div class="fw-semibold">${head}</div>
+          ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
+        </div>
+      `;
+    }) || `<span class="text-muted small">—</span>`);
+
+    // Eventos movilización (lista)
+    const eventos = listOrEmpty(p.capacidad_movilizacion_eventos);
+    setHtmlIfExists('v_eventos_movilizacion', renderSimpleList(eventos, (e) => {
+      const head = esc(e.nombre_evento || '—');
+      const meta = [e.fecha_evento, e.asistencia != null ? `Asistencia: ${e.asistencia}` : null]
+        .filter(Boolean).map(esc).join(' • ');
+      return `
+        <div class="border rounded p-2">
+          <div class="fw-semibold">${head}</div>
+          ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
+        </div>
+      `;
+    }) || `<span class="text-muted small">—</span>`);
+
+    // Experiencia laboral
+    const exp = listOrEmpty(p.experiencia_laboral);
+    setHtmlIfExists('v_experiencia', renderSimpleList(exp, (x) => {
+      const head = esc(x.cargo || '—');
+      const org  = x.organizacion ? `<div class="text-muted small">${esc(x.organizacion)}</div>` : '';
+      const per  = x.periodo ? `<div class="text-muted small">${esc(x.periodo)}</div>` : '';
+      return `
+        <div class="border rounded p-2">
+          <div class="fw-semibold">${head}</div>
+          ${org}
+          ${per}
+        </div>
+      `;
+    }) || `<span class="text-muted small">—</span>`);
 
     // Participación
     const po = listOrEmpty(p.participacion_organizaciones);
@@ -481,11 +645,11 @@ async function openPerfilModal(idPersona){
     });
 
     // Controversias
-    const conv = listOrEmpty(p.controversias);
     if (p.sin_controversias_publicas === true) {
       document.getElementById('v_controversias').innerHTML =
         `<div class="alert alert-success mb-0 py-2">Marcado como <strong>Sin controversias públicas</strong>.</div>`;
     } else {
+      const conv = listOrEmpty(p.controversias);
       document.getElementById('v_controversias').innerHTML = renderSimpleList(conv, (c) => {
         const head = c.tipo ? esc(c.tipo) : `Tipo #${esc(c.id_tipo || '—')}`;
         const meta = [c.estatus, c.fecha_registro].filter(Boolean).map(esc).join(' • ');
@@ -501,25 +665,24 @@ async function openPerfilModal(idPersona){
         `;
       });
     }
-    // Parejas + hijos (anidado)
+
+    // Parejas + Hijos (usa periodo)
     const parejas = listOrEmpty(p.parejas);
     document.getElementById('v_parejas').innerHTML = renderSimpleList(parejas, (pa) => {
       const head = [pa.nombre_pareja, pa.tipo_relacion].filter(Boolean).map(esc).join(' • ') || '—';
-      const fechas = (pa.fecha_inicio || pa.fecha_fin)
-        ? `<div class="text-muted small">${fmtDate(pa.fecha_inicio)} - ${fmtDate(pa.fecha_fin)}</div>`
-        : '';
+      const periodo = pa.periodo ? `<div class="text-muted small">${esc(pa.periodo)}</div>` : '';
 
       const hijos = listOrEmpty(pa.hijos);
       const hijosHtml = hijos.length
         ? `<div class="mt-2">
             <div class="small text-muted mb-1">Hijos</div>
             ${hijos.map(h => `
-                <div class="border rounded p-2 mb-2">
-                  <div class="d-flex gap-2 flex-wrap align-items-center">
-                    <span class="fw-semibold">${esc(h.sexo || '—')}</span>
-                    <span class="text-muted small">Año: ${esc(h.anio_nacimiento || '—')}</span>
-                  </div>
+              <div class="border rounded p-2 mb-2">
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                  <span class="fw-semibold">${esc(h.sexo || '—')}</span>
+                  <span class="text-muted small">Año: ${esc(h.anio_nacimiento || '—')}</span>
                 </div>
+              </div>
             `).join('')}
           </div>`
         : `<div class="small text-muted mt-2">Sin hijos registrados</div>`;
@@ -527,12 +690,13 @@ async function openPerfilModal(idPersona){
       return `
         <div class="border rounded p-2">
           <div class="fw-semibold">${head}</div>
-          ${fechas}
+          ${periodo}
           ${hijosHtml}
         </div>
       `;
     });
-    //servicio publico
+
+    // Servicio público
     const sp = listOrEmpty(p.servicio_publico);
     document.getElementById('v_servicio_publico').innerHTML = renderSimpleList(sp, (s) => {
       const head = esc(s.cargo || '—');
@@ -546,11 +710,12 @@ async function openPerfilModal(idPersona){
         </div>
       `;
     });
-    //servicio publico
+
+    // Elecciones
     const elx = listOrEmpty(p.elecciones);
     document.getElementById('v_elecciones').innerHTML = renderSimpleList(elx, (e) => {
       const head = [e.anio_eleccion, e.candidatura].filter(Boolean).map(esc).join(' • ') || '—';
-      const partido = e.partido_postulacion ? `<span class="text-muted small">${esc(e.partido_postulacion)}</span>` : '';
+      const partidoP = e.partido_postulacion ? `<span class="text-muted small">${esc(e.partido_postulacion)}</span>` : '';
       const badge = badgeResultadoEleccion(e.resultado);
 
       const diff = (e.diferencia_votos || e.diferencia_porcentaje)
@@ -562,7 +727,7 @@ async function openPerfilModal(idPersona){
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div>
               <div class="fw-semibold">${head}</div>
-              ${partido ? `<div>${partido}</div>` : ''}
+              ${partidoP ? `<div>${partidoP}</div>` : ''}
               ${diff}
             </div>
             <div>${badge}</div>
@@ -570,53 +735,40 @@ async function openPerfilModal(idPersona){
         </div>
       `;
     });
-    //capacidad movilizacion
-    const cm = p.capacidad_movilizacion || null;
-    document.getElementById('v_capacidad').innerHTML = cm
-      ? `
+
+    // Capacidad movilización
+
+
+    // Equipos
+    const equipos = listOrEmpty(p.equipos);
+    document.getElementById('v_equipos').innerHTML = renderSimpleList(equipos, (eq) => {
+      const activo = (eq.activo === true)
+        ? `<span class="badge text-bg-success ms-2">Activo</span>`
+        : `<span class="badge text-bg-secondary ms-2">Inactivo</span>`;
+      return `
+        <div class="border rounded p-2 d-flex align-items-center justify-content-between">
+          <div class="fw-semibold">${esc(eq.nombre_equipo || '—')}</div>
+          <div>${activo}</div>
+        </div>
+      `;
+    });
+
+    // Referentes (CORREGIDO)
+    const refs = listOrEmpty(p.referentes);
+    document.getElementById('v_referentes').innerHTML = renderSimpleList(refs, (r) => {
+      const nombreRef = [r.nombres, r.apellido_paterno, r.apellido_materno].filter(Boolean).map(esc).join(' ') || '—';
+      const lvl  = r.nivel ? `<span class="badge text-bg-info ms-2">${esc(r.nivel)}</span>` : '';
+      return `
         <div class="border rounded p-2">
-          <div class="row g-2">
-            <div class="col-sm-6">
-              <div class="text-muted small">Eventos últimos 3 años</div>
-              <div class="fw-semibold">${fmtNum(cm.eventos_ultimos_3_anios)}</div>
-            </div>
-            <div class="col-sm-6">
-              <div class="text-muted small">Asistencia promedio</div>
-              <div class="fw-semibold">${fmtNum(cm.asistencia_promedio)}</div>
-            </div>
+          <div class="d-flex align-items-center flex-wrap gap-2">
+            <div class="fw-semibold">${nombreRef}</div>
+            ${lvl}
           </div>
         </div>
-      `
-      : `<span class="text-muted small">—</span>`;
-      //equipos
+      `;
+    });
 
-      const equipos = listOrEmpty(p.equipos);
-      document.getElementById('v_equipos').innerHTML = renderSimpleList(equipos, (eq) => {
-        const activo = (eq.activo === true)
-          ? `<span class="badge text-bg-success ms-2">Activo</span>`
-          : `<span class="badge text-bg-secondary ms-2">Inactivo</span>`;
-        return `
-          <div class="border rounded p-2 d-flex align-items-center justify-content-between">
-            <div class="fw-semibold">${esc(eq.nombre_equipo || '—')}</div>
-            <div>${activo}</div>
-          </div>
-        `;
-      });
-      //referentes
-      const refs = listOrEmpty(p.referentes);
-      document.getElementById('v_referentes').innerHTML = renderSimpleList(refs, (r) => {
-        const head = esc(r.nombre_referente || '—');
-        const lvl  = r.nivel ? `<span class="badge text-bg-info ms-2">${esc(r.nivel)}</span>` : '';
-        return `
-          <div class="border rounded p-2">
-            <div class="d-flex align-items-center flex-wrap gap-2">
-              <div class="fw-semibold">${head}</div>
-              ${lvl}
-            </div>
-          </div>
-        `;
-      });
-     //fa miliares
+    // Familiares
     const fam = listOrEmpty(p.familiares);
     document.getElementById('v_familiares').innerHTML = renderSimpleList(fam, (f) => {
       const head = [f.nombre, f.parentesco].filter(Boolean).map(esc).join(' • ') || '—';
@@ -629,7 +781,6 @@ async function openPerfilModal(idPersona){
       `;
     });
 
-
     showPerfilState({loading:false, error:null});
   } catch (err) {
     console.error(err);
@@ -637,47 +788,31 @@ async function openPerfilModal(idPersona){
   }
 }
 
-//Cargar usuarios para filtro (superadmin)
-async function loadUsuariosFiltro() {
-  const sel = document.getElementById('filtroUsuario');
-  if (!sel) return;
-
-  sel.innerHTML = `<option value="">Todos</option>`;
-
-  const users = await apiGet('/personas/admin/usuarios'); // [{id_usuario,nombre,email,roles:[]},...]
-  usuariosFiltroCache = users || [];
-
-  for (const u of usuariosFiltroCache) {
-    const rolesTxt = Array.isArray(u.roles) && u.roles.length ? ` (${u.roles.join(', ')})` : '';
-    const opt = document.createElement('option');
-    opt.value = String(u.id_usuario);
-    opt.textContent = `${u.nombre} — ${u.email}${rolesTxt}`;
-    sel.appendChild(opt);
-  }
+// helper para setText con fallback
+function setText(id, value){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = (value === undefined || value === null || value === '') ? '—' : String(value);
 }
+
 
 //Inicializar Tabulator (modo remoto)
 function initPersonasGrid() {
   const el = document.getElementById('gridPersonas');
   if (!el) return;
 
-  // Evita doble init
-  if (window.personasGrid) return;
-
   // Si el grid está dentro de un tab/pane oculto, NO inicialices aún
   const pane = document.getElementById('pane-grid'); // ajusta si tu id es otro
-  const isHidden = pane && pane.offsetParent === null; // display:none o no visible
+  const isHidden = pane && pane.offsetParent === null;
 
   if (isHidden) {
-    // Inicializa cuando se muestre el tab Grid
     document.getElementById('tab-grid')?.addEventListener(
       'shown.bs.tab',
       () => {
-        initPersonasGrid(); // reintenta, ahora ya está visible
-        // y fuerza redraw + data
+        initPersonasGrid();
         if (window.personasGrid) {
           window.personasGrid.redraw(true);
-          window.personasGrid.setData(); // primera carga
+          window.personasGrid.setData();
         }
       },
       { once: true }
@@ -685,7 +820,6 @@ function initPersonasGrid() {
     return;
   }
 
-  // Si por alguna razón ya hay instancia, destrúyela
   if (window.personasGrid) {
     window.personasGrid.destroy();
     window.personasGrid = null;
@@ -696,64 +830,59 @@ function initPersonasGrid() {
     height: "70vh",
     responsiveLayout: "collapse",
     placeholder: "Sin registros",
-
-    // ✅ Opcional: que NO abra el “+” automáticamente
     responsiveLayoutCollapseStartOpen: false,
 
-    // ✅ Aquí va el formatter del collapse (campos colapsados)
-  responsiveLayoutCollapseFormatter: (data) => {
-    const wrap = document.createElement("div");
-    wrap.className = "p-2";
+    responsiveLayoutCollapseFormatter: (data) => {
+      const wrap = document.createElement("div");
+      wrap.className = "p-2";
 
-    const safe = (v) => {
-      if (v === null || v === undefined) return "—";
-      if (typeof v === "string") return v;
-      if (typeof v === "number" || typeof v === "boolean") return String(v);
-      try { return JSON.stringify(v); } catch { return String(v); }
-    };
+      const safe = (v) => {
+        if (v === null || v === undefined) return "—";
+        if (typeof v === "string") return v;
+        if (typeof v === "number" || typeof v === "boolean") return String(v);
+        try { return JSON.stringify(v); } catch { return String(v); }
+      };
 
-    const labelMap = {
-      creado_por_nombre: "Capturó",
-      creado_por_email: "Correo",
-      partido_actual_siglas: "Partido (siglas)",
-      partido_actual: "Partido",
-      tema_interes_central: "Tema",
-      created_at: "Creado",
-      municipio_trabajo_politico: "Municipio",
-      escala_influencia: "Escala"
-    };
+      const labelMap = {
+        oficina_nombre: "Oficina",
+        creado_por_nombre: "Capturó",
+        creado_por_email: "Correo",
+        modificado_por_nombre: "Modificó",
+        municipio_trabajo_nombre: "Municipio",
+        telefono_principal: "Teléfono",
+        created_at: "Creado",
+        updated_at: "Actualizado",
+        curp: "CURP",
+        rfc: "RFC",
+        clave_elector: "Clave elector",
+      };
 
-    Object.entries(data).forEach(([k, v]) => {
-      let val = v;
+      Object.entries(data).forEach(([k, v]) => {
+        let val = v;
+        if ((k === "created_at" || k === "updated_at") && typeof fmtDate === "function") val = fmtDate(v);
 
-      if (k === "created_at" && typeof fmtDate === "function") val = fmtDate(v);
-      if (k === "escala_influencia" && typeof labelEscalaInfluencia === "function") {
-        val = v ? labelEscalaInfluencia(v) : "—";
-      }
+        const row = document.createElement("div");
+        row.className = "small mb-1";
 
-      const row = document.createElement("div");
-      row.className = "small mb-1";
+        const label = document.createElement("strong");
+        label.textContent = (labelMap[k] || k) + ": ";
 
-      const label = document.createElement("strong");
-      label.textContent = (labelMap[k] || k) + ": ";
+        const value = document.createElement("span");
+        value.textContent = safe(val);
 
-      const value = document.createElement("span");
-      value.textContent = safe(val);
+        row.appendChild(label);
+        row.appendChild(value);
+        wrap.appendChild(row);
+      });
 
-      row.appendChild(label);
-      row.appendChild(value);
-      wrap.appendChild(row);
-    });
-
-    return wrap; // ✅ Node, no string
-  },
+      return wrap;
+    },
 
     pagination: true,
     paginationMode: "remote",
     paginationSize: gridState.pageSize,
     paginationSizeSelector: [10, 25, 50, 100],
 
-    // OJO: puedes omitir ajaxURL porque ya usas ajaxRequestFunc
     ajaxURL: "/api/personas/admin/grid",
     ajaxConfig: { method: "GET" },
 
@@ -761,64 +890,73 @@ function initPersonasGrid() {
       const page = params.page || 1;
       const size = params.size || gridState.pageSize;
 
-      let sort = "created_at";
-      let dir = "desc";
+      // sorters de Tabulator
+      let sortField = "updated_at";
+      let sortDir = "desc";
       if (Array.isArray(params.sorters) && params.sorters.length) {
-        sort = params.sorters[0].field || sort;
-        dir = params.sorters[0].dir || dir;
+        sortField = params.sorters[0].field || sortField;
+        sortDir = params.sorters[0].dir || sortDir;
       }
 
       const qs = new URLSearchParams();
       qs.set("page", String(page));
-      qs.set("pageSize", String(size));
-      qs.set("sort", sort);
-      qs.set("dir", dir);
+      qs.set("size", String(size));
+      qs.set("sortField", sortField);
+      qs.set("sortDir", sortDir);
 
-      if (gridState.creado_por) qs.set("creado_por", gridState.creado_por);
-      if (gridState.municipio_trabajo) qs.set("municipio_trabajo", gridState.municipio_trabajo);
+      // 🔎 filtros UI (ajusta si tu gridState usa otros nombres)
+      if (gridState.oficinaId) qs.set("oficinaId", String(gridState.oficinaId));
+      if (gridState.capturistaId) qs.set("capturistaId", String(gridState.capturistaId));
+      if (gridState.municipio_trabajo) qs.set("municipio_trabajo", String(gridState.municipio_trabajo));
       if (gridState.q) qs.set("q", gridState.q);
 
       return apiGet(`/personas/admin/grid?${qs.toString()}`);
     },
 
     ajaxResponse: (url, params, resp) => {
-      const total = resp.total || 0;
-      const pageSize = resp.pageSize || gridState.pageSize;
-      const lastPage = Math.max(1, Math.ceil(total / pageSize));
-
+      // backend: { data, total, page, size, last_page }
       return {
-        data: resp.rows || [],
-        last_page: lastPage,
-        total_records: total
+        data: resp.data || [],
+        last_page: resp.last_page || 1,
+        total_records: resp.total || 0,
       };
     },
 
     columns: [
       {
         title: "Nombre",
-        field: "nombre",
-        minWidth: 240,
-        responsive: 0, // 🔥 nunca colapsar
+        field: "nombre_completo",
+        minWidth: 260,
+        responsive: 0,
         headerSort: true,
         formatter: (cell) => {
-          const row = cell.getRow().getData();
-          const muni = row.municipio_trabajo_politico || "—";
-          const escala = row.escala_influencia ? labelEscalaInfluencia(row.escala_influencia) : "—";
+          const r = cell.getRow().getData();
+          const muni = r.municipio_trabajo_nombre || "—";
+          const tel = r.telefono_principal || "—";
           return `
             <div class="min-w-0">
-              <div class="fw-semibold text-truncate">${esc(row.nombre || "—")}</div>
-              <div class="small text-muted text-truncate">${esc(muni)} • ${esc(escala)}</div>
+              <div class="fw-semibold text-truncate">${esc(r.nombre_completo || "—")}</div>
+              <div class="small text-muted text-truncate">${esc(muni)} • Tel: ${esc(tel)}</div>
             </div>
           `;
         }
       },
       {
+        title: "Oficina",
+        field: "oficina_nombre",
+        width: 220,
+        minWidth: 180,
+        responsive: 2,
+        headerSort: false,
+        formatter: (cell) => esc(cell.getValue() || "—")
+      },
+      {
         title: "Capturó",
         field: "creado_por_nombre",
-        width: 200,
+        width: 220,
         minWidth: 180,
-        responsive: 1, // ✅ colapsa después
-        headerSort: true,
+        responsive: 1,
+        headerSort: false,
         formatter: (cell) => {
           const r = cell.getRow().getData();
           const name = r.creado_por_nombre || "—";
@@ -832,32 +970,11 @@ function initPersonasGrid() {
         }
       },
       {
-        title: "Partido",
-        field: "partido_actual_siglas",
-        width: 110,
-        minWidth: 90,
-        responsive: 3,
-        headerSort: false,
-        formatter: (cell) => {
-          const r = cell.getRow().getData();
-          return esc(r.partido_actual_siglas || r.partido_actual || "—");
-        }
-      },
-      {
-        title: "Tema",
-        field: "tema_interes_central",
-        width: 160,
+        title: "Actualizado",
+        field: "updated_at",
+        width: 150,
         minWidth: 140,
         responsive: 4,
-        headerSort: false,
-        formatter: (cell) => esc(cell.getValue() || "—")
-      },
-      {
-        title: "Creado",
-        field: "created_at",
-        width: 140,
-        minWidth: 120,
-        responsive: 5,
         headerSort: true,
         formatter: (cell) => fmtDate(cell.getValue())
       },
@@ -869,28 +986,27 @@ function initPersonasGrid() {
         frozen: true,
         headerSort: false,
         hozAlign: "right",
-        responsive: 0, // 🔥 nunca colapsar
+        responsive: 0,
         formatter: () => `<button type="button" class="btn btn-outline-primary btn-sm">Ver</button>`,
         cellClick: (e, cell) => {
           const r = cell.getRow().getData();
           const id = Number(r.id_persona);
           if (Number.isFinite(id)) openPerfilModal(id);
+          if (act === "edit") return openEditPersonaModal(id);
         }
       }
     ],
   });
 
-  // IMPORTANTE: no dispares setData “en caliente” si estás en layout raro
-  // mejor en el siguiente frame (da tiempo a calcular tamaños)
   requestAnimationFrame(() => {
     if (window.personasGrid) window.personasGrid.setData();
   });
 
-  // Siempre que se abra el tab, redraw (por si cambia tamaño)
   document.getElementById('tab-grid')?.addEventListener('shown.bs.tab', () => {
     if (window.personasGrid) window.personasGrid.redraw(true);
   });
 }
+
 
 //Wire-up de filtros (usuario + búsqueda + pageSize)
 
@@ -903,7 +1019,9 @@ function refreshGridSafe() {
 }
 
 function initGridFilters() {
-  const selUsuario  = document.getElementById('filtroUsuario');
+  const selOficina    = document.getElementById('filtroOficina');
+  const selCapturista = document.getElementById('filtroCapturista');
+
   const inpSearch   = document.getElementById('gridSearch');
   const selPageSize = document.getElementById('gridPageSize');
   const selGridMun  = document.getElementById('gridMunicipio');
@@ -915,13 +1033,30 @@ function initGridFilters() {
     });
   }
 
-  if (selUsuario) {
-    selUsuario.addEventListener('change', () => {
-      gridState.creado_por = selUsuario.value || '';
+  // ✅ Oficina → recarga capturistas
+  if (selOficina) {
+    selOficina.addEventListener('change', async () => {
+      const oficinaId = selOficina.value || '';
+      gridState.oficinaId = oficinaId;
+
+      // reset capturista al cambiar oficina
+      gridState.capturistaId = '';
+      if (selCapturista) selCapturista.value = '';
+
+      await loadCapturistasByOficinaFiltro(oficinaId);
       refreshGridSafe();
     });
   }
 
+  // ✅ Capturista
+  if (selCapturista) {
+    selCapturista.addEventListener('change', () => {
+      gridState.capturistaId = selCapturista.value || '';
+      refreshGridSafe();
+    });
+  }
+
+  // ✅ Page size
   if (selPageSize) {
     selPageSize.addEventListener('change', () => {
       const n = Number(selPageSize.value);
@@ -931,20 +1066,19 @@ function initGridFilters() {
         window.personasGrid.setPageSize(gridState.pageSize);
         window.personasGrid.setData();
       }
-      // si no existe aún, no pasa nada: se usará cuando se inicialice
     });
   }
 
+  // ✅ Search debounce
   if (inpSearch) {
     const onSearch = debounce(() => {
       gridState.q = (inpSearch.value || '').trim();
       refreshGridSafe();
     }, 300);
-
     inpSearch.addEventListener('input', onSearch);
   }
 
-  // ✅ Cuando se abra el tab grid: inicializa (si no existe), redraw y carga
+  // ✅ Al abrir tab grid: init + redraw + cargar
   document.getElementById('tab-grid')?.addEventListener('shown.bs.tab', () => {
     const sel = document.getElementById('gridMunicipio');
     gridState.municipio_trabajo = sel ? (sel.value || '') : '';
@@ -952,22 +1086,30 @@ function initGridFilters() {
     if (!window.personasGrid) initPersonasGrid();
 
     if (window.personasGrid) {
-      // un frame después, ya con medidas reales
       requestAnimationFrame(() => {
         window.personasGrid.redraw(true);
         window.personasGrid.setData();
       });
     }
   });
-
 }
 
 
+
+
 async function initAdminDatagrid() {
-  await loadUsuariosFiltro();
+  // 1) Oficinas
+  await loadOficinasFiltro();
+
+  // 2) Capturistas inicial (según oficina seleccionada)
+  const selOfi = document.getElementById('filtroOficina');
+  const oficinaIdInit = selOfi ? (selOfi.value || '') : '';
+  await loadCapturistasByOficinaFiltro(oficinaIdInit);
+
+  // 3) listeners
   initGridFilters();
 
-  // Si por alguna razón el tab grid ya está activo al cargar:
+  // 4) si el tab grid ya está activo
   const paneGrid = document.getElementById('pane-grid');
   if (paneGrid?.classList.contains('active') || paneGrid?.classList.contains('show')) {
     initPersonasGrid();
@@ -975,12 +1117,48 @@ async function initAdminDatagrid() {
   }
 }
 
+
 function fillSelectMunicipios(selectEl, municipios) {
   if (!selectEl) return;
   const current = selectEl.value || '';
   selectEl.innerHTML = `<option value="">Todos</option>` +
     municipios.map(m => `<option value="${m.id_municipio}">${esc(m.nombre)}</option>`).join('');
   if (current) selectEl.value = current;
+}
+
+//oficina filtro
+
+async function loadOficinasFiltro() {
+  const sel = document.getElementById('filtroOficina');
+  if (!sel) return;
+
+  sel.innerHTML = `<option value="">Todas</option>`;
+
+  const oficinas = await apiGet('/personas/admin/oficinas'); // [{id_oficina,nombre},...]
+  (oficinas || []).forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = String(o.id_oficina);
+    opt.textContent = o.nombre;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadCapturistasByOficinaFiltro(oficinaId) {
+  const sel = document.getElementById('filtroCapturista');
+  if (!sel) return;
+
+  sel.innerHTML = `<option value="">Todos</option>`;
+
+  const qs = new URLSearchParams();
+  if (oficinaId) qs.set('oficinaId', String(oficinaId));
+
+  const capturistas = await apiGet(`/personas/admin/capturistas?${qs.toString()}`);
+  (capturistas || []).forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = String(u.id_usuario);
+    opt.textContent = `${u.nombre} — ${u.email || ''}`.trim();
+    sel.appendChild(opt);
+  });
 }
 //kpi completitud
 
@@ -1202,6 +1380,296 @@ async function loadAndPaintMunicipioCoverage(){
   setMunicipioCoverageCounts(countsMap);
 }
 
+//edicion abri modal 
+let currentEditId = null;
+
+// helpers
+function fillSelect(el, rows, valueKey, textKey, placeholder = 'Seleccione') {
+  if (!el) return;
+  el.innerHTML = `<option value="">${placeholder}</option>`;
+  (rows || []).forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r[valueKey];
+    opt.textContent = r[textKey];
+    el.appendChild(opt);
+  });
+}
+
+function setFormDisabled(form, disabled){
+  if (!form) return;
+  [...form.elements].forEach(el => el.disabled = disabled);
+}
+
+// ✅ crea los checks dentro del root (modal)
+function renderTemasChecks(root, temas){
+  const wrap = root.querySelector('#temasInteresChecks');
+  if (!wrap) return;
+
+  wrap.innerHTML = '';
+  (temas || []).forEach(t => {
+    const id = Number(t.id_tema);
+    const div = document.createElement('div');
+    div.className = 'form-check';
+
+    div.innerHTML = `
+      <input class="form-check-input tema-interes-chk" type="checkbox" data-id="${id}" id="tema_${id}">
+      <label class="form-check-label" for="tema_${id}">
+        ${t.nombre}
+      </label>
+    `;
+
+    wrap.appendChild(div);
+  });
+}
+// cache global de catálogos (para no pedirlos cada vez)
+let _sharedEdit = null;
+
+function ensureShared(){
+  if (_sharedEdit) return _sharedEdit;
+
+  const modalEl = document.getElementById("editPersonaModal");
+  if (!modalEl) throw new Error("No existe #editPersonaModal");
+
+  // PersonaShared debe venir de /static/js/persona.shared.js
+  if (!window.PersonaShared || typeof window.PersonaShared.init !== "function") {
+    throw new Error("PersonaShared no está cargado. Revisa <script src='/static/js/persona.shared.js'> y el orden.");
+  }
+
+  _sharedEdit = window.PersonaShared.init({
+    root: modalEl,
+    catalogs: {
+      municipios: window.municipiosCache || [],
+      redes: window.redesCatalog || [],
+      controversias: window.controversiasCatalog || [],
+      temas: window.temasCatalog || [],
+      partidos: window.partidosCatalog || [],
+      ideologias: window.ideologiasCatalog || [],
+      grupos: window.gruposCatalog || [],
+    }
+  });
+
+  return _sharedEdit;
+}
+
+let _catsEdit = null;
+
+async function ensureCatalogosEdicion(){
+  if (_catsEdit) return _catsEdit;
+
+  // Ajusta estas rutas según TU apiGet (si ya agrega /api o no)
+  // Si apiGet ya prefija "/api", entonces aquí NO pongas "/api"
+  const [
+    redes,
+    controversias,
+    temas,
+    partidos,
+    ideologias,
+    grupos,
+    municipios
+  ] = await Promise.all([
+    apiGet('/catalogos/redes'),
+    apiGet('/catalogos/controversias'),
+    apiGet('/catalogos/temas-interes'),
+    apiGet('/catalogos/partidos'),
+    apiGet('/catalogos/ideologias'),
+    apiGet('/catalogos/grupos-postulacion'),
+    apiGet('/municipios'), // 👈 tu router municipios es /api/municipios (si apiGet agrega /api)
+  ]);
+
+  _catsEdit = { redes, controversias, temas, partidos, ideologias, grupos, municipios };
+  return _catsEdit;
+}
+
+async function openEditPersonaModal(idPersona){
+  const id = Number(idPersona);
+  if (!Number.isFinite(id) || id <= 0) return;
+
+  currentEditId = id;
+
+  const modalEl = document.getElementById("editPersonaModal");
+  const formEl  = modalEl?.querySelector("#personaForm");
+  if (!modalEl || !formEl) return;
+
+  setFormDisabled(formEl, true);
+
+  try{
+    const cats = await ensureCatalogosEdicion();
+
+    // --- llena selects ANTES de aplicar payload ---
+    fillSelect(modalEl.querySelector('#mun_legal'),   cats.municipios, 'id_municipio', 'nombre', 'Seleccione');
+    fillSelect(modalEl.querySelector('#mun_real'),    cats.municipios, 'id_municipio', 'nombre', 'Seleccione');
+    fillSelect(modalEl.querySelector('#mun_trabajo'), cats.municipios, 'id_municipio', 'nombre', 'Seleccione');
+
+    fillSelect(modalEl.querySelector('#selPartidoActual'),     cats.partidos,   'id_partido',   'nombre', 'Seleccione');
+    fillSelect(modalEl.querySelector('#selIdeologia'),         cats.ideologias, 'id_ideologia', 'nombre', 'Seleccione');
+    fillSelect(modalEl.querySelector('#selGrupoPostulacion'),  cats.grupos,     'id_grupo',     'nombre', 'Seleccione');
+
+    window.redesCatalog = cats.redes;
+    window.controversiasCatalog = cats.controversias;
+    window.temasCatalog = cats.temas;
+    renderTemasChecks(modalEl, cats.temas); // tu función
+
+    const payload = await apiGet(`/personas/${id}/payload`); // OJO: aquí depende de tu apiGet si ya agrega /api
+    const shared = ensureShared();
+    shared.applyPayloadToForm(payload);
+
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }catch(err){
+    console.error("openEditPersonaModal error:", err);
+  }finally{
+    setFormDisabled(formEl, false);
+  }
+}
+
+// submit (una sola vez)
+// ====== FOTO + SUBMIT (1 sola vez) ======
+document.addEventListener("DOMContentLoaded", () => {
+  const modalEl = document.getElementById("editPersonaModal");
+  if (!modalEl) return;
+
+  const formEl = modalEl.querySelector("#personaForm");
+  if (!formEl) return;
+
+  const inp = modalEl.querySelector("#inpFoto");
+  const img = modalEl.querySelector("#previewFoto");
+  const hid = modalEl.querySelector("#foto_url");
+
+  // ---- Foto: preview + upload + set hidden ----
+  if (inp && img && hid) {
+    inp.addEventListener("change", async () => {
+      const file = inp.files?.[0];
+      if (!file) return;
+
+      // preview local inmediato
+      const localUrl = URL.createObjectURL(file);
+      img.src = localUrl;
+      img.classList.remove("d-none");
+
+      try {
+        inp.disabled = true;
+
+        // SUBE AL BACKEND
+        const fotoUrl = await uploadFotoPersona(file); // <- tu función
+
+        // guarda en hidden para que buildPayload lo mande en PUT
+        hid.value = fotoUrl;
+
+        // preview desde servidor (evita cache)
+        img.src = fotoUrl + (fotoUrl.includes("?") ? "&" : "?") + "t=" + Date.now();
+        img.classList.remove("d-none");
+      } catch (err) {
+        console.error("Error subiendo foto:", err);
+      } finally {
+        inp.disabled = false;
+        URL.revokeObjectURL(localUrl);
+      }
+    });
+  }
+
+  // ---- Submit edición ----
+  formEl.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const id = Number(currentEditId);
+    if (!Number.isFinite(id) || id <= 0) return;
+
+    try {
+      const shared = ensureShared();
+
+      // ✅ IMPORTANTE: construir payload ANTES de deshabilitar (FormData ignora disabled)
+      const payload = shared.buildPayload();
+
+      // validación rápida en front para evitar roundtrip
+      if (!payload?.persona?.nombre) {
+        console.warn("Nombre vacío en payload:", payload);
+        // showEditAlert("El nombre es obligatorio.", "warning");
+        return;
+      }
+
+      // ahora sí deshabilita
+      setFormDisabled(formEl, true);
+
+      // ✅ tu apiFetch ya agrega "/api", así que NO pongas /api aquí
+      await apiPut(`/personas/${id}`, payload);
+
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+
+      // refrescar UI (si existe)
+      await loadPersonasByMunicipioId(currentMunicipioTrabajoId);
+
+    } catch (err) {
+      console.error("submit edit error:", err);
+    } finally {
+      setFormDisabled(formEl, false);
+    }
+  });
+});
+//helper foto
+async function uploadFotoPersona(file) {
+  const fd = new FormData();
+  fd.append("foto", file);
+
+  // OJO: aquí NO uses apiPost porque apiPost fuerza JSON.
+  // Usamos fetch directo pero con token.
+  const token = localStorage.getItem("token") || "";
+  const res = await fetch("/api/upload/foto", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "No se pudo subir la foto");
+
+  return data.foto_url; // <- tu backend devuelve foto_url
+}
+
+
+
+
+//delete modal persona 
+document.getElementById("btnDeletePersona")?.addEventListener("click", async () => {
+  const id = Number(currentEditId);
+  if (!Number.isFinite(id) || id <= 0) return;
+
+  const ok = confirm(`¿Eliminar a la persona #${id}? Esta acción NO se puede deshacer.`);
+  if (!ok) return;
+
+  try {
+    await apiDelete(`/personas/${id}`); // 👈 SIN /api
+    bootstrap.Modal.getInstance(document.getElementById("editPersonaModal"))?.hide();
+
+    // refresca cards + grid
+   
+    // o si no, recarga las cards del municipio actual:
+    await loadPersonasByMunicipioId(currentMunicipioTrabajoId);
+
+  } catch (err) {
+    console.error(err);
+    // showEditAlert("No pude eliminar: " + (err.message || ""), "danger");
+    alert("No pude eliminar: " + (err.message || ""));
+  }
+});
+
+async function confirmDeletePersona(idPersona){
+  const ok = confirm(`¿Eliminar la persona #${idPersona}? Esta acción no se puede deshacer.`);
+  if (!ok) return;
+
+  try{
+    await apiDelete(`/personas/${idPersona}`); // o apiFetch con method DELETE
+    // refresca UI
+    if (typeof refreshGridSafe === "function") refreshGridSafe();
+    // si estás viendo cards por municipio, vuelve a cargar o re-filtra
+    // por ejemplo:
+    // applySearch();
+    alert("Eliminado ✅");
+  }catch(err){
+    console.error(err);
+    alert("No se pudo eliminar. " + (err.message || ""));
+  }
+}
+
+
 // Llama esto cuando tu dashboard ya esté listo
 document.addEventListener("DOMContentLoaded", () => {
   let loaded = false;
@@ -1216,7 +1684,6 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-  
   initAdminDatagrid();
   initDashboard().catch(err=>{
     console.error(err);
