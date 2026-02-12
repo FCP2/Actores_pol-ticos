@@ -12,10 +12,13 @@ async function apiFetch(path, options = {}) {
   const token = getToken();
   const headers = { ...(options.headers || {}) };
 
-  // Solo set Content-Type si mandas body JSON y aún no está definido
-  if (options.body && !headers["Content-Type"]) {
+  const isFormData = (options.body instanceof FormData);
+
+  // ✅ Solo set Content-Type si es JSON (NO si es FormData)
+  if (options.body && !isFormData && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
+
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch("/api" + path, { ...options, headers });
