@@ -365,8 +365,10 @@ exports.listPersonasAdminGrid = async (req, res) => {
 
 // 2) CREAR PERSONA COMPLETA (transacción)
 // Espera un JSON como el que te pongo más abajo
+// Espera un JSON como el que te pongo más abajo
 exports.createPersonaCompleta = async (req, res) => {
   const client = await pool.connect();
+
   try {
     const {
       persona,
@@ -388,62 +390,56 @@ exports.createPersonaCompleta = async (req, res) => {
       cargos_eleccion_popular = [],
       experiencia_laboral = [],
       empresas_persona = [],
-      fuentes_consulta = []
+      fuentes_consulta = [],
+      municipios_trabajo = [] // ✅ ya lo tomamos aquí en lugar de req.body después
     } = req.body;
 
-      if (persona.sin_controversias_publicas === true && controversias.length > 0) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          error: 'No puede haber controversias si se marca "Sin controversias públicas"'
-        });
-      }
-      // Si tema de interés es "Otro", debe venir texto
-      // (mejor validar por id consultando el catálogo)
-      if (persona.id_tema_interes_central) {
-        const { rows: temaRows } = await client.query(
-          'SELECT requiere_otro_texto FROM catalogo_temas_interes WHERE id_tema = $1',
-          [persona.id_tema_interes_central]
-        );
+    // -------------------------
+    // VALIDACIONES PREVIAS (sin ROLLBACK)
+    // -------------------------
+    if (!persona?.nombre) return res.status(400).json({ error: "Nombre es requerido" });
+    if (!persona?.apellido_paterno) return res.status(400).json({ error: "Apellido paterno es requerido" });
+    if (!persona?.apellido_materno) return res.status(400).json({ error: "Apellido materno es requerido" });
 
-        if (!temaRows[0]) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ error: 'Tema de interés inválido' });
-        }
-
-        if (temaRows[0].requiere_otro_texto && !persona.tema_interes_otro_texto) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ error: 'Para el tema "Otro" se requiere texto' });
-        }
-      }
-
-    //Validación mínima
-    if (!persona?.nombre) {
-      return res.status(400).json({ error: 'persona.nombre es obligatorio' });
+    // Validación controversias vs bandera
+    if (persona.sin_controversias_publicas === true && Array.isArray(controversias) && controversias.length > 0) {
+      return res.status(400).json({
+        error: 'No puede haber controversias si se marca "Sin controversias públicas"'
+      });
     }
-    //validadion nivel de confiabilidad
-    const nc = (persona.nivel_confiabilidad || "").toString().trim().toLowerCase() || null;
 
-    if (nc && !["alto","medio","bajo"].includes(nc)) {
+    // Validación tema central (Otro requiere texto)
+    if (persona.id_tema_interes_central) {
+      const { rows: temaRows } = await client.query(
+        "SELECT requiere_otro_texto FROM catalogo_temas_interes WHERE id_tema = $1",
+        [persona.id_tema_interes_central]
+      );
+      if (!temaRows[0]) return res.status(400).json({ error: "Tema de interés inválido" });
+
+      if (temaRows[0].requiere_otro_texto && !persona.tema_interes_otro_texto) {
+        return res.status(400).json({ error: 'Para el tema "Otro" se requiere texto' });
+      }
+    }
+
+    // Validación nivel de confiabilidad
+    const nc = (persona.nivel_confiabilidad || "").toString().trim().toLowerCase() || null;
+    if (nc && !["alto", "medio", "bajo"].includes(nc)) {
       return res.status(400).json({ error: "nivel_confiabilidad inválido" });
     }
 
-   /* const curp = validarLongitudOpcional(persona.curp, 18);
-    if (curp === false) return res.status(400).json({ error: "CURP debe tener 18 caracteres" });
+    // Validación no contradicción cargos elección popular
+    if (persona.sin_cargos_eleccion_popular === true && Array.isArray(cargos_eleccion_popular) && cargos_eleccion_popular.length > 0) {
+      return res.status(400).json({
+        error: 'No puede haber cargos de elección popular si se marca "No ha ocupado cargos de elección popular"'
+      });
+    }
 
-    const rfc = validarLongitudOpcional(persona.rfc, 13);
-    if (rfc === false) return res.status(400).json({ error: "RFC debe tener 13 caracteres" });
+    // -------------------------
+    // BEGIN
+    // -------------------------
+    await client.query("BEGIN");
 
-    const clave = validarLongitudOpcional(persona.clave_elector, 18);
-    if (clave === false) return res.status(400).json({ error: "Clave de elector debe tener 18 caracteres" });
-
-    // si pasó, guarda normalizado
-    persona.curp = curp;               // null o string
-    persona.rfc = rfc;
-    persona.clave_elector = clave;*/
-
-    await client.query('BEGIN');
-
-    //reglas oficina por usuario:
+    // Reglas oficina por usuario
     const roles = req.user.roles || [];
     const isSuperadmin = roles.includes("superadmin");
 
@@ -456,12 +452,43 @@ exports.createPersonaCompleta = async (req, res) => {
       ? (persona.id_oficina || req.user.id_oficina || null)
       : req.user.id_oficina;
 
-    // PERSONA
+    // Validar "Otro" partido (ya dentro de transacción para consistencia)
+    if (persona.id_partido_actual) {
+      const { rows: pr } = await client.query(
+        "SELECT nombre, siglas FROM catalogo_partidos WHERE id_partido = $1",
+        [persona.id_partido_actual]
+      );
+      if (!pr[0]) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Partido inválido" });
+      }
+
+      const esOtro =
+        (pr[0].nombre || "").toLowerCase() === "otro" ||
+        (pr[0].siglas || "").toUpperCase() === "OTRO";
+
+      if (esOtro && !persona.partido_otro_texto) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: 'Si partido es "Otro", se requiere partido_otro_texto' });
+      }
+      if (!esOtro && persona.partido_otro_texto) {
+        persona.partido_otro_texto = null;
+      }
+    }
+
+    // -------------------------
+    // INSERT PERSONA
+    // -------------------------
     const creadoPor = req.user.id_usuario;
+
     const insertPersona = await client.query(
       `
       INSERT INTO personas (
-        nombre, apellido_paterno, apellido_materno, curp, rfc, clave_elector, estado_civil, escala_influencia,sin_servicio_publico, ha_contendido_eleccion, creado_por,
+        nombre, apellido_paterno, apellido_materno,
+        curp, rfc, clave_elector,
+        estado_civil, escala_influencia,
+        sin_servicio_publico, ha_contendido_eleccion,
+        creado_por,
         municipio_residencia_legal, municipio_residencia_real, municipio_trabajo_politico,
         sin_controversias_publicas,
         id_partido_actual, partido_otro_texto,
@@ -498,171 +525,100 @@ exports.createPersonaCompleta = async (req, res) => {
         persona.sin_cargos_eleccion_popular ?? null,
         persona.foto_url || null,
         oficinaFinal,
-        persona.nivel_confiabilidad = nc
+        nc // ✅ aquí va el valor final
       ]
     );
 
-
     const id_persona = insertPersona.rows[0].id_persona;
 
-    if (!persona.nombre) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: 'Nombre es requerido'
-      });
-    }
-
-    if (!persona.apellido_paterno) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: 'Apellido paterno es requerido'
-      });
-    }
-
-    if (!persona.apellido_materno) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: 'Apellido materno es requerido'
-      });
-    }
-      
-    // Validar "Otro" partido
-    if (persona.id_partido_actual) {
-      const { rows: pr } = await client.query(
-        'SELECT nombre, siglas FROM catalogo_partidos WHERE id_partido = $1',
-        [persona.id_partido_actual]
-      );
-
-      if (!pr[0]) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Partido inválido' });
-      }
-
-      const esOtro = (pr[0].nombre || '').toLowerCase() === 'otro' || (pr[0].siglas || '').toUpperCase() === 'OTRO';
-
-      if (esOtro && !persona.partido_otro_texto) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Si partido es "Otro", se requiere partido_otro_texto' });
-      }
-
-      if (!esOtro && persona.partido_otro_texto) {
-        // opcional: limpia si mandaron basura
-        persona.partido_otro_texto = null;
-      }
-    }
-    //validacion no contradiccion cargos eleccion popular
-    if (persona.sin_cargos_eleccion_popular === true && cargos_eleccion_popular.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: 'No puede haber cargos de elección popular si se marca "No ha ocupado cargos de elección popular"'
-      });
-    }
-
-    // temas de interes 1:N
+    // -------------------------
+    // TEMAS DE INTERÉS 1:N
+    // -------------------------
     for (const t of temas_interes) {
       if (!t?.id_tema) continue;
 
-      // validar si requiere otro_texto
       const { rows } = await client.query(
-        'SELECT requiere_otro_texto FROM catalogo_temas_interes WHERE id_tema = $1',
+        "SELECT requiere_otro_texto FROM catalogo_temas_interes WHERE id_tema = $1",
         [t.id_tema]
       );
-
       if (!rows[0]) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Tema de interés inválido' });
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Tema de interés inválido" });
       }
-
       if (rows[0].requiere_otro_texto && !t.otro_texto) {
-        await client.query('ROLLBACK');
+        await client.query("ROLLBACK");
         return res.status(400).json({ error: 'Para el tema "Otro" se requiere texto' });
       }
 
       await client.query(
-        `
-        INSERT INTO personas_temas_interes (id_persona, id_tema, otro_texto)
-        VALUES ($1,$2,$3)
-        `,
+        `INSERT INTO personas_temas_interes (id_persona, id_tema, otro_texto) VALUES ($1,$2,$3)`,
         [id_persona, t.id_tema, t.otro_texto || null]
       );
     }
 
-    // FORMACION ACADEMICA (histórico-ready)
-  for (const fa of formacion_academica) {
-    const tieneAlgo =
-      fa?.nivel ||
-      fa?.grado ||
-      fa?.grado_obtenido ||
-      fa?.institucion ||
-      fa?.anio_inicio ||
-      fa?.titulado ||
-      fa?.anio_fin;
+    // -------------------------
+    // FORMACIÓN ACADÉMICA
+    // -------------------------
+    for (const fa of formacion_academica) {
+      const tieneAlgo =
+        fa?.nivel || fa?.grado || fa?.grado_obtenido || fa?.institucion ||
+        fa?.anio_inicio || fa?.titulado || fa?.anio_fin;
 
-    if (!tieneAlgo) continue;
+      if (!tieneAlgo) continue;
 
-    if (!fa.nivel) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: 'formacion_academica.nivel es obligatorio'
-      });
-    }
-
-    const requiereDetalle = ['Educación Superior', 'Posgrado'].includes(fa.nivel);
-
-    if (requiereDetalle && (!fa.grado_obtenido || !fa.institucion)) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: 'Para Educación Superior o Posgrado se requiere grado_obtenido e institucion'
-      });
-    }
-
-    if (['Educación Superior', 'Posgrado'].includes(fa.nivel)) {
-      if (fa.titulado === null || fa.titulado === undefined) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          error: 'Debes indicar si está titulado'
-        });
+      if (!fa.nivel) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "formacion_academica.nivel es obligatorio" });
       }
-    }
 
-    const ced = (fa.cedula_profesional || "").toString().trim() || null;
-    // regla: si NO está titulado, forzamos null
-    const cedFinal = (fa.titulado === true) ? ced : null;
+      const requiereDetalle = ["Educación Superior", "Posgrado"].includes(fa.nivel);
+      if (requiereDetalle && (!fa.grado_obtenido || !fa.institucion)) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Para Educación Superior o Posgrado se requiere grado_obtenido e institucion" });
+      }
 
-    // si titulado=true, exigir cédula (para sup/posgrado o para cualquier nivel, tú decides)
-    if (fa.titulado === true && !cedFinal) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Si está titulado, captura la cédula profesional' });
-    }
+      if (["Educación Superior", "Posgrado"].includes(fa.nivel)) {
+        if (fa.titulado === null || fa.titulado === undefined) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: "Debes indicar si está titulado" });
+        }
+      }
 
-    await client.query(
-      `
-    INSERT INTO formacion_academica
-      (id_persona, nivel, grado_obtenido, institucion, anio_inicio, anio_fin, grado, titulado, cedula_profesional)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      `,
-      [
-        id_persona,
-        fa.nivel,
-        requiereDetalle ? (fa.grado_obtenido || null) : null,
-        requiereDetalle ? (fa.institucion || null) : null,
-        fa.anio_inicio || null,
-        fa.anio_fin || null,
-        fa.grado || null,
-        fa.titulado ?? null,
-        cedFinal
-      ]
-      
-    );
-  }
+      const ced = (fa.cedula_profesional || "").toString().trim() || null;
+      const cedFinal = (fa.titulado === true) ? ced : null;
 
-    // 2) DATOS INE (1 por persona) - tu tabla tiene UNIQUE(id_persona)
-    if (datos_ine && (datos_ine.seccion_electoral || datos_ine.distrito_federal || datos_ine.distrito_local)) {
+      if (fa.titulado === true && !cedFinal) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Si está titulado, captura la cédula profesional" });
+      }
+
       await client.query(
         `
-        INSERT INTO datos_ine (id_persona, seccion_electoral, distrito_federal, distrito_local)
-        VALUES ($1,$2,$3,$4)
+        INSERT INTO formacion_academica
+          (id_persona, nivel, grado_obtenido, institucion, anio_inicio, anio_fin, grado, titulado, cedula_profesional)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         `,
+        [
+          id_persona,
+          fa.nivel,
+          requiereDetalle ? (fa.grado_obtenido || null) : null,
+          requiereDetalle ? (fa.institucion || null) : null,
+          fa.anio_inicio || null,
+          fa.anio_fin || null,
+          fa.grado || null,
+          fa.titulado ?? null,
+          cedFinal
+        ]
+      );
+    }
+
+    // -------------------------
+    // DATOS INE 1:1
+    // -------------------------
+    if (datos_ine && (datos_ine.seccion_electoral || datos_ine.distrito_federal || datos_ine.distrito_local)) {
+      await client.query(
+        `INSERT INTO datos_ine (id_persona, seccion_electoral, distrito_federal, distrito_local)
+         VALUES ($1,$2,$3,$4)`,
         [
           id_persona,
           datos_ine.seccion_electoral || null,
@@ -672,53 +628,45 @@ exports.createPersonaCompleta = async (req, res) => {
       );
     }
 
+    // -------------------------
     // TELEFONOS
+    // -------------------------
     for (const t of telefonos) {
+      if (!t?.telefono) continue;
       await client.query(
-        `
-        INSERT INTO telefonos (id_persona, telefono, tipo, principal)
-        VALUES ($1,$2,$3,$4)
-        `,
+        `INSERT INTO telefonos (id_persona, telefono, tipo, principal) VALUES ($1,$2,$3,$4)`,
         [id_persona, t.telefono, t.tipo || null, t.principal ?? false]
       );
     }
 
-
-    // 4) PAREJAS con MAP temp_id -> id_pareja
+    // -------------------------
+    // PAREJAS + HIJOS
+    // -------------------------
     const parejaMap = new Map();
 
     for (const p of parejas) {
       const periodo = normalizePeriodo(p?.periodo);
-
       const tieneAlgo = p?.nombre_pareja || p?.tipo_relacion || periodo;
       if (!tieneAlgo) continue;
 
-      // Validación: si mandan periodo, debe ser AAAA o AAAA-AAAA
       if (periodo && !isPeriodoValido(periodo)) {
-        await client.query('ROLLBACK');
+        await client.query("ROLLBACK");
         return res.status(400).json({
-          error: 'Formato de periodo inválido en parejas. Usa AAAA o AAAA-AAAA',
+          error: "Formato de periodo inválido en parejas. Usa AAAA o AAAA-AAAA",
           detail: { temp_id: p?.temp_id || null, periodo }
         });
       }
 
       const { rows } = await client.query(
-        `
-        INSERT INTO parejas (id_persona, nombre_pareja, tipo_relacion, periodo)
-        VALUES ($1,$2,$3,$4)
-        RETURNING id_pareja
-        `,
-        [
-          id_persona,
-          p.nombre_pareja || null,
-          p.tipo_relacion || null,
-          periodo || null
-        ]
+        `INSERT INTO parejas (id_persona, nombre_pareja, tipo_relacion, periodo)
+         VALUES ($1,$2,$3,$4)
+         RETURNING id_pareja`,
+        [id_persona, p.nombre_pareja || null, p.tipo_relacion || null, periodo || null]
       );
 
       if (p.temp_id) parejaMap.set(p.temp_id, rows[0].id_pareja);
     }
-// 5) HIJOS ligados a pareja
+
     for (const h of hijos) {
       const tieneAlgo = h?.anio_nacimiento || h?.sexo || h?.pareja_temp_id;
       if (!tieneAlgo) continue;
@@ -726,44 +674,47 @@ exports.createPersonaCompleta = async (req, res) => {
       const id_pareja = h.pareja_temp_id ? (parejaMap.get(h.pareja_temp_id) || null) : null;
 
       await client.query(
-        `
-        INSERT INTO hijos (id_persona, id_pareja, anio_nacimiento, sexo)
-        VALUES ($1,$2,$3,$4)
-        `,
+        `INSERT INTO hijos (id_persona, id_pareja, anio_nacimiento, sexo) VALUES ($1,$2,$3,$4)`,
         [id_persona, id_pareja, h.anio_nacimiento || null, h.sexo || null]
       );
     }
 
-    // REDES (requiere id_red)
+    // -------------------------
+    // REDES
+    // -------------------------
     for (const r of redes) {
+      if (!r?.id_red) continue;
       await client.query(
-        `
-        INSERT INTO redes_sociales_persona (id_persona, id_red, url)
-        VALUES ($1,$2,$3)
-        `,
-        [id_persona, r.id_red, r.url]
+        `INSERT INTO redes_sociales_persona (id_persona, id_red, url) VALUES ($1,$2,$3)`,
+        [id_persona, r.id_red, r.url || null]
       );
     }
 
+    // -------------------------
     // SERVICIO PUBLICO
+    // -------------------------
     for (const s of servicio_publico) {
+      const tieneAlgo = s?.periodo || s?.cargo || s?.dependencia;
+      if (!tieneAlgo) continue;
       await client.query(
-        `
-        INSERT INTO servicio_publico (id_persona, periodo, cargo, dependencia)
-        VALUES ($1,$2,$3,$4)
-        `,
+        `INSERT INTO servicio_publico (id_persona, periodo, cargo, dependencia) VALUES ($1,$2,$3,$4)`,
         [id_persona, s.periodo || null, s.cargo || null, s.dependencia || null]
       );
     }
 
+    // -------------------------
     // ELECCIONES
+    // -------------------------
     for (const e of elecciones) {
+      const tieneAlgo =
+        e?.anio_eleccion || e?.candidatura || e?.partido_postulacion || e?.resultado ||
+        e?.diferencia_votos || e?.diferencia_porcentaje;
+      if (!tieneAlgo) continue;
+
       await client.query(
-        `
-        INSERT INTO elecciones_contendidas
-        (id_persona, anio_eleccion, candidatura, partido_postulacion, resultado, diferencia_votos, diferencia_porcentaje)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-        `,
+        `INSERT INTO elecciones_contendidas
+          (id_persona, anio_eleccion, candidatura, partido_postulacion, resultado, diferencia_votos, diferencia_porcentaje)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [
           id_persona,
           e.anio_eleccion || null,
@@ -776,70 +727,99 @@ exports.createPersonaCompleta = async (req, res) => {
       );
     }
 
-    for (const ev of capacidad_movilizacion_eventos) {
-      const nombre = (ev?.nombre_evento || '').toString().trim();
-      const fecha = ev?.fecha_evento || null;
-
-      // asistencia puede venir como string desde el front
-      const asistencia =
-        ev?.asistencia === '' || ev?.asistencia == null
-          ? null
-          : Number(ev.asistencia);
-
-      // ignora líneas totalmente vacías
-      if (!nombre && !fecha && (asistencia == null)) continue;
-
-      // validación: si hay evento, debe traer todo
-      if (!nombre || !fecha || asistencia == null || Number.isNaN(asistencia)) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          error: 'Cada evento requiere nombre_evento, fecha_evento y asistencia'
-        });
-      }
-
-      if (asistencia < 0) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          error: 'La asistencia no puede ser negativa'
-        });
-      }
-
-      await client.query(
-        `
-        INSERT INTO capacidad_movilizacion_eventos
-          (id_persona, nombre_evento, fecha_evento, asistencia, lugar_evento, foto_evento_url)
-        VALUES ($1,$2,$3,$4,$5,$6)
-        `,
-        [
-          id_persona,
-          nombre,
-          fecha,
-          asistencia,
-          (ev?.lugar_evento || '').toString().trim() || null,
-          (ev?.foto_evento_url || '').toString().trim() || null
-        ]
-      );
+    // -------------------------
+    // EVENTOS MOVILIZACIÓN (0..10 fotos) ✅ tabla hija
+    // -------------------------
+    function normalizeUrl(u) {
+      const s = (u || "").toString().trim();
+      return s || null;
     }
 
-    // EQUIPOS
-    for (const eq of equipos) {
-      await client.query(
+    function normalizeFotos(arr, max = 10) {
+      const list = Array.isArray(arr) ? arr : [];
+      const seen = new Set();
+      const out = [];
+      for (const x of list) {
+        const url = normalizeUrl(x);
+        if (!url) continue;
+        if (seen.has(url)) continue;
+        seen.add(url);
+        out.push(url);
+        if (out.length >= max) break;
+      }
+      return out;
+    }
+
+    for (const ev of capacidad_movilizacion_eventos) {
+      const nombre = (ev?.nombre_evento || "").toString().trim();
+      const fecha = ev?.fecha_evento || null;
+      const asistencia =
+        ev?.asistencia === "" || ev?.asistencia == null ? null : Number(ev.asistencia);
+
+      const lugar = (ev?.lugar_evento || "").toString().trim() || null;
+      const fotos = normalizeFotos(ev?.fotos, 10);
+
+      // si no hay nada, saltar
+      if (!nombre && !fecha && asistencia == null && !lugar && fotos.length === 0) continue;
+
+      if (!nombre || !fecha || asistencia == null || Number.isNaN(asistencia)) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Cada evento requiere nombre_evento, fecha_evento y asistencia" });
+      }
+      if (asistencia < 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "La asistencia no puede ser negativa" });
+      }
+
+      // límite 10 (por si mandan más en raw)
+      if (Array.isArray(ev?.fotos) && normalizeFotos(ev.fotos, 999).length > 10) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Máximo 10 fotos por evento" });
+      }
+
+      const { rows } = await client.query(
         `
-        INSERT INTO equipos_politicos (id_persona, nombre_equipo, activo)
-        VALUES ($1,$2,$3)
+        INSERT INTO capacidad_movilizacion_eventos
+          (id_persona, nombre_evento, fecha_evento, asistencia, lugar_evento)
+        VALUES ($1,$2,$3,$4,$5)
+        RETURNING id_evento
         `,
+        [id_persona, nombre, fecha, asistencia, lugar]
+      );
+
+      const id_evento = rows[0].id_evento;
+
+      for (const url of fotos) {
+        await client.query(
+          `INSERT INTO capacidad_movilizacion_eventos_fotos (id_evento, foto_url) VALUES ($1,$2)`,
+          [id_evento, url]
+        );
+      }
+    }
+
+    // -------------------------
+    // EQUIPOS
+    // -------------------------
+    for (const eq of equipos) {
+      const tieneAlgo = eq?.nombre_equipo || eq?.activo !== undefined;
+      if (!tieneAlgo) continue;
+
+      await client.query(
+        `INSERT INTO equipos_politicos (id_persona, nombre_equipo, activo) VALUES ($1,$2,$3)`,
         [id_persona, eq.nombre_equipo || null, eq.activo ?? true]
       );
     }
 
+    // -------------------------
     // REFERENTES
+    // -------------------------
     for (const ref of referentes) {
+      const tieneAlgo = ref?.nivel || ref?.nombres || ref?.apellido_paterno || ref?.apellido_materno;
+      if (!tieneAlgo) continue;
+
       await client.query(
-        `
-        INSERT INTO referentes_politicos
-          (id_persona, nivel, nombres, apellido_paterno, apellido_materno)
-        VALUES ($1,$2,$3,$4,$5)
-        `,
+        `INSERT INTO referentes_politicos (id_persona, nivel, nombres, apellido_paterno, apellido_materno)
+         VALUES ($1,$2,$3,$4,$5)`,
         [
           id_persona,
           ref.nivel || null,
@@ -850,129 +830,110 @@ exports.createPersonaCompleta = async (req, res) => {
       );
     }
 
-    // Si se marcó "sin controversias públicas", NO se insertan controversias
+    // -------------------------
+    // CONTROVERSIAS (si no sinControversias)
+    // -------------------------
     const sinControversias = persona.sin_controversias_publicas === true;
-
     if (!sinControversias) {
       for (const c of controversias) {
-
-        // ✅ VALIDAR ANTES DE INSERTAR
-        if (c.fecha_registro && !isPeriodoValido(c.fecha_registro)) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({
-            error: 'Formato inválido en controversia. Usa AAAA o AAAA-AAAA'
-          });
-        }
         const tieneAlgo = c?.id_tipo || c?.descripcion || c?.fuente || c?.fecha_registro || c?.estatus;
         if (!tieneAlgo) continue;
 
+        // OJO: si fecha_registro es AAAA / AAAA-AAAA, valida así (si es date real, cambia esta regla)
+        if (c.fecha_registro && !isPeriodoValido(c.fecha_registro)) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: "Formato inválido en controversia. Usa AAAA o AAAA-AAAA" });
+        }
+
         await client.query(
-          `
-          INSERT INTO controversias_persona
-            (id_persona, id_tipo, descripcion, fuente, fecha_registro, estatus)
-          VALUES ($1,$2,$3,$4,$5,$6)
-          `,
+          `INSERT INTO controversias_persona (id_persona, id_tipo, descripcion, fuente, fecha_registro, estatus)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
           [
             id_persona,
             c.id_tipo,
             c.descripcion || null,
             c.fuente || null,
-            c.fecha_registro || null, // ahora es VARCHAR
+            c.fecha_registro || null,
             c.estatus || null
           ]
         );
       }
     }
 
+    // -------------------------
     // FAMILIARES
+    // -------------------------
     for (const f of familiares) {
+      const tieneAlgo = f?.nombre || f?.parentesco || f?.cargo || f?.institucion;
+      if (!tieneAlgo) continue;
+
       await client.query(
-        `
-        INSERT INTO familiares_politica (id_persona, nombre, parentesco, cargo, institucion)
-        VALUES ($1,$2,$3,$4,$5)
-        `,
+        `INSERT INTO familiares_politica (id_persona, nombre, parentesco, cargo, institucion)
+         VALUES ($1,$2,$3,$4,$5)`,
         [id_persona, f.nombre || null, f.parentesco || null, f.cargo || null, f.institucion || null]
       );
     }
-    // PARTICIPACIÓN EN OTROS PARTIDOS / ORGANIZACIONES
+
+    // -------------------------
+    // PARTICIPACIÓN ORGANIZACIONES
+    // -------------------------
     for (const po of participacion_organizaciones) {
       const tieneAlgo = po?.tipo || po?.nombre || po?.rol || po?.periodo || po?.notas;
       if (!tieneAlgo) continue;
 
       if (!po.nombre) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'participacion_organizaciones.nombre es obligatorio' });
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "participacion_organizaciones.nombre es obligatorio" });
       }
 
       await client.query(
-        `
-        INSERT INTO participacion_organizaciones
-          (id_persona, tipo, nombre, rol, periodo, notas)
-        VALUES ($1,$2,$3,$4,$5,$6)
-        `,
-        [
-          id_persona,
-          po.tipo || 'otro',
-          po.nombre,
-          po.rol || null,
-          po.periodo || null,
-          po.notas || null
-        ]
+        `INSERT INTO participacion_organizaciones (id_persona, tipo, nombre, rol, periodo, notas)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [id_persona, po.tipo || "otro", po.nombre, po.rol || null, po.periodo || null, po.notas || null]
       );
     }
-    //Eleccion popular
+
+    // -------------------------
+    // CARGOS ELECCIÓN POPULAR
+    // -------------------------
     for (const c of cargos_eleccion_popular) {
       const tieneAlgo = c?.periodo || c?.cargo || c?.partido_postulante || c?.modalidad;
       if (!tieneAlgo) continue;
 
-      // Validación mínima: si hay registro, exige cargo y periodo
       if (!c.cargo || !c.periodo) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          error: 'Cada cargo de elección popular requiere periodo y cargo'
-        });
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Cada cargo de elección popular requiere periodo y cargo" });
       }
 
-      // modalidad opcional pero si viene, debe ser mr/rp
-      if (c.modalidad && !['mr','rp'].includes(c.modalidad)) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'modalidad inválida (mr|rp)' });
+      if (c.modalidad && !["mr", "rp"].includes(c.modalidad)) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "modalidad inválida (mr|rp)" });
       }
 
       await client.query(
-        `
-        INSERT INTO cargos_eleccion_popular
-          (id_persona, periodo, cargo, partido_postulante, modalidad)
-        VALUES ($1,$2,$3,$4,$5)
-        `,
-        [
-          id_persona,
-          c.periodo || null,
-          c.cargo || null,
-          c.partido_postulante || null,
-          c.modalidad || null
-        ]
+        `INSERT INTO cargos_eleccion_popular (id_persona, periodo, cargo, partido_postulante, modalidad)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [id_persona, c.periodo || null, c.cargo || null, c.partido_postulante || null, c.modalidad || null]
       );
     }
-    // EXPERIENCIA LABORAL (fuera del servicio público)
+
+    // -------------------------
+    // EXPERIENCIA LABORAL
+    // -------------------------
     for (const ex of experiencia_laboral) {
       const tieneAlgo = ex?.periodo || ex?.cargo || ex?.organizacion;
       if (!tieneAlgo) continue;
 
       await client.query(
-        `
-        INSERT INTO experiencia_laboral (id_persona, periodo, cargo, organizacion)
-        VALUES ($1,$2,$3,$4)
-        `,
-        [
-          id_persona,
-          ex.periodo || null,
-          ex.cargo || null,
-          ex.organizacion || null
-        ]
+        `INSERT INTO experiencia_laboral (id_persona, periodo, cargo, organizacion)
+         VALUES ($1,$2,$3,$4)`,
+        [id_persona, ex.periodo || null, ex.cargo || null, ex.organizacion || null]
       );
     }
-    // EMPRESAS (1:N)
+
+    // -------------------------
+    // EMPRESAS
+    // -------------------------
     for (const e of empresas_persona) {
       const nombre = (e?.nombre_empresa || "").trim();
       const rol = (e?.rol || "").trim();
@@ -983,34 +944,34 @@ exports.createPersonaCompleta = async (req, res) => {
       if (!tieneAlgo) continue;
 
       if (!nombre) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Cada empresa requiere nombre_empresa' });
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Cada empresa requiere nombre_empresa" });
       }
 
       if (periodo && !isPeriodoValido(periodo)) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Formato inválido en empresa. Usa AAAA o AAAA-AAAA' });
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Formato inválido en empresa. Usa AAAA o AAAA-AAAA" });
       }
 
       await client.query(
-        `
-        INSERT INTO empresas_persona (id_persona, nombre_empresa, rol, periodo, notas)
-        VALUES ($1,$2,$3,$4,$5)
-        `,
+        `INSERT INTO empresas_persona (id_persona, nombre_empresa, rol, periodo, notas)
+         VALUES ($1,$2,$3,$4,$5)`,
         [id_persona, nombre, rol || null, periodo || null, notas || null]
       );
     }
-    // fuentes_consulta (1:N)
+
+    // -------------------------
+    // FUENTES CONSULTA (1:N UNIQUE por persona+fuente)
+    // -------------------------
     await client.query(`DELETE FROM fuentes_persona WHERE id_persona = $1`, [id_persona]);
 
     for (const f of (fuentes_consulta || [])) {
       const id_fuente = Number(f?.id_fuente);
-      const detalle = (f?.detalle || '').toString().trim() || null;
-      const fecha_consulta = (f?.fecha_consulta || '').toString().trim() || null; // 'YYYY-MM-DD'
+      const detalle = (f?.detalle || "").toString().trim() || null;
+      const fecha_consulta = (f?.fecha_consulta || "").toString().trim() || null; // YYYY-MM-DD
 
       if (!Number.isFinite(id_fuente) || id_fuente <= 0) continue;
 
-      // 🔒 validar que exista y esté activa
       const { rows: fr } = await client.query(
         `SELECT 1 FROM catalogo_fuentes_consulta WHERE id_fuente = $1 AND activo = true`,
         [id_fuente]
@@ -1022,21 +983,24 @@ exports.createPersonaCompleta = async (req, res) => {
 
       await client.query(
         `INSERT INTO fuentes_persona (id_persona, id_fuente, detalle, fecha_consulta)
-        VALUES ($1,$2,$3,$4)
-        ON CONFLICT (id_persona, id_fuente)
-        DO UPDATE SET detalle = EXCLUDED.detalle, fecha_consulta = EXCLUDED.fecha_consulta`,
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (id_persona, id_fuente)
+         DO UPDATE SET detalle = EXCLUDED.detalle, fecha_consulta = EXCLUDED.fecha_consulta`,
         [id_persona, id_fuente, detalle, fecha_consulta]
       );
     }
-    //trabajo politico en varios municipios
-    const municipios_trabajo = Array.isArray(req.body.municipios_trabajo) ? req.body.municipios_trabajo : [];
 
-    await client.query(`DELETE FROM personas_municipios_trabajo WHERE id_persona=$1`, [id_persona]);
+    // -------------------------
+    // TRABAJO POLÍTICO EN VARIOS MUNICIPIOS
+    // -------------------------
+    const mt = Array.isArray(municipios_trabajo) ? municipios_trabajo : [];
+
+    await client.query(`DELETE FROM personas_municipios_trabajo WHERE id_persona = $1`, [id_persona]);
 
     const principal = persona.municipio_trabajo_politico ? Number(persona.municipio_trabajo_politico) : null;
     const ids = new Set();
 
-    for (const it of municipios_trabajo) {
+    for (const it of mt) {
       const id_municipio = Number(it?.id_municipio);
       if (!Number.isFinite(id_municipio) || id_municipio <= 0) continue;
       if (ids.has(id_municipio)) continue;
@@ -1044,40 +1008,47 @@ exports.createPersonaCompleta = async (req, res) => {
 
       await client.query(
         `INSERT INTO personas_municipios_trabajo (id_persona, id_municipio, es_principal, notas)
-        VALUES ($1,$2,$3,$4)`,
-        [id_persona, id_municipio, principal === id_municipio, (it?.notas || '').toString().trim() || null]
+         VALUES ($1,$2,$3,$4)`,
+        [
+          id_persona,
+          id_municipio,
+          principal === id_municipio,
+          (it?.notas || "").toString().trim() || null
+        ]
       );
     }
 
-    // Forzar que el principal esté en la cobertura si existe
     if (principal && !ids.has(principal)) {
       await client.query(
         `INSERT INTO personas_municipios_trabajo (id_persona, id_municipio, es_principal)
-        VALUES ($1,$2,true)
-        ON CONFLICT (id_persona, id_municipio) DO UPDATE SET es_principal=true`,
+         VALUES ($1,$2,true)
+         ON CONFLICT (id_persona, id_municipio) DO UPDATE SET es_principal = true`,
         [id_persona, principal]
       );
     }
-      await client.query('COMMIT');
-      return res.status(201).json({ ok: true, id_persona });
 
-    } catch (e) {
-      await client.query('ROLLBACK');
-      console.error(e);
+    // -------------------------
+    // COMMIT
+    // -------------------------
+    await client.query("COMMIT");
+    return res.status(201).json({ ok: true, id_persona });
 
-      // si algún día insertas ine dos veces para la misma persona, caerá aquí por UNIQUE
-      if (String(e.message).includes('datos_ine_id_persona_key')) {
-        return res.status(409).json({ error: 'Esta persona ya tiene datos INE' });
-      }
-      if (String(e.message).includes('personas_curp_key')) return res.status(409).json({ error: 'CURP ya existe' });
-      if (String(e.message).includes('personas_rfc_key')) return res.status(409).json({ error: 'RFC ya existe' });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error(e);
 
-
-      return res.status(500).json({ error: 'Error al crear persona', detail: e.message });
-    } finally {
-      client.release();
+    if (String(e.message).includes("datos_ine_id_persona_key")) {
+      return res.status(409).json({ error: "Esta persona ya tiene datos INE" });
     }
+    if (String(e.message).includes("personas_curp_key")) return res.status(409).json({ error: "CURP ya existe" });
+    if (String(e.message).includes("personas_rfc_key")) return res.status(409).json({ error: "RFC ya existe" });
+
+    return res.status(500).json({ error: "Error al crear persona", detail: e.message });
+  } finally {
+    client.release();
+  }
 };
+
 
 
 // 3) PERFIL COMPLETO (usa tu query consolidado)
@@ -3004,41 +2975,85 @@ exports.updatePersonaCompleta = async (req, res) => {
     }
 
     // 10) Eventos movilización
-    await del("capacidad_movilizacion_eventos");
-    for (const ev of capacidad_movilizacion_eventos) {
-      const nombre = (ev?.nombre_evento || "").toString().trim();
-      const fecha = ev?.fecha_evento || null;
-      const asistencia =
-        ev?.asistencia === "" || ev?.asistencia == null ? null : Number(ev.asistencia);
-
-      if (!nombre && !fecha && asistencia == null) continue;
-
-      if (!nombre || !fecha || asistencia == null || Number.isNaN(asistencia)) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({
-          error: "Cada evento requiere nombre_evento, fecha_evento y asistencia"
-        });
+      function normalizeUrl(u) {
+        const s = (u || "").toString().trim();
+        return s || null;
       }
-      if (asistencia < 0) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ error: "La asistencia no puede ser negativa" });
+
+      function normalizeFotos(arr, max = 10) {
+        const list = Array.isArray(arr) ? arr : [];
+        // dedupe por url
+        const seen = new Set();
+        const out = [];
+        for (const x of list) {
+          const url = normalizeUrl(x);
+          if (!url) continue;
+          if (seen.has(url)) continue;
+          seen.add(url);
+          out.push(url);
+          if (out.length >= max) break;
+        }
+        return out;
       }
-      await client.query(
-        `
-        INSERT INTO capacidad_movilizacion_eventos
-          (id_persona, nombre_evento, fecha_evento, asistencia, lugar_evento, foto_evento_url)
-        VALUES ($1,$2,$3,$4,$5,$6)
-        `,
-        [
-          id_persona,
-          nombre,
-          fecha,
-          asistencia,
-          (ev?.lugar_evento || '').toString().trim() || null,
-          (ev?.foto_evento_url || '').toString().trim() || null
-        ]
-      );
-    }
+
+      // 10) Eventos movilización (con 1:N fotos)
+      await del("capacidad_movilizacion_eventos");
+
+      for (const ev of capacidad_movilizacion_eventos) {
+        const nombre = (ev?.nombre_evento || "").toString().trim();
+        const fecha = ev?.fecha_evento || null;
+        const asistencia =
+          ev?.asistencia === "" || ev?.asistencia == null ? null : Number(ev.asistencia);
+
+        const lugar = (ev?.lugar_evento || "").toString().trim() || null;
+
+        // fotos opcionales: array de urls (0..10)
+        const fotos = normalizeFotos(ev?.fotos, 10);
+
+        // si no hay nada, saltar
+        if (!nombre && !fecha && asistencia == null && !lugar && fotos.length === 0) continue;
+
+        // reglas mínimas del evento (igual que ya tenías)
+        if (!nombre || !fecha || asistencia == null || Number.isNaN(asistencia)) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            error: "Cada evento requiere nombre_evento, fecha_evento y asistencia"
+          });
+        }
+        if (asistencia < 0) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: "La asistencia no puede ser negativa" });
+        }
+
+        // ✅ límite fotos
+        if (Array.isArray(ev?.fotos) && normalizeFotos(ev.fotos, 999).length > 10) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: "Máximo 10 fotos por evento" });
+        }
+
+        // insert evento y obtener id_evento
+        const { rows } = await client.query(
+          `
+          INSERT INTO capacidad_movilizacion_eventos
+            (id_persona, nombre_evento, fecha_evento, asistencia, lugar_evento)
+          VALUES ($1,$2,$3,$4,$5)
+          RETURNING id_evento
+          `,
+          [id_persona, nombre, fecha, asistencia, lugar]
+        );
+
+        const id_evento = rows[0].id_evento;
+
+        // insert fotos
+        for (const url of fotos) {
+          await client.query(
+            `INSERT INTO capacidad_movilizacion_eventos_fotos (id_evento, foto_url)
+            VALUES ($1,$2)`,
+            [id_evento, url]
+          );
+        }
+      }
+
     // empresas_persona:
     await del("empresas_persona");
     for (const em of empresas_persona) {
@@ -3511,12 +3526,13 @@ exports.getPayloadEdicion = async (req, res) => {
         [id_persona]
       ).then(r => r.rows),
 
-      // capacidad_movilizacion_eventos (PK: id_evento)
+
+      // capacidad_movilizacion_eventos (PK: id_evento)  ✅ incluye id_evento
       client.query(
-        `SELECT nombre_evento, fecha_evento, asistencia, lugar_evento, foto_evento_url
-         FROM capacidad_movilizacion_eventos
-         WHERE id_persona = $1
-         ORDER BY id_evento ASC`,
+        `SELECT id_evento, nombre_evento, fecha_evento, asistencia, lugar_evento
+        FROM capacidad_movilizacion_eventos
+        WHERE id_persona = $1
+        ORDER BY id_evento ASC`,
         [id_persona]
       ).then(r => r.rows),
 
@@ -3618,6 +3634,30 @@ exports.getPayloadEdicion = async (req, res) => {
     ).then(r => r.rows),
 
     ]);
+    
+        // ✅ cargar fotos de eventos
+    const eventIds = (capacidad_movilizacion_eventos || []).map(e => e.id_evento).filter(Boolean);
+
+    let fotosByEvento = new Map();
+    if (eventIds.length) {
+      const { rows: fRows } = await client.query(
+        `SELECT id_evento, foto_url
+        FROM capacidad_movilizacion_eventos_fotos
+        WHERE id_evento = ANY($1::int[])
+        ORDER BY id_foto ASC`,
+        [eventIds]
+      );
+
+      for (const r of fRows) {
+        if (!fotosByEvento.has(r.id_evento)) fotosByEvento.set(r.id_evento, []);
+        fotosByEvento.get(r.id_evento).push(r.foto_url);
+      }
+    }
+
+    // anexar fotos al arreglo de eventos
+    for (const ev of capacidad_movilizacion_eventos) {
+      ev.fotos = fotosByEvento.get(ev.id_evento) || [];
+    }
 
     return res.json({
       persona,
