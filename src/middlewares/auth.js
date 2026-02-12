@@ -1,65 +1,60 @@
-const pool = require('../db');
 const jwt = require('jsonwebtoken');
 
-function signToken(payload) {
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '8h' });
+function isSuperadmin(req) {
+  return (req.user?.roles || []).includes("superadmin");
 }
 
-exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ error: 'email y password son obligatorios' });
-    }
+/*function requireOffice(req, res, next) {
+  if (isSuperadmin(req)) return next();
+  if (!req.user?.id_oficina) return res.status(403).json({ error: "Usuario sin oficina asignada" });
+  next();
+}*/
 
-    const q = await pool.query(
-      `
-      SELECT
-        u.id_usuario, u.nombre, u.email, u.activo,
-        u.id_oficina,
-        array_remove(array_agg(r.nombre), NULL) AS roles
-      FROM usuarios u
-      LEFT JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
-      LEFT JOIN roles r ON r.id_rol = ur.id_rol
-      WHERE u.email = $1
-        AND u.activo = true
-        AND u.password_hash = crypt($2, u.password_hash)
-      GROUP BY u.id_usuario
-      `,
-      [email.toLowerCase().trim(), password]
-    );
+function requireOffice(req, res, next) {
+  const roles = req.user?.roles || [];
+  if (roles.includes("superadmin")) return next();
 
-    if (q.rowCount === 0) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
-    }
-
-    const user = q.rows[0];
-    const token = signToken({
-      id_usuario: user.id_usuario,
-      email: user.email,
-      roles: user.roles || [],
-      id_oficina: user.id_oficina ?? null
-    });
-
-    return res.json({
-      ok: true,
-      token,
-      user: {
-        id_usuario: user.id_usuario,
-        nombre: user.nombre,
-        email: user.email,
-        roles: user.roles || [],
-        id_oficina: user.id_oficina ?? null
-      }
-    });
-    
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Error en login', detail: e.message });
+  if (!req.user?.id_oficina) {
+    return res.status(403).json({ error: "Usuario sin oficina asignada" });
   }
-};
+  next();
+}
 
-exports.me = async (req, res) => {
-  // requireAuth ya puso req.user
-  res.json({ ok: true, user: req.user });
+function requireAuth(req, res, next) {
+  try {
+    const h = req.headers.authorization || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+
+    if (!token) return res.status(401).json({ error: 'No autorizado' });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    req.user = {
+      id_usuario: decoded.id_usuario,
+      email: decoded.email,
+      roles: decoded.roles || [],
+      id_oficina: decoded.id_oficina ?? null
+    };
+
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'Token inválido' });
+  }
+}
+
+function requireRole(...allowed) {
+  return (req, res, next) => {
+    const roles = req.user?.roles || [];
+    const ok = allowed.some(r => roles.includes(r));
+    if (!ok) return res.status(403).json({ error: 'Prohibido' });
+    next();
+  };
+}
+
+// ✅ Exporta TODO junto (sin mezclar exports.* con module.exports)
+module.exports = {
+  requireAuth,
+  requireRole,
+  requireOffice,
+  isSuperadmin
 };
