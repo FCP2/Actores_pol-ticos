@@ -30,7 +30,17 @@ exports.getPartidos = async (req, res) => {
       `SELECT id_partido, nombre, siglas
        FROM catalogo_partidos
        WHERE activo = true
-       ORDER BY nombre`
+       ORDER BY 
+         CASE siglas 
+           WHEN 'MORENA' THEN 1
+           WHEN 'PRD' THEN 2  
+           WHEN 'PAN' THEN 3
+           WHEN 'PRI' THEN 4
+           WHEN 'PVEM' THEN 5
+           WHEN 'PT' THEN 6
+           WHEN 'MC' THEN 7
+           WHEN 'OTRO' THEN 8 
+         END`
     );
     res.json(rows);
   } catch (e) {
@@ -45,7 +55,11 @@ exports.getTemasInteres = async (req, res) => {
       `SELECT id_tema, nombre, requiere_otro_texto
        FROM catalogo_temas_interes
        WHERE activo = true
-       ORDER BY id_tema`
+       ORDER BY 
+         CASE 
+           WHEN nombre = 'Otro' THEN 999
+           ELSE id_tema 
+         END`
     );
     res.json(rows);
   } catch (e) {
@@ -83,3 +97,4 @@ exports.getIdeologias = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener ideologías' });
   }
 };
+
