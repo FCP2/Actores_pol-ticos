@@ -127,11 +127,28 @@ document.getElementById('togglePass').addEventListener('click', () => {
   input.focus();
 });
 
+// ✅ Si ya hay token válido, manda a su vista
+(async function redirectIfLogged(){
+  const token = localStorage.getItem("token");
+  if (!token) return;
+
+  try {
+    const r = await fetch("/api/auth/me", {
+      headers: { Authorization: "Bearer " + token }
+    });
+    if (!r.ok) return;
+
+    const data = await r.json();
+    const roles = data?.user?.roles || [];
+    if (roles.includes("superadmin")) window.location.href = "/dashboard";
+    else window.location.href = "/captura";
+  } catch {}
+})();
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   alertBox.classList.add('d-none');
 
-  // Validación Bootstrap
   if (!form.checkValidity()) {
     form.classList.add('was-validated');
     return;
@@ -155,22 +172,12 @@ form.addEventListener('submit', async (e) => {
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
 
-    // Si "Recordarme" NO está marcado, podrías usar sessionStorage (opcional)
-    // const remember = document.getElementById('remember').checked;
-    // if(!remember){
-    //   sessionStorage.setItem('token', data.token);
-    //   sessionStorage.setItem('user', JSON.stringify(data.user));
-    //   localStorage.removeItem('token'); localStorage.removeItem('user');
-    // }
-
-    const u = data.user; // o JSON.parse(localStorage.getItem('user'))
-    const roles = u.roles || (u.rol ? [u.rol] : []);
-
+    const roles = data?.user?.roles || [];
     if (roles.includes('superadmin')) window.location.href = '/dashboard';
     else window.location.href = '/captura';
 
   }catch(err){
-    showAlert('danger', 'No se pudo conectar con el servidor. Revisa tu API.');
+    showAlert('danger', err?.message || 'No se pudo conectar con el servidor.');
   }finally{
     setLoading(false);
   }
