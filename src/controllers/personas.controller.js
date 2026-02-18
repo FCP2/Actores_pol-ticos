@@ -391,7 +391,8 @@ exports.createPersonaCompleta = async (req, res) => {
       experiencia_laboral = [],
       empresas_persona = [],
       fuentes_consulta = [],
-      municipios_trabajo = [] // ✅ ya lo tomamos aquí en lugar de req.body después
+      municipios_trabajo = [], // ✅ ya lo tomamos aquí en lugar de req.body después
+      liderazgo_influencia = null,
     } = req.body;
 
     // -------------------------
@@ -432,6 +433,114 @@ exports.createPersonaCompleta = async (req, res) => {
       return res.status(400).json({
         error: 'No puede haber cargos de elección popular si se marca "No ha ocupado cargos de elección popular"'
       });
+    }
+
+    //validaciones y mas
+    const LID_NIVELES = new Set(["alto", "medio", "bajo", "nulo"]);
+    const LID_TIPOS = new Set([
+      "territorial",
+      "politico_institucional",
+      "social_comunitario",
+      "empresarial",
+      "mediatico",
+      "tecnico_especializado",
+      "otro"
+    ]);
+    const LID_PRESENCIAS = new Set(["permanente", "eventual", "nula"]);
+
+    function normalizeStr(s) {
+      return (s ?? "").toString().trim();
+    }
+
+    function normalizeArray(arr) {
+      if (!Array.isArray(arr)) return [];
+      return arr.map(x => normalizeStr(x)).filter(Boolean);
+    }
+
+    function validateLiderazgo(lid) {
+      if (!lid || typeof lid !== "object") return { ok: true, data: null };
+
+      const nivel = normalizeStr(lid.nivel).toLowerCase() || null;
+      const tipos = normalizeArray(lid.tipos).map(t => t.toLowerCase());
+      const tipo_otro_texto = normalizeStr(lid.tipo_otro_texto) || null;
+
+      const cuentaRaw = lid.cuenta_con_estructura;
+      const cuenta_con_estructura =
+        cuentaRaw === null || cuentaRaw === undefined ? null : !!cuentaRaw;
+
+      const presencia_territorial = normalizeStr(lid.presencia_territorial).toLowerCase() || null;
+
+      // si viene totalmente vacío, lo tratamos como null (no insert)
+      const tieneAlgo =
+        nivel || tipos.length || tipo_otro_texto ||
+        cuenta_con_estructura !== null || presencia_territorial;
+
+      if (!tieneAlgo) return { ok: true, data: null };
+
+      // validaciones
+      if (nivel && !LID_NIVELES.has(nivel)) {
+        return { ok: false, error: "nivel de liderazgo inválido" };
+      }
+
+      for (const t of tipos) {
+        if (!LID_TIPOS.has(t)) return { ok: false, error: "tipo de liderazgo inválido" };
+      }
+
+      if (presencia_territorial && !LID_PRESENCIAS.has(presencia_territorial)) {
+        return { ok: false, error: "presencia territorial inválida" };
+      }
+
+      // si incluye "otro", exige texto
+      if (tipos.includes("otro") && !tipo_otro_texto) {
+        return { ok: false, error: 'Si seleccionas "Otro", captura tipo_otro_texto' };
+      }
+
+      // si NO incluye "otro", limpia texto
+      const otroFinal = tipos.includes("otro") ? tipo_otro_texto : null;
+
+      return {
+        ok: true,
+        data: {
+          nivel,
+          tipos,
+          tipo_otro_texto: otroFinal,
+          cuenta_con_estructura,
+          presencia_territorial
+        }
+      };
+    }
+
+    // ===============================
+    // VALIDACIÓN RESIDENCIAS (FUERA EDOMEX) - BACKEND
+    // ===============================
+    const legalFuera = persona.res_legal_fuera_edomex === true;
+    const realFuera  = persona.res_real_fuera_edomex === true;
+
+    function hasText(x) { return !!(x || "").toString().trim(); }
+
+    if (legalFuera) {
+      if (persona.municipio_residencia_legal != null) {
+        return res.status(400).json({ error: "Residencia legal: si es fuera EdoMéx, municipio_residencia_legal debe ser null." });
+      }
+      if (!hasText(persona.res_legal_estado_texto) || !hasText(persona.res_legal_municipio_texto)) {
+        return res.status(400).json({ error: "Residencia legal: captura res_legal_estado_texto y res_legal_municipio_texto." });
+      }
+    } else {
+      // si NO es fuera, no permitas textos
+      persona.res_legal_estado_texto = null;
+      persona.res_legal_municipio_texto = null;
+    }
+
+    if (realFuera) {
+      if (persona.municipio_residencia_real != null) {
+        return res.status(400).json({ error: "Residencia actual: si es fuera EdoMéx, municipio_residencia_real debe ser null." });
+      }
+      if (!hasText(persona.res_real_estado_texto) || !hasText(persona.res_real_municipio_texto)) {
+        return res.status(400).json({ error: "Residencia actual: captura res_real_estado_texto y res_real_municipio_texto." });
+      }
+    } else {
+      persona.res_real_estado_texto = null;
+      persona.res_real_municipio_texto = null;
     }
 
     // -------------------------
@@ -490,6 +599,15 @@ exports.createPersonaCompleta = async (req, res) => {
         sin_servicio_publico, ha_contendido_eleccion,
         creado_por,
         municipio_residencia_legal, municipio_residencia_real, municipio_trabajo_politico,
+
+        -- 🔥 NUEVO BLOQUE RESIDENCIAS
+        res_legal_fuera_edomex,
+        res_legal_estado_texto,
+        res_legal_municipio_texto,
+        res_real_fuera_edomex,
+        res_real_estado_texto,
+        res_real_municipio_texto,
+
         sin_controversias_publicas,
         id_partido_actual, partido_otro_texto,
         id_grupo_postulacion,
@@ -499,7 +617,11 @@ exports.createPersonaCompleta = async (req, res) => {
         id_oficina,
         nivel_confiabilidad
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+        $15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25,$26,$27,$28,$29
+      )
       RETURNING id_persona
       `,
       [
@@ -517,6 +639,15 @@ exports.createPersonaCompleta = async (req, res) => {
         persona.municipio_residencia_legal || null,
         persona.municipio_residencia_real || null,
         persona.municipio_trabajo_politico || null,
+
+        // 🔥 NUEVOS CAMPOS RESIDENCIA
+        persona.res_legal_fuera_edomex ?? false,
+        persona.res_legal_estado_texto || null,
+        persona.res_legal_municipio_texto || null,
+        persona.res_real_fuera_edomex ?? false,
+        persona.res_real_estado_texto || null,
+        persona.res_real_municipio_texto || null,
+
         persona.sin_controversias_publicas ?? null,
         persona.id_partido_actual || null,
         persona.partido_otro_texto || null,
@@ -525,7 +656,7 @@ exports.createPersonaCompleta = async (req, res) => {
         persona.sin_cargos_eleccion_popular ?? null,
         persona.foto_url || null,
         oficinaFinal,
-        nc // ✅ aquí va el valor final
+        nc
       ]
     );
 
@@ -656,12 +787,18 @@ exports.createPersonaCompleta = async (req, res) => {
           detail: { temp_id: p?.temp_id || null, periodo }
         });
       }
-
+      const idRelSent = p?.id_relacion_sentimental ? Number(p.id_relacion_sentimental) : null;
       const { rows } = await client.query(
-        `INSERT INTO parejas (id_persona, nombre_pareja, tipo_relacion, periodo)
-         VALUES ($1,$2,$3,$4)
-         RETURNING id_pareja`,
-        [id_persona, p.nombre_pareja || null, p.tipo_relacion || null, periodo || null]
+        `INSERT INTO parejas (id_persona, nombre_pareja, tipo_relacion, periodo, id_relacion_sentimental)
+        VALUES ($1,$2,$3,$4,$5)
+        RETURNING id_pareja`,
+        [
+          id_persona,
+          p.nombre_pareja || null,
+          p.tipo_relacion || null,
+          periodo || null,
+          Number.isFinite(idRelSent) ? idRelSent : null
+        ]
       );
 
       if (p.temp_id) parejaMap.set(p.temp_id, rows[0].id_pareja);
@@ -674,8 +811,15 @@ exports.createPersonaCompleta = async (req, res) => {
       const id_pareja = h.pareja_temp_id ? (parejaMap.get(h.pareja_temp_id) || null) : null;
 
       await client.query(
-        `INSERT INTO hijos (id_persona, id_pareja, anio_nacimiento, sexo) VALUES ($1,$2,$3,$4)`,
-        [id_persona, id_pareja, h.anio_nacimiento || null, h.sexo || null]
+        `INSERT INTO hijos (id_persona, id_pareja, anio_nacimiento, anios, sexo)
+            VALUES ($1,$2,$3,$4,$5)`,
+        [
+          id_persona, 
+          id_pareja, 
+          h.anio_nacimiento || null, 
+          h.anios ?? null,
+          h.sexo || null
+        ]
       );
     }
 
@@ -818,14 +962,15 @@ exports.createPersonaCompleta = async (req, res) => {
       if (!tieneAlgo) continue;
 
       await client.query(
-        `INSERT INTO referentes_politicos (id_persona, nivel, nombres, apellido_paterno, apellido_materno)
-         VALUES ($1,$2,$3,$4,$5)`,
+        `INSERT INTO referentes_politicos (id_persona, nivel, nombres, apellido_paterno, apellido_materno, cargo)
+          VALUES ($1,$2,$3,$4,$5,$6)`,
         [
           id_persona,
           ref.nivel || null,
           ref.nombres || null,
           ref.apellido_paterno || null,
-          ref.apellido_materno || null
+          ref.apellido_materno || null,
+          ref.cargo || null
         ]
       );
     }
@@ -896,26 +1041,70 @@ exports.createPersonaCompleta = async (req, res) => {
     // -------------------------
     // CARGOS ELECCIÓN POPULAR
     // -------------------------
-    for (const c of cargos_eleccion_popular) {
-      const tieneAlgo = c?.periodo || c?.cargo || c?.partido_postulante || c?.modalidad;
+    for (const c of (cargos_eleccion_popular || [])) {
+      const idOrden = c?.id_orden_gobierno ? Number(c.id_orden_gobierno) : null;
+      const idCargo = c?.id_cargo_catalogo ? Number(c.id_cargo_catalogo) : null;
+      const idPart  = c?.id_partido_postulante ? Number(c.id_partido_postulante) : null;
+
+      const es_suplente =
+        c?.es_suplente === true ||
+        String(c?.es_suplente).toLowerCase() === "true" ||
+        Number(c?.es_suplente) === 1;
+
+      const titular = (c?.titular_candidatura || "").toString().trim();
+
+      const tieneAlgo =
+        c?.periodo || c?.cargo || c?.partido_postulante || c?.modalidad ||
+        idOrden || idCargo || idPart ||
+        es_suplente || titular;
+
       if (!tieneAlgo) continue;
 
-      if (!c.cargo || !c.periodo) {
+      // requeridos base
+      if (!c.periodo || !Number.isFinite(idOrden) || !Number.isFinite(idCargo)) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Cada cargo de elección popular requiere periodo y cargo" });
+        return res.status(400).json({
+          error: "Cada cargo de elección popular requiere periodo, orden de gobierno y cargo"
+        });
       }
 
-      if (c.modalidad && !["mr", "rp"].includes(c.modalidad)) {
+      // modalidad
+      const modalidad = c.modalidad ? String(c.modalidad).toLowerCase() : null;
+      if (modalidad && !["mr", "rp", "pm"].includes(modalidad)) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "modalidad inválida (mr|rp)" });
+        return res.status(400).json({ error: "modalidad inválida (mr|rp|pm)" });
+      }
+
+      // ✅ si es suplente, titular obligatorio
+      if (es_suplente && !titular) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: 'Si "es_suplente" es true, "titular_candidatura" es obligatorio.'
+        });
       }
 
       await client.query(
-        `INSERT INTO cargos_eleccion_popular (id_persona, periodo, cargo, partido_postulante, modalidad)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [id_persona, c.periodo || null, c.cargo || null, c.partido_postulante || null, c.modalidad || null]
+        `INSERT INTO cargos_eleccion_popular
+          (id_persona, periodo, modalidad,
+          id_orden_gobierno, id_cargo_catalogo, id_partido_postulante,
+          cargo, partido_postulante,
+          es_suplente, titular_candidatura)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [
+          id_persona,
+          c.periodo || null,
+          modalidad,
+          idOrden,
+          idCargo,
+          Number.isFinite(idPart) ? idPart : null,
+          c.cargo || null,               // legacy
+          c.partido_postulante || null,  // legacy
+          es_suplente,
+          es_suplente ? (titular || null) : null
+        ]
       );
     }
+
 
     // -------------------------
     // EXPERIENCIA LABORAL
@@ -937,15 +1126,25 @@ exports.createPersonaCompleta = async (req, res) => {
     for (const e of empresas_persona) {
       const nombre = (e?.nombre_empresa || "").trim();
       const rol = (e?.rol || "").trim();
+      const rol_otro = (e?.rol_otro || "").trim();
+      const nombre_relacionado = (e?.nombre_relacionado || "").trim();
+      const relacion = (e?.relacion || "").trim();
+
       const periodo = normalizePeriodo(e?.periodo);
       const notas = (e?.notas || "").trim();
 
-      const tieneAlgo = nombre || rol || periodo || notas;
+      const tieneAlgo =
+        nombre || rol || rol_otro || nombre_relacionado || relacion || periodo || notas;
       if (!tieneAlgo) continue;
 
       if (!nombre) {
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "Cada empresa requiere nombre_empresa" });
+      }
+
+      if (rol.toLowerCase() === "otro" && !rol_otro) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: 'Si el rol es "Otro", captura el rol (rol_otro).' });
       }
 
       if (periodo && !isPeriodoValido(periodo)) {
@@ -954,9 +1153,19 @@ exports.createPersonaCompleta = async (req, res) => {
       }
 
       await client.query(
-        `INSERT INTO empresas_persona (id_persona, nombre_empresa, rol, periodo, notas)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [id_persona, nombre, rol || null, periodo || null, notas || null]
+        `INSERT INTO empresas_persona
+          (id_persona, nombre_empresa, rol, rol_otro, nombre_relacionado, relacion, periodo, notas)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          id_persona,
+          nombre,
+          rol || null,
+          rol_otro || null,
+          nombre_relacionado || null,
+          relacion || null,
+          periodo || null,
+          notas || null
+        ]
       );
     }
 
@@ -1024,6 +1233,31 @@ exports.createPersonaCompleta = async (req, res) => {
          VALUES ($1,$2,true)
          ON CONFLICT (id_persona, id_municipio) DO UPDATE SET es_principal = true`,
         [id_persona, principal]
+      );
+    }
+    // -------------------------
+    // LIDERAZGO E INFLUENCIA
+    // -------------------------
+    const vLid = validateLiderazgo(liderazgo_influencia);
+    if (!vLid.ok) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: vLid.error });
+    }
+
+    if (vLid.data) {
+      const d = vLid.data;
+      await client.query(
+        `INSERT INTO liderazgo_influencia
+          (id_persona, nivel, tipos, tipo_otro_texto, cuenta_con_estructura, presencia_territorial)
+        VALUES ($1,$2,$3,$4,$5,$6)`,
+        [
+          id_persona,
+          d.nivel,
+          d.tipos,                 // text[]
+          d.tipo_otro_texto,
+          d.cuenta_con_estructura,
+          d.presencia_territorial
+        ]
       );
     }
 
@@ -2563,6 +2797,90 @@ exports.checkDuplicado = async (req, res) => {
   }
 };
 
+function validateLiderazgo(input) {
+  if (input == null) return { ok: true, data: null };
+
+  if (typeof input === "string") {
+    try { input = JSON.parse(input); } catch {}
+  }
+  if (typeof input !== "object") {
+    return { ok: false, error: "liderazgo_influencia inválido (formato)" };
+  }
+
+  const nivel = (input.nivel || "").toString().trim().toLowerCase() || null;
+  const nivelesValidos = ["alto", "medio", "bajo", "nulo"];
+
+  const CANON = {
+    "territorial": "territorial",
+    "politico_institucional": "politico_institucional",
+    "politico-institucional": "politico_institucional",
+    "social_comunitario": "social_comunitario",
+    "social-comunitario": "social_comunitario",
+    "social/comunitario": "social_comunitario",
+    "empresarial": "empresarial",
+    "mediatico": "mediatico",
+    "tecnico_especializado": "tecnico_especializado",
+    "tecnico-especializado": "tecnico_especializado",
+    "tecnico/especializado": "tecnico_especializado",
+    "otro": "otro",
+  };
+
+  const normalizaTipo = (t) => {
+    if (!t) return "";
+    const raw = t.toString()
+      .replace("–", "-")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    return CANON[raw] || raw;
+  };
+
+  const tipos = Array.isArray(input.tipos) ? input.tipos : [];
+  const tiposNorm = tipos.map(normalizaTipo).filter(Boolean);
+  const tiposValidos = new Set(Object.values(CANON));
+
+  let tipo_otro_texto = (input.tipo_otro_texto || "").toString().trim() || null;
+  if (tiposNorm.includes("otro")) {
+    if (!tipo_otro_texto) return { ok:false, error:"Si seleccionas 'Otro' en tipo de liderazgo, captura el texto." };
+  } else {
+    tipo_otro_texto = null;
+  }
+
+  // boolean seguro
+  const c = input.cuenta_con_estructura;
+  let cuenta_con_estructura = null;
+  if (c === true || c === false) cuenta_con_estructura = c;
+  else if (typeof c === "string") {
+    if (c === "true") cuenta_con_estructura = true;
+    else if (c === "false") cuenta_con_estructura = false;
+  }
+
+  const presencia_territorial = (input.presencia_territorial || "").toString().trim().toLowerCase() || null;
+  const presValidas = ["permanente", "eventual", "nula"];
+  if (presencia_territorial && !presValidas.includes(presencia_territorial)) {
+    return { ok:false, error:"presencia_territorial inválida (permanente|eventual|nula)" };
+  }
+
+  const tieneAlgo =
+    !!nivel || tiposNorm.length > 0 || !!tipo_otro_texto ||
+    cuenta_con_estructura !== null || !!presencia_territorial;
+
+  if (!tieneAlgo) return { ok:true, data:null };
+
+  if (!nivel) return { ok:false, error:"Liderazgo: selecciona nivel." };
+  if (!nivelesValidos.includes(nivel)) return { ok:false, error:"Liderazgo: nivel inválido." };
+
+  if (!tiposNorm.length) return { ok:false, error:"Liderazgo: selecciona al menos un tipo." };
+
+  for (const t of tiposNorm) {
+    if (!tiposValidos.has(t)) return { ok:false, error:`Liderazgo: tipo inválido (${t}).` };
+  }
+
+  return {
+    ok: true,
+    data: { nivel, tipos: tiposNorm, tipo_otro_texto, cuenta_con_estructura, presencia_territorial }
+  };
+}
 
 //editar 
 
@@ -2593,7 +2911,8 @@ exports.updatePersonaCompleta = async (req, res) => {
       cargos_eleccion_popular = [],
       experiencia_laboral = [],
       empresas_persona=[],
-      fuentes_consulta=[]
+      fuentes_consulta=[],
+      liderazgo_influencia = null,
     } = req.body;
 
 
@@ -2674,7 +2993,37 @@ exports.updatePersonaCompleta = async (req, res) => {
         error: 'No puede haber cargos de elección popular si se marca "No ha ocupado cargos de elección popular"'
       });
     }
+    
+    //validaciones
+    // ===== Validación RESIDENCIAS FUERA EDOMEX =====
+    const legalFuera = persona.res_legal_fuera_edomex === true;
+    const realFuera  = persona.res_real_fuera_edomex === true;
+    const hasText = (x) => !!(x || "").toString().trim();
 
+    if (legalFuera) {
+      if (persona.municipio_residencia_legal != null) {
+        return res.status(400).json({ error: "Residencia legal: si es fuera EdoMéx, municipio_residencia_legal debe ser null." });
+      }
+      if (!hasText(persona.res_legal_estado_texto) || !hasText(persona.res_legal_municipio_texto)) {
+        return res.status(400).json({ error: "Residencia legal: captura Estado y Municipio/Alcaldía (texto)." });
+      }
+    } else {
+      // si NO es fuera, no permitas textos
+      persona.res_legal_estado_texto = null;
+      persona.res_legal_municipio_texto = null;
+    }
+
+    if (realFuera) {
+      if (persona.municipio_residencia_real != null) {
+        return res.status(400).json({ error: "Residencia actual: si es fuera EdoMéx, municipio_residencia_real debe ser null." });
+      }
+      if (!hasText(persona.res_real_estado_texto) || !hasText(persona.res_real_municipio_texto)) {
+        return res.status(400).json({ error: "Residencia actual: captura Estado y Municipio/Alcaldía (texto)." });
+      }
+    } else {
+      persona.res_real_estado_texto = null;
+      persona.res_real_municipio_texto = null;
+    }
     await client.query("BEGIN");
         // 🔒 Validar existencia + permisos de edición
     const { rows: ownerRows } = await client.query(
@@ -2725,47 +3074,69 @@ exports.updatePersonaCompleta = async (req, res) => {
         escala_influencia = $9,
         sin_servicio_publico = $10,
         ha_contendido_eleccion = $11,
+
         municipio_residencia_legal = $12,
         municipio_residencia_real = $13,
         municipio_trabajo_politico = $14,
-        sin_controversias_publicas = $15,
-        id_partido_actual = $16,
-        partido_otro_texto = $17,
-        id_grupo_postulacion = $18,
-        id_ideologia_politica = $19,
-        sin_cargos_eleccion_popular = $20,
-        foto_url = $21,
-        id_oficina = $22,
+
+        -- 🔥 NUEVO: residencias fuera EdoMéx
+        res_legal_fuera_edomex = $15,
+        res_legal_estado_texto = $16,
+        res_legal_municipio_texto = $17,
+        res_real_fuera_edomex = $18,
+        res_real_estado_texto = $19,
+        res_real_municipio_texto = $20,
+
+        sin_controversias_publicas = $21,
+        id_partido_actual = $22,
+        partido_otro_texto = $23,
+        id_grupo_postulacion = $24,
+        id_ideologia_politica = $25,
+        sin_cargos_eleccion_popular = $26,
+        foto_url = $27,
+        id_oficina = $28,
         updated_at = now(),
-        modificado_por = $23,
-        nivel_confiabilidad = $24
+        modificado_por = $29,
+        nivel_confiabilidad = $30
       WHERE id_persona = $1
       `,
       [
         id_persona,
+
         persona.nombre,
-        persona.apellido_paterno || null,
-        persona.apellido_materno || null,
-        persona.curp || null,
-        persona.rfc || null,
-        persona.clave_elector || null,
-        persona.estado_civil || null,
-        persona.escala_influencia || null,
+        persona.apellido_paterno ?? null,
+        persona.apellido_materno ?? null,
+        persona.curp ?? null,
+        persona.rfc ?? null,
+        persona.clave_elector ?? null,
+        persona.estado_civil ?? null,
+        persona.escala_influencia ?? null,
         persona.sin_servicio_publico ?? false,
         persona.ha_contendido_eleccion ?? null,
-        persona.municipio_residencia_legal || null,
-        persona.municipio_residencia_real || null,
-        persona.municipio_trabajo_politico || null,
+
+        persona.municipio_residencia_legal ?? null,
+        persona.municipio_residencia_real ?? null,
+        persona.municipio_trabajo_politico ?? null,
+
+        // 🔥 residencias fuera EdoMéx
+        persona.res_legal_fuera_edomex ?? false,
+        persona.res_legal_estado_texto ?? null,
+        persona.res_legal_municipio_texto ?? null,
+        persona.res_real_fuera_edomex ?? false,
+        persona.res_real_estado_texto ?? null,
+        persona.res_real_municipio_texto ?? null,
+
         persona.sin_controversias_publicas ?? null,
-        persona.id_partido_actual || null,
-        persona.partido_otro_texto || null,
-        persona.id_grupo_postulacion || null,
-        persona.id_ideologia_politica || null,
+        persona.id_partido_actual ?? null,
+        persona.partido_otro_texto ?? null,
+        persona.id_grupo_postulacion ?? null,
+        persona.id_ideologia_politica ?? null,
         persona.sin_cargos_eleccion_popular ?? null,
-        persona.foto_url || null,
-        oficinaFinal,
-         req.user.id_usuario,                         // $23 ✅ modificado_por
-        persona.nivel_confiabilidad = nc,
+        persona.foto_url ?? null,
+
+        oficinaFinal,               // OJO: ver nota abajo
+        req.user.id_usuario,        // modificado_por
+        nc                          // ✅ nivel_confiabilidad (NO asignar dentro)
       ]
     );
 
@@ -2902,11 +3273,19 @@ exports.updatePersonaCompleta = async (req, res) => {
         });
       }
 
+      const idRelSent = p?.id_relacion_sentimental ? Number(p.id_relacion_sentimental) : null;
+
       const { rows } = await client.query(
-        `INSERT INTO parejas (id_persona, nombre_pareja, tipo_relacion, periodo)
-         VALUES ($1,$2,$3,$4)
-         RETURNING id_pareja`,
-        [id_persona, p.nombre_pareja || null, p.tipo_relacion || null, periodo || null]
+        `INSERT INTO parejas (id_persona, nombre_pareja, tipo_relacion, periodo, id_relacion_sentimental)
+        VALUES ($1,$2,$3,$4,$5)
+        RETURNING id_pareja`,
+        [
+          id_persona,
+          p.nombre_pareja || null,
+          p.tipo_relacion || null,
+          periodo || null,
+          Number.isFinite(idRelSent) ? idRelSent : null
+        ]
       );
 
       if (p.temp_id) parejaMap.set(p.temp_id, rows[0].id_pareja);
@@ -2921,9 +3300,15 @@ exports.updatePersonaCompleta = async (req, res) => {
         (h.pareja_temp_id ? (parejaMap.get(h.pareja_temp_id) || null) : null);
 
       await client.query(
-        `INSERT INTO hijos (id_persona, id_pareja, anio_nacimiento, sexo)
-         VALUES ($1,$2,$3,$4)`,
-        [id_persona, idPareja, h.anio_nacimiento || null, h.sexo || null]
+        `INSERT INTO hijos (id_persona, id_pareja, anio_nacimiento, anios, sexo)
+            VALUES ($1,$2,$3,$4,$5)`,
+        [
+          id_persona, 
+          idPareja, 
+          h.anio_nacimiento || null, 
+          h.anios ?? null,
+          h.sexo || null
+        ]
       );
     }
 
@@ -3056,18 +3441,29 @@ exports.updatePersonaCompleta = async (req, res) => {
 
     // empresas_persona:
     await del("empresas_persona");
+
     for (const em of empresas_persona) {
       const nombre = (em?.nombre_empresa || "").toString().trim();
-      const rol    = (em?.rol || "").toString().trim() || null;
-      const notas  = (em?.notas || "").toString().trim() || null;
-      const periodo = normalizePeriodo(em?.periodo); // ✅ igual que parejas
+      const rol = (em?.rol || "").toString().trim();
+      const rol_otro = (em?.rol_otro || "").toString().trim();
+      const nombre_relacionado = (em?.nombre_relacionado || "").toString().trim();
+      const relacion = (em?.relacion || "").toString().trim();
 
-      const tieneAlgo = nombre || rol || periodo || notas;
+      const notas = (em?.notas || "").toString().trim() || null;
+      const periodo = normalizePeriodo(em?.periodo);
+
+      const tieneAlgo =
+        nombre || rol || rol_otro || nombre_relacionado || relacion || periodo || notas;
       if (!tieneAlgo) continue;
 
       if (!nombre) {
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "Cada empresa requiere nombre_empresa" });
+      }
+
+      if (rol.toLowerCase() === "otro" && !rol_otro) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: 'Si el rol es "Otro", captura el rol (rol_otro).' });
       }
 
       if (periodo && !isPeriodoValido(periodo)) {
@@ -3076,9 +3472,19 @@ exports.updatePersonaCompleta = async (req, res) => {
       }
 
       await client.query(
-        `INSERT INTO empresas_persona (id_persona, nombre_empresa, rol, periodo, notas)
-        VALUES ($1,$2,$3,$4,$5)`,
-        [id_persona, nombre, rol, periodo || null, notas]
+        `INSERT INTO empresas_persona
+          (id_persona, nombre_empresa, rol, rol_otro, nombre_relacionado, relacion, periodo, notas)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          id_persona,
+          nombre,
+          rol || null,
+          rol_otro || null,
+          nombre_relacionado || null,
+          relacion || null,
+          periodo || null,
+          notas
+        ]
       );
     }
     // 11) Equipos
@@ -3101,9 +3507,14 @@ exports.updatePersonaCompleta = async (req, res) => {
       if (!tieneAlgo) continue;
 
       await client.query(
-        `INSERT INTO referentes_politicos (id_persona, nivel, nombres, apellido_paterno, apellido_materno)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [id_persona, ref.nivel || null, ref.nombres || null, ref.apellido_paterno || null, ref.apellido_materno || null]
+        `INSERT INTO referentes_politicos (id_persona, nivel, nombres, apellido_paterno, apellido_materno, cargo)
+          VALUES ($1,$2,$3,$4,$5,$6)`,
+        [id_persona, ref.nivel || null, 
+          ref.nombres || null, 
+          ref.apellido_paterno || null, 
+          ref.apellido_materno || null,
+          ref.cargo || null
+        ]
       );
     }
 
@@ -3164,23 +3575,77 @@ exports.updatePersonaCompleta = async (req, res) => {
 
     // 16) Cargos elección popular
     await del("cargos_eleccion_popular");
-    for (const c of cargos_eleccion_popular) {
-      const tieneAlgo = c?.periodo || c?.cargo || c?.partido_postulante || c?.modalidad;
+
+    for (const c of (cargos_eleccion_popular || [])) {
+      const idOrden = c?.id_orden_gobierno ? Number(c.id_orden_gobierno) : null;
+      const idCargo = c?.id_cargo_catalogo ? Number(c.id_cargo_catalogo) : null;
+      const idPart  = c?.id_partido_postulante ? Number(c.id_partido_postulante) : null;
+
+      const periodo = (c?.periodo || "").toString().trim() || null;
+      const modalidad = (c?.modalidad || "").toString().trim().toLowerCase() || null;
+
+      // ✅ NUEVO: suplente + titular (tomados DESDE c)
+      const es_suplente = c?.es_suplente === true;
+      const titular = (c?.titular_candidatura || "").toString().trim(); // string (puede quedar "")
+
+      // legacy opcional
+      const cargoLegacy = (c?.cargo || "").toString().trim() || null;
+      const partidoLegacy = (c?.partido_postulante || "").toString().trim() || null;
+
+      const tieneAlgo =
+        !!periodo ||
+        !!modalidad ||
+        Number.isFinite(idOrden) ||
+        Number.isFinite(idCargo) ||
+        Number.isFinite(idPart) ||
+        !!cargoLegacy ||
+        !!partidoLegacy ||
+        es_suplente ||
+        !!titular;
+
       if (!tieneAlgo) continue;
 
-      if (!c.cargo || !c.periodo) {
+      // ✅ Requeridos base
+      if (!periodo || !Number.isFinite(idOrden) || !Number.isFinite(idCargo)) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Cada cargo de elección popular requiere periodo y cargo" });
+        return res.status(400).json({
+          error: "Cada cargo de elección popular requiere periodo, orden de gobierno y cargo"
+        });
       }
-      if (c.modalidad && !["mr", "rp"].includes(c.modalidad)) {
+
+      // ✅ modalidad (tu CHECK en BD solo permite mr/rp o null)
+      if (modalidad && !["mr", "rp"].includes(modalidad)) {
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "modalidad inválida (mr|rp)" });
       }
 
+      // ✅ Blindaje suplente (además del CHECK en BD)
+      if (es_suplente && !titular) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: 'Si "Fue suplente" está activado, "Titular de la candidatura" es obligatorio.'
+        });
+      }
+
       await client.query(
-        `INSERT INTO cargos_eleccion_popular (id_persona, periodo, cargo, partido_postulante, modalidad)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [id_persona, c.periodo || null, c.cargo || null, c.partido_postulante || null, c.modalidad || null]
+        `INSERT INTO cargos_eleccion_popular
+          (id_persona, periodo, modalidad,
+          id_orden_gobierno, id_cargo_catalogo, id_partido_postulante,
+          cargo, partido_postulante,
+          es_suplente, titular_candidatura)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [
+          id_persona,
+          periodo,
+          modalidad || null,
+          idOrden,
+          idCargo,
+          Number.isFinite(idPart) ? idPart : null,
+          cargoLegacy,
+          partidoLegacy,
+          es_suplente,
+          es_suplente ? (titular || null) : null // ✅ si NO es suplente => NULL (para pasar CHECK)
+        ]
       );
     }
 
@@ -3256,6 +3721,36 @@ exports.updatePersonaCompleta = async (req, res) => {
         [id_persona, principal]
       );
     }
+
+    // X) Liderazgo e influencia (1:1)
+    const vLid = validateLiderazgo(liderazgo_influencia);
+    if (!vLid.ok) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: vLid.error });
+    }
+
+    // ✅ enfoque actual: si no hay data => borrar
+    if (!vLid.data) {
+      await client.query(`DELETE FROM liderazgo_influencia WHERE id_persona = $1`, [id_persona]);
+    } else {
+      const d = vLid.data;
+
+      // ✅ upsert (no necesitas borrar antes)
+      await client.query(
+        `INSERT INTO liderazgo_influencia
+          (id_persona, nivel, tipos, tipo_otro_texto, cuenta_con_estructura, presencia_territorial, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6, now())
+        ON CONFLICT (id_persona) DO UPDATE SET
+          nivel = EXCLUDED.nivel,
+          tipos = EXCLUDED.tipos,
+          tipo_otro_texto = EXCLUDED.tipo_otro_texto,
+          cuenta_con_estructura = EXCLUDED.cuenta_con_estructura,
+          presencia_territorial = EXCLUDED.presencia_territorial,
+          updated_at = now()`,
+        [id_persona, d.nivel, d.tipos, d.tipo_otro_texto, d.cuenta_con_estructura, d.presencia_territorial]
+      );
+    }
+
     await client.query("COMMIT");
     return res.json({ ok: true, id_persona });
   } catch (e) {
@@ -3369,6 +3864,15 @@ exports.getPayloadEdicion = async (req, res) => {
         nombre, apellido_paterno, apellido_materno, curp, rfc, clave_elector,
         estado_civil, escala_influencia, sin_servicio_publico, ha_contendido_eleccion,
         municipio_residencia_legal, municipio_residencia_real, municipio_trabajo_politico,
+
+        -- 🔥 RESIDENCIAS FUERA EDOMEX
+        res_legal_fuera_edomex,
+        res_legal_estado_texto,
+        res_legal_municipio_texto,
+        res_real_fuera_edomex,
+        res_real_estado_texto,
+        res_real_municipio_texto,
+
         sin_controversias_publicas,
         id_partido_actual, partido_otro_texto,
         id_grupo_postulacion,
@@ -3391,6 +3895,14 @@ exports.getPayloadEdicion = async (req, res) => {
     }
 
     const persona = pRows[0];
+    if (!persona.res_legal_fuera_edomex) {
+      persona.res_legal_estado_texto = null;
+      persona.res_legal_municipio_texto = null;
+    }
+    if (!persona.res_real_fuera_edomex) {
+      persona.res_real_estado_texto = null;
+      persona.res_real_municipio_texto = null;
+    }
 
     // 2️⃣ Auditoría (DESPUÉS de tener persona)
     const roles = req.user?.roles || [];
@@ -3452,6 +3964,7 @@ exports.getPayloadEdicion = async (req, res) => {
       experiencia_laboral,
       fuentes_consulta,
       municipios_trabajo,
+      liderazgoRow,
     ] = await Promise.all([
       // telefonos (PK: id_telefono)
       client.query(
@@ -3465,28 +3978,30 @@ exports.getPayloadEdicion = async (req, res) => {
       // parejas (PK: id_pareja) + temp_id para compatibilidad front
       client.query(
         `SELECT
-           id_pareja,
-           id_pareja AS temp_id,
-           nombre_pareja,
-           tipo_relacion,
-           periodo
-         FROM parejas
-         WHERE id_persona = $1
-         ORDER BY id_pareja ASC`,
+          id_pareja,
+          id_pareja AS temp_id,
+          nombre_pareja,
+          tipo_relacion,
+          periodo,
+          id_relacion_sentimental
+        FROM parejas
+        WHERE id_persona = $1
+        ORDER BY id_pareja ASC`,
         [id_persona]
       ).then(r => r.rows),
 
       // hijos (PK: id_hijo) + pareja_temp_id para compatibilidad front
       client.query(
         `SELECT
-           id_hijo,
-           id_pareja,
-           id_pareja AS pareja_temp_id,
-           anio_nacimiento,
-           sexo
-         FROM hijos
-         WHERE id_persona = $1
-         ORDER BY id_hijo ASC`,
+          id_hijo,
+          id_pareja,
+          id_pareja AS pareja_temp_id,
+          anio_nacimiento,
+          anios,
+          sexo
+        FROM hijos
+        WHERE id_persona = $1
+        ORDER BY id_hijo ASC`,
         [id_persona]
       ).then(r => r.rows),
 
@@ -3501,7 +4016,15 @@ exports.getPayloadEdicion = async (req, res) => {
 
       // empresas_persona (PK: id_empresa_persona)
       client.query(
-        `SELECT id_empresa_persona, nombre_empresa, rol, periodo, notas
+        `SELECT
+          id_empresa_persona,
+          nombre_empresa,
+          rol,
+          rol_otro,
+          nombre_relacionado,
+          relacion,
+          periodo,
+          notas
         FROM empresas_persona
         WHERE id_persona = $1
         ORDER BY id_empresa_persona ASC`,
@@ -3547,7 +4070,7 @@ exports.getPayloadEdicion = async (req, res) => {
 
       // referentes_politicos (PK: id_referente)
       client.query(
-        `SELECT nivel, nombres, apellido_paterno, apellido_materno
+        `SELECT nivel, nombres, apellido_paterno, apellido_materno, cargo
          FROM referentes_politicos
          WHERE id_persona = $1
          ORDER BY id_referente ASC`,
@@ -3601,10 +4124,19 @@ exports.getPayloadEdicion = async (req, res) => {
 
       // cargos_eleccion_popular (PK: id_cargo_eleccion)
       client.query(
-        `SELECT periodo, cargo, partido_postulante, modalidad
-         FROM cargos_eleccion_popular
-         WHERE id_persona = $1
-         ORDER BY id_cargo_eleccion ASC`,
+        `SELECT
+          periodo,
+          modalidad,
+          id_orden_gobierno,
+          id_cargo_catalogo,
+          id_partido_postulante,
+          cargo,
+          partido_postulante,
+          es_suplente,
+          titular_candidatura
+        FROM cargos_eleccion_popular
+        WHERE id_persona = $1
+        ORDER BY id_cargo_eleccion ASC`,
         [id_persona]
       ).then(r => r.rows),
 
@@ -3633,6 +4165,14 @@ exports.getPayloadEdicion = async (req, res) => {
       [id_persona]
     ).then(r => r.rows),
 
+    // liderazgo_influencia (1:1)
+    client.query(
+      `SELECT nivel, tipos, tipo_otro_texto, cuenta_con_estructura, presencia_territorial
+      FROM liderazgo_influencia
+      WHERE id_persona = $1`,
+      [id_persona]
+    ).then(r => r.rows[0] || null),
+
     ]);
     
         // ✅ cargar fotos de eventos
@@ -3659,6 +4199,9 @@ exports.getPayloadEdicion = async (req, res) => {
       ev.fotos = fotosByEvento.get(ev.id_evento) || [];
     }
 
+    // ✅ AQUÍ: 3 LÍNEAS NUEVAS
+
+  
     return res.json({
       persona,
       datos_ine,
@@ -3681,6 +4224,7 @@ exports.getPayloadEdicion = async (req, res) => {
       empresas_persona,
       fuentes_consulta,
       municipios_trabajo,
+      liderazgo_influencia: liderazgoRow,
     });
   } catch (e) {
     console.error(e);
@@ -3970,4 +4514,3 @@ exports.listCapturistasByOficina = async (req, res) => {
     });
   }
 };
-
