@@ -76,11 +76,16 @@
                 <a class="small link-inst text-decoration-none" href="#" onclick="return false;">¿Olvidaste tu contraseña?</a>
               </div>-->
 
-              <button class="btn btn-inst w-100 text-white d-inline-flex align-items-center justify-content-center gap-2"
+              <button class="btn-institucional-compact w-100 text-white d-inline-flex align-items-center justify-content-center gap-1 position-relative overflow-hidden"
                       id="btnLogin"
                       type="submit">
-                <span class="spinner-border spinner-border-sm d-none" id="spinner" aria-hidden="true"></span>
-                <span id="btnText">Entrar</span>
+                <i class="bi bi-box-arrow-in-right"></i>
+                <span class="btn-text fw-semibold">Entrar</span>
+                
+                <div class="spinner-wrapper d-none">
+                  <div class="spinner-border spinner-border-sm me-1 text-gold" id="spinner" aria-hidden="true"></div>
+                  <span class="spinner-text fw-semibold fs-6">Iniciando...</span>
+                </div>
               </button>
 
               <p class="text-muted small mt-3 mb-0">
