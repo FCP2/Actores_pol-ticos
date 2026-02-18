@@ -10,8 +10,8 @@
 </head>
 
 <body>
-<script>
-  (async function guardCaptura() {
+  <script>
+    (async function guardCaptura() {
         const token = localStorage.getItem("token");
         if (!token) return (window.location.href = "/");
 
@@ -166,7 +166,7 @@
                       <i class="bi bi-person-fill me-1"></i>Nombre(s)
                     </label>
                     <input class="form-control form-control-institucional" name="nombre" 
-                          placeholder="Ej. Juan Carlos" required>
+                          placeholder="Ej. Juan Carlos">
                   </div>
 
                   <!-- APELLIDOS -->
@@ -174,13 +174,13 @@
                     <label class="form-label text-institucional">
                       <i class="bi bi-person-badge me-1"></i>Apellido paterno <code class="optional">(Obligatorio)</code>
                     </label>
-                    <input class="form-control form-control-institucional" name="apellido_paterno" required>
+                    <input class="form-control form-control-institucional" name="apellido_paterno">
                   </div>
                   <div class="col-md-4">
                     <label class="form-label text-institucional">
                       <i class="bi bi-person-badge-fill me-1"></i>Apellido materno <code class="optional">(Obligatorio)</code>
                     </label>
-                    <input class="form-control form-control-institucional" name="apellido_materno" required>
+                    <input class="form-control form-control-institucional" name="apellido_materno">
                   </div>
 
                   <!-- IDENTIFICACIONES -->
@@ -213,28 +213,12 @@
                     </label>
                     <select class="form-select form-control-institucional" name="estado_civil">
                       <option value="">Seleccione</option>
-                      <option value="Soltero">Soltero</option>
-                      <option value="Casado">Casado</option>
-                      <option value="Divorciado">Divorciado</option>
-                      <option value="Viudo">Viudo</option>
-                      <option value="Concubinato">Concubinato</option>
+                      <option value="Soltero(a)">Soltero(a)</option>
+                      <option value="Casado(a)">Casado(a)</option>
+                      <option value="Divorciado(a)">Divorciado(a)</option>
+                      <option value="Viudo(a)">Viudo(a)</option>
+                      <option value="Concubinato(a)">Concubinato(a)</option>
                     </select>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label text-institucional">
-                      <i class="bi bi-geo-alt-fill me-1"></i>Nivel territorial
-                    </label>
-                    <select class="form-select form-control-institucional" name="escala_influencia">
-                      <option value="">Seleccione</option>
-                      <option value="municipal">Municipal</option>
-                      <option value="regional">Regional</option>
-                      <option value="distrital">Distrital</option>
-                      <option value="estatal">Estatal</option>
-                      <option value="nacional">Nacional</option>
-                    </select>
-                    <div class="form-text text-muted mt-1">
-                      Si selecciona <strong>Regional</strong> o <strong>Distrital</strong>, podrá indicar los municipios de cobertura en <strong>Trabajo político</strong> 
-                    </div>
                   </div>
                 </div>
               </div>
@@ -242,6 +226,19 @@
 
             <!-- SEPARADOR -->
             <hr class="my-4 border-institucional">
+
+            <!-- Switch "Sin familiares en política" - MEJORADO -->
+            <div class="form-check form-switch mb-4 p-3 border rounded hover-shadow bg-white">
+              <input class="form-check-input shadow-none" type="checkbox" id="chkSinFamiliares" checked>
+              <label class="form-check-label text-institucional fw-medium" for="chkSinFamiliares">
+                <i class="bi bi-check-circle-fill me-2 text-success"></i>
+                Sin familiares en política / administración pública
+              </label>
+              <div class="form-text mt-1">
+                <i class="bi bi-info-circle me-1 text-gold"></i>
+                Si activas esta opción, se oculta y deshabilita la captura de familiares.
+              </div>
+            </div>
 
             <!-- FAMILIARES EN POLÍTICA -->
             <div class="card border-institucional shadow-sm mb-0">
@@ -257,6 +254,7 @@
                 <div id="familiaresContainer" class="border rounded p-3 bg-white"></div>
               </div>
             </div>
+            </div>
           </div>
         </div>
 
@@ -270,29 +268,86 @@
               Ubicación y datos electorales
             </h5>
 
-            <!-- MUNICIPIOS PRINCIPALES -->
+            <!-- MUNICIPIOS PRINCIPALES (3 columnas perfectas) -->
             <div class="row g-4 mb-5">
-              <!-- Residencia legal -->
+              
+              <!-- 1. Residencia legal -->
               <div class="col-md-4">
-                <div class="form-group position-relative hover-shadow rounded p-3">
+                <div class="form-group position-relative hover-shadow rounded p-3 h-100">
                   <label class="form-label text-institucional mb-2">
                     <i class="bi bi-house-door me-1"></i>Residencia legal
                   </label>
-                  <select class="form-select form-control-institucional" name="municipio_residencia_legal" id="mun_legal">
-                    <!-- Opciones se llenan por JS -->
-                  </select>
+
+                  <!-- Switch fuera EdoMéx -->
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="chkLegalFueraEdomex">
+                    <label class="form-check-label small text-gold" for="chkLegalFueraEdomex">
+                      <i class="bi bi-globe-americas me-1"></i>No es del EdoMéx
+                    </label>
+                  </div>
+
+                  <!-- Select EdoMéx -->
+                  <div id="wrapLegalEdomex">
+                    <select class="form-select form-control-institucional"
+                            name="municipio_residencia_legal" id="mun_legal">
+                      <!-- Opciones se llenan por JS -->
+                    </select>
+                  </div>
+
+                  <!-- Texto fuera EdoMéx -->
+                  <div id="wrapLegalFuera" class="row g-2 mt-2 d-none">
+                    <div class="col-12">
+                      <input class="form-control form-control-institucional"
+                            id="legal_estado_texto" name="legal_estado_texto"
+                            placeholder="Estado (ej. Ciudad de México)">
+                    </div>
+                    <div class="col-12">
+                      <input class="form-control form-control-institucional"
+                            id="legal_municipio_texto" name="legal_municipio_texto"
+                            placeholder="Municipio/Alcaldía (ej. Iztapalapa)">
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <!-- Residencia actual -->
+              <!-- 2. Residencia actual -->
               <div class="col-md-4">
-                <div class="form-group position-relative hover-shadow rounded p-3">
+                <div class="form-group position-relative hover-shadow rounded p-3 h-100">
                   <label class="form-label text-institucional mb-2">
                     <i class="bi bi-geo-fill me-1"></i>Residencia actual
                   </label>
-                  <select class="form-select form-control-institucional" name="municipio_residencia_real" id="mun_real">
-                    <!-- Opciones se llenan por JS -->
-                  </select>
+
+                  <!-- Switch fuera EdoMéx -->
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="chkRealFueraEdomex">
+                    <label class="form-check-label small text-gold" for="chkRealFueraEdomex">
+                      <i class="bi bi-globe-americas me-1"></i>No es del EdoMéx
+                    </label>
+                  </div>
+
+                  <!-- Select EdoMéx -->
+                  <div id="wrapRealEdomex">
+                    <select class="form-select form-control-institucional"
+                            name="municipio_residencia_real" id="mun_real">
+                      <!-- Opciones se llenan por JS -->
+                    </select>
+                  </div>
+
+                  <!-- Texto fuera EdoMéx -->
+                  <div id="wrapRealFuera" class="row g-2 mt-2 d-none">
+                    <div class="col-12">
+                      <input class="form-control form-control-institucional"
+                            id="real_estado_texto" name="real_estado_texto"
+                            placeholder="Estado (ej. Ciudad de México)">
+                    </div>
+                    <div class="col-12">
+                      <input class="form-control form-control-institucional"
+                            id="real_municipio_texto" name="real_municipio_texto"
+                            placeholder="Municipio/Alcaldía (ej. Coyoacán)">
+                    </div>
+                  </div>
+
+                  <!-- Igual que residencia legal -->
                   <div class="form-check mt-2">
                     <input class="form-check-input" type="checkbox" id="chkMunRealIgual">
                     <label class="form-check-label small text-gold" for="chkMunRealIgual">
@@ -302,83 +357,249 @@
                 </div>
               </div>
 
-              <!-- Trabajo político -->
+              <!-- 3. Espacio reservado para balance (vacío) -->
               <div class="col-md-4">
-                <div class="form-group position-relative hover-shadow rounded p-3">
-                  <label class="form-label text-institucional mb-2">
-                    <i class="bi bi-briefcase-fill me-1"></i>Trabajo político
-                  </label>
-                  <select class="form-select form-control-institucional" name="municipio_trabajo_politico" id="mun_trabajo">
-                    <!-- Opciones se llenan por JS -->
-                  </select>
-                  <!-- Cobertura trabajo político (solo si escala_influencia != municipal) -->
-                  <div id="wrapCoberturaTrabajo" class="mt-2 d-none">
-                    <div class="d-flex align-items-center justify-content-between">
-                      <label class="form-label mb-1">Cobertura de municipios (Trabajo político)</label>
-                      <span class="badge text-bg-secondary" id="lblCoberturaCount">0 seleccionados</span>
-                    </div>
-
-                    <div class="d-flex gap-2 mb-2">
-                      <input type="text" class="form-control" id="txtBuscarMunicipioCobertura" placeholder="Buscar municipio...">
-                      <button type="button" class="btn btn-outline-secondary" id="btnCoberturaAll">Todos</button>
-                      <button type="button" class="btn btn-outline-secondary" id="btnCoberturaNone">Limpiar</button>
-                    </div>
-
-                    <div id="listaCoberturaMunicipios" class="border rounded p-2 bg-white"
-                        style="max-height:240px; overflow:auto;">
-                    </div>
-
-                    <div class="form-text">
-                      Tip: el municipio “Trabajo político (principal)” se incluirá automáticamente en cobertura.
-                    </div>
-                  </div>
-                  <div class="form-check mt-2">
-                    <input class="form-check-input" type="checkbox" id="chkMunTrabajoIgual">
-                    <label class="form-check-label small text-gold" for="chkMunTrabajoIgual">
-                      <i class="bi bi-arrow-repeat me-1"></i>Igual que residencia legal
-                    </label>
-                  </div>
-                </div>
+                <!-- Sección electoral se moverá aquí para completar 3 columnas -->
               </div>
             </div>
 
-            <!-- SECCIÓN ELECTORAL -->
+            <!-- SECCIÓN ELECTORAL (3 columnas) -->
             <div class="row g-4">
+              <!-- Sección electoral -->
               <div class="col-md-4">
-                <div class="form-group position-relative hover-shadow rounded p-3">
-                  <label class="form-label text-institucional">
+                <div class="form-group position-relative hover-shadow rounded p-3 h-100">
+                  <label class="form-label text-institucional mb-2">
                     <i class="bi bi-hash me-1"></i>Sección electoral <code class="field-length">(4 dígitos)</code>
                   </label>
-                  <input class="form-control form-control-institucional number-only" 
+                  <input class="form-control form-control-institucional number-only"
                         name="ine_seccion" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" placeholder="1234">
                   <div class="form-text text-muted">Solo números</div>
                 </div>
               </div>
-              
+
+              <!-- Distrito federal -->
               <div class="col-md-4">
-                <div class="form-group position-relative hover-shadow rounded p-3">
-                  <label class="form-label text-institucional">
+                <div class="form-group position-relative hover-shadow rounded p-3 h-100">
+                  <label class="form-label text-institucional mb-2">
                     <i class="bi bi-flag-fill me-1"></i>Distrito federal <code class="field-length">(2 dígitos)</code>
                   </label>
-                  <input class="form-control form-control-institucional number-only" 
+                  <input class="form-control form-control-institucional number-only"
                         name="ine_df" maxlength="2" inputmode="numeric" pattern="[0-9]{2}" placeholder="05">
                   <div class="form-text text-muted">Ej. 05, 12, 20</div>
                 </div>
               </div>
-              
+
+              <!-- Distrito local -->
               <div class="col-md-4">
-                <div class="form-group position-relative hover-shadow rounded p-3">
-                  <label class="form-label text-institucional">
+                <div class="form-group position-relative hover-shadow rounded p-3 h-100">
+                  <label class="form-label text-institucional mb-2">
                     <i class="bi bi-building-check me-1"></i>Distrito local <code class="field-length">(2 dígitos)</code>
                   </label>
-                  <input class="form-control form-control-institucional number-only" 
+                  <input class="form-control form-control-institucional number-only"
                         name="ine_dl" maxlength="2" inputmode="numeric" pattern="[0-9]{2}" placeholder="12">
                   <div class="form-text text-muted">Solo números</div>
                 </div>
               </div>
             </div>
+
           </div>
         </div>
+
+        <!-- ================== LIDERAZGO E INFLUENCIA ================== -->
+        <div class="card mb-4 border-institucional" id="liderazgoCard">
+          <div class="card-body bg-institucional-light">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <h5 class="mb-0 card-header-custom d-inline-block">
+                <i class="bi bi-award-fill me-2"></i>
+                Liderazgo e influencia
+              </h5>
+            </div>
+
+            <!-- NIVEL DE LIDERAZGO (fila compacta) -->
+            <div class="row g-3 mb-4">
+              <div class="col-12">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <label class="form-label mb-0 fw-semibold">Nivel de liderazgo</label>
+                  <button type="button" 
+                          class="btn btn-sm btn-outline-secondary" 
+                          id="popover-liderazgo"
+                          data-bs-toggle="popover"
+                          data-bs-html="true" 
+                          data-bs-placement="right" 
+                          title="Guía rápida"
+                          data-bs-content='
+                            <div class="text-start">
+                              <strong>Alto (líder influyente)</strong><br>
+                              • Moviliza estructuras formales o informales<br>
+                              • Tiene capacidad real de decisión o veto<br>
+                              • Influye en agenda pública o política<br>
+                              • Cuenta con red territorial o institucional sólida<br><br>
+                              
+                              <strong>Medio (liderazgo regional/sectorial)</strong><br>
+                              • Influye en grupos específicos (colonias, gremios, dependencias)<br>
+                              • Tiene capacidad de convocatoria limitada<br>
+                              • Reconocido en su sector o territorio<br><br>
+                              
+                              <strong>Bajo (liderazgo emergente o limitado)</strong><br>
+                              • Influencia reducida<br>
+                              • Participación reciente o intermitente<br>
+                              • Sin estructura propia<br><br>
+                              
+                              <strong>Nulo</strong><br>
+                              • Sin liderazgo identificable
+                            </div>
+                          '>
+                    <i class="bi bi-question-circle"></i>
+                  </button>
+                </div>
+                <div class="row g-2" id="liderazgoNivelGroup">
+                  <div class="col-md-3 col-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="liderazgo_nivel" id="lid_nivel_alto" value="alto">
+                      <label class="form-check-label" for="lid_nivel_alto">Alto</label>
+                    </div>
+                  </div>
+                  <div class="col-md-3 col-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="liderazgo_nivel" id="lid_nivel_medio" value="medio">
+                      <label class="form-check-label" for="lid_nivel_medio">Medio</label>
+                    </div>
+                  </div>
+                  <div class="col-md-3 col-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="liderazgo_nivel" id="lid_nivel_bajo" value="bajo">
+                      <label class="form-check-label" for="lid_nivel_bajo">Bajo</label>
+                    </div>
+                  </div>
+                  <div class="col-md-3 col-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="liderazgo_nivel" id="lid_nivel_nulo" value="nulo">
+                      <label class="form-check-label" for="lid_nivel_nulo">Nulo</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TIPO DE LIDERAZGO (compacto responsive) -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">Tipo de liderazgo <span class="text-muted">(múltiples)</span></label>
+              <div class="row g-2" id="liderazgoTipoGroup">
+                <div class="col-lg-3 col-md-4 col-6">
+                  <div class="form-check"><input class="form-check-input lid-tipo" type="checkbox" id="lid_tipo_territorial" value="territorial"><label class="form-check-label" for="lid_tipo_territorial">Territorial</label></div>
+                </div>
+                <div class="col-lg-3 col-md-4 col-6">
+                  <div class="form-check"><input class="form-check-input lid-tipo" type="checkbox" id="lid_tipo_politico" value="politico_institucional"><label class="form-check-label" for="lid_tipo_politico">Político</label></div>
+                </div>
+                <div class="col-lg-3 col-md-4 col-6">
+                  <div class="form-check"><input class="form-check-input lid-tipo" type="checkbox" id="lid_tipo_social" value="social_comunitario"><label class="form-check-label" for="lid_tipo_social">Social</label></div>
+                </div>
+                <div class="col-lg-3 col-md-4 col-6">
+                  <div class="form-check"><input class="form-check-input lid-tipo" type="checkbox" id="lid_tipo_empresarial" value="empresarial"><label class="form-check-label" for="lid_tipo_empresarial">Empresarial</label></div>
+                </div>
+                <div class="col-lg-3 col-md-4 col-6">
+                  <div class="form-check"><input class="form-check-input lid-tipo" type="checkbox" id="lid_tipo_mediatico" value="mediatico"><label class="form-check-label" for="lid_tipo_mediatico">Mediático</label></div>
+                </div>
+                <div class="col-lg-3 col-md-4 col-6">
+                  <div class="form-check"><input class="form-check-input lid-tipo" type="checkbox" id="lid_tipo_tecnico" value="tecnico_especializado"><label class="form-check-label" for="lid_tipo_tecnico">Técnico</label></div>
+                </div>
+                <div class="col-lg-3 col-md-4 col-6">
+                  <div class="form-check"><input class="form-check-input lid-tipo" type="checkbox" id="lid_tipo_otro" value="otro"><label class="form-check-label" for="lid_tipo_otro">Otro</label></div>
+                </div>
+              </div>
+              <div class="mt-2 d-none" id="lidTipoOtroWrap">
+                <input class="form-control form-control-sm" id="lidTipoOtroTexto" maxlength="120" placeholder="Describe...">
+              </div>
+            </div>
+
+            <!-- CONTROLES DISTRIBUIDOS EN 3 COLUMNAS PERFECTAS -->
+            <div class="row g-4">
+              <!-- COLUMNA 1: Estructura -->
+              <div class="col-lg-3 col-md-6">
+                <div class="form-group position-relative hover-shadow rounded p-3 h-100">
+                  <label class="form-label text-institucional mb-2 small">
+                    <i class="bi bi-diagram-3-fill me-1"></i>Estructura
+                  </label>
+                  <select class="form-select form-control-institucional" id="lidEstructura">
+                    <option value="">Selecciona</option>
+                    <option value="true">Sí</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- COLUMNA 2: Presencia -->
+              <div class="col-lg-3 col-md-6">
+                <div class="form-group position-relative hover-shadow rounded p-3 h-100">
+                  <label class="form-label text-institucional mb-2 small">
+                    <i class="bi bi-map-fill me-1"></i>Presencia territorial
+                  </label>
+                  <select class="form-select form-control-institucional" id="lidPresencia">
+                    <option value="">Selecciona</option>
+                    <option value="permanente">Permanente</option>
+                    <option value="eventual">Eventual</option>
+                    <option value="nula">Nula</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- COLUMNA 3: Cobertura territorial (CONTENEDOR DESTACADO) -->
+              <div class="col-lg-6 col-md-12">
+                <div class="form-group position-relative hover-shadow rounded p-3 h-100 border-start border-3 border-warning ps-3">
+                  <div class="d-flex align-items-center mb-3 pb-1 border-bottom border-warning border-1 pb-2">
+                    <i class="bi bi-geo-alt-fill me-2 text-warning fs-5"></i>
+                    <h6 class="mb-0 fw-semibold text-institucional">Cobertura territorial</h6>
+                  </div>
+                  
+                  <div class="row g-2 mb-2">
+                    <div class="col-6">
+                      <label class="form-label text-institucional small mb-1">Nivel de influencia</label>
+                      <select class="form-select form-control-institucional form-select-sm" name="escala_influencia" id="escala_influencia">
+                        <option value="">Nivel</option>
+                        <option value="municipal">Municipal</option>
+                        <option value="regional">Regional</option>
+                        <option value="distrital">Distrital</option>
+                        <option value="estatal">Estatal</option>
+                        <option value="nacional">Nacional</option>
+                      </select>
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label text-institucional small mb-1">Trabajo político</label>
+                      <select class="form-select form-control-institucional form-select-sm" name="municipio_trabajo_politico" id="mun_trabajo">
+                        <!-- Opciones por JS -->
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Cobertura -->
+                  <div id="wrapCoberturaTrabajo" class="mt-2 d-none">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                      <small class="text-muted">Cobertura municipios</small>
+                      <span class="badge text-bg-secondary" id="lblCoberturaCount">0 sel.</span>
+                    </div>
+                    <div class="input-group input-group-sm mb-1">
+                      <input type="text" class="form-control" id="txtBuscarMunicipioCobertura" placeholder="Buscar...">
+                      <button class="btn btn-outline-secondary" id="btnCoberturaAll" type="button">Todos</button>
+                      <button class="btn btn-outline-secondary" id="btnCoberturaNone" type="button">Limpiar</button>
+                    </div>
+                    <div id="listaCoberturaMunicipios" class="border rounded p-2 bg-white" style="max-height:100px; overflow:auto;"></div>
+                  </div>
+
+                  <div class="form-check mt-2 pt-1">
+                    <input class="form-check-input" type="checkbox" id="chkMunTrabajoIgual">
+                    <label class="form-label small text-gold" for="chkMunTrabajoIgual">
+                      <i class="bi bi-arrow-repeat me-1"></i>Igual a residencia legal
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+
 
         <!-- ================== FORMACIÓN ACADÉMICA ================== -->
         <div class="card mb-4 border-institucional">
@@ -493,39 +714,59 @@
         </div>
 
         <!-- ================== PAREJAS ================== -->
-        <div class="card mb-4 border-institucional">
+        <div class="card mb-4 border-institucional" id="parejasCard">
           <div class="card-body bg-institucional-light">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h5 class="mb-0 card-header-custom d-inline-block">
                 <i class="bi bi-heart-fill me-2"></i>Parejas
               </h5>
-              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddPareja">
-                <i class="bi bi-plus-circle me-1"></i>Agregar
-              </button>
+
+              <div class="d-flex align-items-center gap-3">
+                <!-- ✅ Switch: No aplica / Sin parejas -->
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" id="chkSinParejas">
+                  <label class="form-check-label small" for="chkSinParejas">No aplica</label>
+                </div>
+
+                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddPareja">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+              </div>
             </div>
+
             <div class="small-muted mb-3">
               <i class="bi bi-info-circle me-1"></i>
               Tipo relación: <code class="text-gold">actual</code> o <code class="text-gold">anterior</code>.
             </div>
+
             <div id="parejasContainer" class="border rounded p-3 bg-white"></div>
           </div>
         </div>
 
         <!-- ================== HIJOS ================== -->
-        <div class="card mb-4 border-institucional">
+        <div class="card mb-4 border-institucional" id="hijosCard">
           <div class="card-body bg-institucional-light">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h5 class="mb-0 card-header-custom d-inline-block">
                 <i class="bi bi-children me-2"></i>Hijos
               </h5>
-              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddHijo">
-                <i class="bi bi-plus-circle me-1"></i>Agregar
-              </button>
+
+              <div class="d-flex align-items-center gap-3">
+                <!-- ✅ Switch: No aplica hijos -->
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" id="chkSinHijos">
+                  <label class="form-check-label small" for="chkSinHijos">No aplica</label>
+                </div>
+
+                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddHijo">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+              </div>
             </div>
+
             <div id="hijosContainer" class="border rounded p-3 bg-white"></div>
           </div>
         </div>
-
 
         <!-- ================== REDES ================== -->
         <div class="card mb-4 border-institucional">
@@ -629,7 +870,7 @@
             <div class="row g-3 align-items-end">
               <div class="col-md-9">
                 <label class="form-label text-institucional mb-2">
-                  <i class="bi bi-building-gear me-1"></i>Participación o socio de alguna empresa
+                  <i class="bi bi-building-gear me-1"></i>¿Mantiene vínculo directo o indirecto con alguna empresa?
                 </label>
                 <select class="form-select form-control-institucional" id="selTieneEmpresa" name="tiene_empresa">
                   <option value="">Seleccione</option>
@@ -820,33 +1061,64 @@
 
             <!-- EQUIPOS POLÍTICOS -->
             <div class="mb-5">
-              <div class="d-flex justify-content-between align-items-center mb-4">
+              <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="mb-0 text-institucional">
                   <i class="bi bi-diagram-3-fill me-2"></i>Equipos políticos
                 </h6>
-                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddEquipo">
-                  <i class="bi bi-plus-circle me-1"></i>Agregar equipo
-                </button>
+
+                <div class="d-flex align-items-center gap-3">
+                  <!-- ✅ SWITCH -->
+                  <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" id="chkSinEquipos">
+                    <label class="form-check-label small text-gold" for="chkSinEquipos">
+                      No aplica
+                    </label>
+                  </div>
+
+                  <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddEquipo">
+                    <i class="bi bi-plus-circle me-1"></i>Agregar equipo
+                  </button>
+                </div>
               </div>
-              <div id="equiposContainer" class="border rounded p-4 bg-white"></div>
+
+              <!-- ✅ wrapper para ocultar -->
+              <div id="wrapEquipos">
+                <div id="equiposContainer" class="border rounded p-4 bg-white"></div>
+              </div>
             </div>
 
             <hr class="my-4 border-institucional">
 
             <!-- REFERENTES POLÍTICOS -->
             <div>
-              <div class="d-flex justify-content-between align-items-center mb-4">
+              <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="mb-0 text-institucional">
                   <i class="bi bi-star-fill me-2"></i>Referentes políticos
                 </h6>
-                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddReferente">
-                  <i class="bi bi-plus-circle me-1"></i>Agregar referente
-                </button>
+
+                <div class="d-flex align-items-center gap-3">
+                  <!-- ✅ SWITCH -->
+                  <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" id="chkSinReferentes">
+                    <label class="form-check-label small text-gold" for="chkSinReferentes">
+                      Sin referentes
+                    </label>
+                  </div>
+
+                  <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddReferente">
+                    <i class="bi bi-plus-circle me-1"></i>Agregar referente
+                  </button>
+                </div>
               </div>
-              <div id="referentesContainer" class="border rounded p-4 bg-white"></div>
+
+              <!-- ✅ wrapper para ocultar -->
+              <div id="wrapReferentes">
+                <div id="referentesContainer" class="border rounded p-4 bg-white"></div>
+              </div>
             </div>
           </div>
         </div>
+
         <!-- ================== CONTROVERSIAS ================== -->
         <div class="card mb-4 border-institucional">
           <div class="card-body bg-institucional-light">
@@ -1064,6 +1336,204 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+  //cargar global
+  //recalcular edad_año
+  function clampInt(n, min, max){
+      if (!Number.isFinite(n)) return null;
+      n = Math.trunc(n);
+      if (n < min) return min;
+      if (n > max) return max;
+      return n;
+    }
+
+    function currentYear(){
+      return new Date().getFullYear();
+    }
+
+    function syncEdadAnioFromAnio(block){
+      const anioEl = block.querySelector('input[name="anio_nacimiento"]');
+      const edadEl = block.querySelector('input[name="edad_hijo"]');
+      if (!anioEl || !edadEl) return;
+
+      const anio = clampInt(Number(anioEl.value), 1900, currentYear());
+      if (!anio) { edadEl.value = ""; return; }
+
+      const edad = currentYear() - anio;
+      edadEl.value = String(edad);
+    }
+
+    function syncEdadAnioFromEdad(block){
+      const anioEl = block.querySelector('input[name="anio_nacimiento"]');
+      const edadEl = block.querySelector('input[name="edad_hijo"]');
+      if (!anioEl || !edadEl) return;
+
+      const edad = clampInt(Number(edadEl.value), 0, 120);
+      if (edad == null) { anioEl.value = ""; return; }
+
+      const anio = currentYear() - edad;
+      anioEl.value = String(anio);
+    }
+
+    // Delegación: funciona para nuevos bloques añadidos con "+"
+    document.addEventListener("input", (e) => {
+      const el = e.target;
+      if (!el) return;
+
+      // ubica el bloque .list-item del hijo
+      const block = el.closest("#hijosContainer .list-item");
+      if (!block) return;
+
+      // evita bucles: solo actúa según el campo editado
+      if (el.matches('input[name="anio_nacimiento"]')) {
+        syncEdadAnioFromAnio(block);
+      }
+      if (el.matches('input[name="edad_hijo"]')) {
+        syncEdadAnioFromEdad(block);
+      }
+    });
+        //cargar cargos dependientes
+      async function fetchCargosEleccionByOrden(idOrden) {
+        const key = String(idOrden || '');
+        if (!key) return [];
+
+        window.__cargosEleccionByOrden = window.__cargosEleccionByOrden || {};
+        if (window.__cargosEleccionByOrden[key]) return window.__cargosEleccionByOrden[key];
+
+        const rows = await apiGet(`/catalogos/cargos-eleccion?id_orden=${encodeURIComponent(key)}`);
+        window.__cargosEleccionByOrden[key] = rows || [];
+        return rows || [];
+      }
+
+      window.fillSelectFromRows= function fillSelectFromRows(sel, rows, valueKey, textKey, placeholder = "Seleccione") {
+        if (!sel) return;
+        sel.innerHTML = `<option value="">${placeholder}</option>` + (rows || []).map(r =>
+          `<option value="${r[valueKey]}">${r[textKey]}</option>`
+        ).join("");
+      }
+  //togle hijos container ocultar switch
+        window.toggleHijos= function toggleHijos() {
+          const chk = document.getElementById('chkSinHijos');
+          const sin = chk?.checked === true;
+
+          const hijosCont = document.getElementById('hijosContainer');
+          const btnAddHijo = document.getElementById('btnAddHijo');
+
+          if (hijosCont) hijosCont.classList.toggle('d-none', sin);
+
+          if (btnAddHijo) {
+            btnAddHijo.disabled = sin;
+            btnAddHijo.style.opacity = sin ? '0.65' : '1';
+          }
+
+          if (sin && hijosCont) {
+            hijosCont.innerHTML = '';
+          } else if (!sin && hijosCont && !hijosCont.children.length) {
+            hijosCont.appendChild(hijoBlock());
+          }
+
+          refreshPreview?.();
+        }
+  //parejas
+        //togle parejas:
+      window.toggleParejas = function toggleParejas() {
+        const chk = document.getElementById('chkSinParejas');
+        const sin = chk?.checked === true;
+
+        const parejasCont = document.getElementById('parejasContainer');
+        const btnAddPareja = document.getElementById('btnAddPareja');
+
+        // ✅ Ocultar SOLO contenedores (no el card)
+        if (parejasCont) parejasCont.classList.toggle('d-none', sin);
+
+        // ✅ Deshabilitar botones
+        if (btnAddPareja) {
+          btnAddPareja.disabled = sin;
+          btnAddPareja.style.opacity = sin ? '0.65' : '1';
+        }
+
+
+        if (sin) {
+          // ✅ limpiar datos
+          if (parejasCont) parejasCont.innerHTML = '';
+
+        } else {
+          // ✅ re-seed mínimos si están vacíos
+          if (parejasCont && !parejasCont.children.length) parejasCont.appendChild(parejaBlock());
+
+
+          refreshHijosParejasSelects?.();
+        }
+
+        refreshPreview?.();
+      }
+
+        // ✅ ANTES - Definir función toggleFamiliares
+      window.toggleFamiliares = function toggleFamiliares() {
+        const chkSinFamiliares = document.getElementById('chkSinFamiliares');
+        const familiaresCard   = document.getElementById('familiaresCard');
+        const familiaresCont   = document.getElementById('familiaresContainer');
+        const btnAddFamiliar   = document.getElementById('btnAddFamiliar');
+
+        const sinFam = chkSinFamiliares?.checked === true;
+
+        if (familiaresCard) {
+          familiaresCard.style.display = sinFam ? 'none' : 'block';
+        }
+
+        if (sinFam) {
+          if (familiaresCont) familiaresCont.innerHTML = '';
+          if (btnAddFamiliar) {
+            btnAddFamiliar.disabled = true;
+            btnAddFamiliar.style.opacity = '0.65';
+          }
+        } else {
+          if (btnAddFamiliar) {
+            btnAddFamiliar.disabled = false;
+            btnAddFamiliar.style.opacity = '1';
+          }
+
+          // opcional: si quieres que al activar familiares se cree 1 fila si está vacío
+          if (familiaresCont && !familiaresCont.children.length) {
+            familiaresCont.appendChild(familiarBlock());
+          }
+        }
+      }
+  // ✅ CONSTANTE BLINDA PARA FAMILIARES POLÍTICOS
+const PARENTESCOS_FAMILIARES = [
+  { value: 'padre', label: 'Padre' },
+  { value: 'madre', label: 'Madre' },
+  { value: 'hijo', label: 'Hijo' },
+  { value: 'hija', label: 'Hija' },
+  { value: 'conyuge', label: 'Cónyuge/Esposo(a)' },
+  { value: 'concubino', label: 'Concubino/a' },
+  { value: 'hermano', label: 'Hermano' },
+  { value: 'hermana', label: 'Hermana' },
+  { value: 'suegro', label: 'Suegro' },
+  { value: 'suegra', label: 'Suegra' },
+  { value: 'yerno', label: 'Yerno' },
+  { value: 'nuera', label: 'Nuera' },
+  { value: 'tio', label: 'Tío' },
+  { value: 'tia', label: 'Tía' },
+  { value: 'primo', label: 'Primo' },
+  { value: 'prima', label: 'Prima' },
+  { value: 'padrastro', label: 'Padrastro' },
+  { value: 'madrastra', label: 'Madrastra' },
+  { value: 'hijastro', label: 'Hijastro' },
+  { value: 'hijastra', label: 'Hijastra' },
+  { value: 'cuñado', label: 'Cuñado' },
+  { value: 'cuñada', label: 'Cuñada' }
+];
+//constante roles_empresa
+const ROLES_EMPRESA = [
+  "Propietario/a",
+  "Socio/a",
+  "Directivo/a",
+  "Empleado/a",
+  "Asesor/a / Consultor/a",
+  "Empresa de familiar",
+  "Empresa de amigo/a cercano/a",
+  "Otro"
+];
   //validacion de datos solo numeros
   document.querySelectorAll('.number-only').forEach(input => {
       // Bloquea letras al teclear
@@ -1306,7 +1776,7 @@ async function onDeletePersona(id_persona) {
     const setVal = (name, value) => {
       const el = document.querySelector(`[name="${name}"]`);
       if (!el) return;
-      el.value = (value ?? '') === null ? '' : String(value ?? '');
+      el.value = (value === null || value === undefined) ? '' : String(value);
     };
 
     setVal('nombre', p.nombre);
@@ -1323,6 +1793,78 @@ async function onDeletePersona(id_persona) {
     setVal('municipio_residencia_legal', p.municipio_residencia_legal);
     setVal('municipio_residencia_real', p.municipio_residencia_real);
     setVal('municipio_trabajo_politico', p.municipio_trabajo_politico);
+
+      // ===============================
+      // MUNICIPIOS: EdoMéx vs Fuera (CORREGIDO a tu BD)
+      // ===============================
+
+      // Front inputs (HTML) siguen igual:
+      setVal('legal_estado_texto',     p.res_legal_estado_texto);
+      setVal('legal_municipio_texto',  p.res_legal_municipio_texto);
+      setVal('real_estado_texto',      p.res_real_estado_texto);
+      setVal('real_municipio_texto',   p.res_real_municipio_texto);
+
+      // Detecta “fuera” (primero bandera real, si no, por textos)
+      const legalEstadoTxt = (p.res_legal_estado_texto || "").toString().trim();
+      const legalMunTxt    = (p.res_legal_municipio_texto || "").toString().trim();
+      const realEstadoTxt  = (p.res_real_estado_texto || "").toString().trim();
+      const realMunTxt     = (p.res_real_municipio_texto || "").toString().trim();
+
+      const legalFuera = (p.res_legal_fuera_edomex === true) || !!legalEstadoTxt || !!legalMunTxt;
+      const realFuera  = (p.res_real_fuera_edomex  === true) || !!realEstadoTxt  || !!realMunTxt;
+
+      const chkLegalFuera = document.getElementById("chkLegalFueraEdomex");
+      const chkRealFuera  = document.getElementById("chkRealFueraEdomex");
+
+      if (chkLegalFuera) chkLegalFuera.checked = !!legalFuera;
+      if (chkRealFuera)  chkRealFuera.checked  = !!realFuera;
+
+      // Aplica UI correctamente (con parámetro)
+      toggleResidenciaFueraEdomex?.("legal", legalFuera);
+      toggleResidenciaFueraEdomex?.("real",  realFuera);
+
+      // ✅ Reglas de “Igual que residencia legal” (deducido del payload)
+      const chkMunRealIgual = document.getElementById("chkMunRealIgual");
+
+      // IDs de municipio (cuando es EdoMéx)
+      const legalId = p.municipio_residencia_legal ? String(p.municipio_residencia_legal) : "";
+      const realId  = p.municipio_residencia_real  ? String(p.municipio_residencia_real)  : "";
+
+      // Deducir “igual”
+      const esIgual =
+        (!legalFuera && !realFuera && legalId && realId && legalId === realId) ||
+        ( legalFuera &&  realFuera &&
+          legalEstadoTxt && legalMunTxt &&
+          legalEstadoTxt.toLowerCase() === realEstadoTxt.toLowerCase() &&
+          legalMunTxt.toLowerCase() === realMunTxt.toLowerCase()
+        );
+
+      if (chkMunRealIgual) chkMunRealIgual.checked = !!esIgual;
+      const munReal = document.getElementById("mun_real");
+      if (munReal) munReal.disabled = !!esIgual;
+      
+      if (esIgual) {
+        // Forzar que REAL herede el modo de LEGAL
+        if (chkRealFuera) chkRealFuera.checked = !!legalFuera;
+        toggleResidenciaFueraEdomex?.("real", legalFuera);
+
+        if (legalFuera) {
+          // copiar textos
+          setVal('real_estado_texto', legalEstadoTxt);
+          setVal('real_municipio_texto', legalMunTxt);
+
+          // limpiar select real para respetar CHECK (municipio_residencia_real debe NULL)
+          setVal('municipio_residencia_real', '');
+        } else {
+          // copiar ID (select)
+          setVal('municipio_residencia_real', p.municipio_residencia_legal);
+
+          // limpiar textos real
+          setVal('real_estado_texto', '');
+          setVal('real_municipio_texto', '');
+        }
+      }
+
 
     // 2) datos_ine
     const ine = payload.datos_ine || {};
@@ -1369,21 +1911,42 @@ async function onDeletePersona(id_persona) {
       b.querySelector('input[name="nombre_pareja"]').value = it.nombre_pareja || '';
       b.querySelector('select[name="tipo_relacion"]').value = it.tipo_relacion || '';
 
+      // ✅ nuevo
+      const selRel = b.querySelector('select[name="id_relacion_sentimental"]');
+      if (selRel) {
+        const v = it.id_relacion_sentimental ?? '';
+        selRel.value = String(v || '');
+      }
+
       const inpPeriodo = b.querySelector('input[name="periodo"]');
       if (inpPeriodo) inpPeriodo.value = it.periodo || '';
     });
+
+    // ✅ switch según payload (si no hay parejas => No aplica ON)
+    const chkSinParejas = document.getElementById('chkSinParejas');
+    if (chkSinParejas) chkSinParejas.checked = ((payload.parejas || []).length === 0);
+
+    window.toggleParejas?.(); // (la creamos abajo)
 
     // refresca selects de hijos con parejas cargadas
     refreshHijosParejasSelects();
 
     // 4) hijos
     rebuildList('hijosContainer', payload.hijos || [], hijoBlock, (b, it) => {
-      b.querySelector('input[name="anio_nacimiento"]').value = it.anio_nacimiento || '';
       b.querySelector('select[name="sexo"]').value = it.sexo || '';
+
       const sel = b.querySelector('select[name="pareja_temp_id"]');
       fillHijoParejaSelect(sel);
-      sel.value = it.pareja_temp_id || '';
+      sel.value = it.pareja_temp_id || it.id_pareja || '';
+
+      const aniosEl = b.querySelector('input[name="anios"]');
+      if (aniosEl) aniosEl.value = (it.anios ?? '');
     });
+
+    const chkHijos = document.getElementById('chkSinHijos');
+    if (chkHijos) chkHijos.checked = ((payload.hijos || []).length === 0);
+
+    window.toggleHijos?.();
 
     // 5) telefonos
     rebuildList('telefonosContainer', payload.telefonos || [], telefonoBlock, (b, it) => {
@@ -1449,10 +2012,12 @@ async function onDeletePersona(id_persona) {
     rebuildList('referentesContainer', payload.referentes || [], referenteBlock, (b, it) => {
       b.querySelector('select[name="nivel"]').value = it.nivel || '';
 
-      const n = b.querySelector('input[name="nombres"]');
+      const c  = b.querySelector('input[name="cargo"]');            // ✅ NUEVO
+      const n  = b.querySelector('input[name="nombres"]');
       const ap = b.querySelector('input[name="apellido_paterno"]');
       const am = b.querySelector('input[name="apellido_materno"]');
 
+      if (c)  c.value  = it.cargo || '';                            // ✅ NUEVO
       if (n)  n.value  = it.nombres || '';
       if (ap) ap.value = it.apellido_paterno || '';
       if (am) am.value = it.apellido_materno || '';
@@ -1468,25 +2033,106 @@ async function onDeletePersona(id_persona) {
       });
     }
 
-    // 13) familiares
+    // 13) familiares - SELECT parentesco
     rebuildList('familiaresContainer', payload.familiares || [], familiarBlock, (b, it) => {
-      b.querySelector('input[name="nombre"]').value = it.nombre || '';
-      b.querySelector('input[name="parentesco"]').value = it.parentesco || '';
-      b.querySelector('input[name="cargo"]').value = it.cargo || '';
-      b.querySelector('input[name="institucion"]').value = it.institucion || '';
-    });
+      const $ = (sel) => b.querySelector(sel);
 
-    //14 ELECCION POPULAR
+      const inpNombre = $('input[name="nombre"]');
+      const selPar    = $('select[name="parentesco"]');
+      const inpCargo  = $('input[name="cargo"]');
+      const inpInst   = $('input[name="institucion"]');
+
+      if (inpNombre) inpNombre.value = it.nombre || '';
+      if (inpCargo)  inpCargo.value  = it.cargo || '';
+      if (inpInst)   inpInst.value   = it.institucion || '';
+
+      if (selPar) {
+        const v = (it.parentesco || '').trim();
+
+        // ✅ setea si existe la opción; si no, deja vacío (o pon "otro" si lo manejas)
+        const hasOption = Array.from(selPar.options).some(o => o.value === v);
+        selPar.value = hasOption ? v : '';
+      }
+    });
+    // ✅ Sync switch "Sin familiares" con el payload
+    const fam = payload.familiares || [];
+    const chk = document.getElementById('chkSinFamiliares');
+    if (chk) chk.checked = (fam.length === 0);
+
+    // ✅ aplicar UI según el switch ya sincronizado
+    toggleFamiliares?.();
+
+    // 14 ELECCION POPULAR
     const chkSinCargos = document.getElementById('chkSinCargosEleccion');
     if (chkSinCargos) chkSinCargos.checked = !!p.sin_cargos_eleccion_popular;
 
     const cargos = payload.cargos_eleccion_popular || [];
+
     rebuildList('cargosEleccionContainer', cargos, cargoEleccionBlock, (b, it) => {
       b.querySelector('input[name="periodo"]').value = it.periodo || '';
+      b.querySelector('select[name="modalidad"]').value = it.modalidad || '';
+
+      const selOrden = b.querySelector('select[name="id_orden_gobierno"]');
+      const selPart  = b.querySelector('select[name="id_partido_postulante"]');
+
+      if (selOrden) selOrden.value = it.id_orden_gobierno ? String(it.id_orden_gobierno) : '';
+      if (selPart)  selPart.value  = it.id_partido_postulante ? String(it.id_partido_postulante) : '';
+
+      b.dataset.cargoDeseado = it.id_cargo_catalogo ? String(it.id_cargo_catalogo) : '';
+
+      // legacy
       b.querySelector('input[name="cargo"]').value = it.cargo || '';
       b.querySelector('input[name="partido_postulante"]').value = it.partido_postulante || '';
-      b.querySelector('select[name="modalidad"]').value = it.modalidad || '';
+
+      // ✅ NUEVO: suplente + titular
+      const chkSupl = b.querySelector('input[name="es_suplente"]');
+      const wrapSupl = b.querySelector('[data-suplt-wrap]');
+      const inpTit = b.querySelector('input[name="titular_candidatura"]');
+
+      const esSupl = it.es_suplente === true;
+
+      if (chkSupl) chkSupl.checked = esSupl;
+      wrapSupl?.classList.toggle("d-none", !esSupl);
+
+      if (inpTit) {
+        inpTit.value = esSupl ? (it.titular_candidatura || "") : "";
+        inpTit.classList.remove("is-invalid", "is-valid");
+      }
     });
+    (async function hydrateCargosEleccionSelects() {
+      const blocks = document.querySelectorAll("#cargosEleccionContainer .list-item");
+
+      for (const b of blocks) {
+        const selOrden = b.querySelector('select[name="id_orden_gobierno"]');
+        const selCargo = b.querySelector('select[name="id_cargo_catalogo"]');
+
+        if (!selOrden || !selCargo) continue;
+
+        const idOrden = Number(selOrden.value || 0) || null;
+        if (!idOrden) {
+          selCargo.disabled = true;
+          selCargo.innerHTML = `<option value="">Seleccione orden primero</option>`;
+          continue;
+        }
+
+        selCargo.disabled = true;
+        selCargo.innerHTML = `<option value="">Cargando...</option>`;
+
+        try {
+          const cargosRows = await fetchCargosEleccionByOrden(idOrden);
+          fillSelectFromRows(selCargo, cargosRows, "id_cargo", "nombre", "Seleccione");
+          selCargo.disabled = false;
+
+          const cargoDeseado = b.dataset.cargoDeseado || "";
+          if (cargoDeseado) selCargo.value = cargoDeseado;
+        } catch (e) {
+          console.error(e);
+          selCargo.innerHTML = `<option value="">Error al cargar</option>`;
+          selCargo.disabled = true;
+        }
+      }
+    })();
+
     // ✅ Formación académica (single)
     const fa = (payload.formacion_academica || [])[0] || {};
 
@@ -1576,19 +2222,26 @@ async function onDeletePersona(id_persona) {
     rebuildList('empresasContainer', empresas_persona, empresaBlock, (b, it) => {
       const $ = (q) => b.querySelector(q);
 
-      const inpNombre  = $('input[name="empresa_nombre"]');
-      const inpRol     = $('input[name="empresa_rol"]');
-      const inpPeriodo = $('input[name="empresa_periodo"]');
-      const inpNotas   = $('input[name="empresa_notas"]');
+      const inpNombre = $('input[name="empresa_nombre"]');
+      const selRol    = $('select[name="empresa_rol"]');
+      const inpRolOtro= $('input[name="empresa_rol_otro"]');
+      const inpPeriodo= $('input[name="empresa_periodo"]');
+      const txtNotas  = $('textarea[name="empresa_notas"]'); // ✅ ahora textarea
+      const inpNomRel = $('input[name="empresa_nombre_relacionado"]');
+      const inpRel    = $('input[name="empresa_relacion"]');
+      const hidId     = $('input[name="id_empresa_persona"]');
 
       if (inpNombre)  inpNombre.value  = it?.nombre_empresa ?? '';
-      if (inpRol)     inpRol.value     = it?.rol ?? '';
+      if (selRol)     selRol.value     = it?.rol ?? '';
+      if (inpRolOtro) inpRolOtro.value = it?.rol_otro ?? '';
       if (inpPeriodo) inpPeriodo.value = it?.periodo ?? '';
-      if (inpNotas)   inpNotas.value   = it?.notas ?? '';
+      if (txtNotas)   txtNotas.value   = it?.notas ?? '';
+      if (inpNomRel)  inpNomRel.value  = it?.nombre_relacionado ?? '';
+      if (inpRel)     inpRel.value     = it?.relacion ?? '';
+      if (hidId)      hidId.value      = it?.id_empresa_persona ?? '';
 
-      // opcional: si tu bloque trae hidden id para futuro (no estorba)
-      const hidId = $('input[name="id_empresa_persona"]');
-      if (hidId) hidId.value = it?.id_empresa_persona ?? '';
+      // 💡 importante: disparar change del rol para que muestre/oculte "rol_otro"
+      if (selRol) selRol.dispatchEvent(new Event("change"));
     });
 
     //SIN SERVICIO PUBLICO
@@ -1690,6 +2343,49 @@ async function onDeletePersona(id_persona) {
     if (inpFec) {
       inpFec.value = fechaRaw ? String(fechaRaw).slice(0, 10) : "";
     }
+    // =====================
+    // LIDERAZGO E INFLUENCIA (apply)
+    // =====================
+    const lid = payload.liderazgo_influencia || null;
+
+    // nivel (radio)
+    document.querySelectorAll('input[name="liderazgo_nivel"]').forEach(r => (r.checked = false));
+    if (lid?.nivel) {
+      const r = document.querySelector(`input[name="liderazgo_nivel"][value="${lid.nivel}"]`);
+      if (r) r.checked = true;
+    }
+
+    // tipos (checkbox)
+    document.querySelectorAll('.lid-tipo').forEach(ch => (ch.checked = false));
+    const tipos = Array.isArray(lid?.tipos) ? lid.tipos : [];
+    tipos.forEach(v => {
+      const chk = document.querySelector(`.lid-tipo[value="${v}"]`);
+      if (chk) chk.checked = true;
+    });
+
+    // otro texto
+    const txtOtro = document.getElementById('lidTipoOtroTexto');
+    if (txtOtro) txtOtro.value = lid?.tipo_otro_texto || '';
+
+    // estructura (select true/false/"")
+    const selEst = document.getElementById('lidEstructura');
+    if (selEst) {
+      if (lid?.cuenta_con_estructura === true) selEst.value = 'true';
+      else if (lid?.cuenta_con_estructura === false) selEst.value = 'false';
+      else selEst.value = '';
+    }
+
+    // presencia
+    const selPre = document.getElementById('lidPresencia');
+    if (selPre) selPre.value = lid?.presencia_territorial || '';
+
+    // ✅ mostrar/ocultar wrap otro (ID correcto)
+    document.getElementById('lid_tipo_otro')?.dispatchEvent(new Event('change', { bubbles:true }));
+
+    // ✅ fallback si no hay listener
+    if (typeof toggleLidTipoOtroWrap === "function") {
+      toggleLidTipoOtroWrap();
+    }
   }
 
   function fillSelect(el, rows, valueKey, textKey, placeholder = 'Seleccione') {
@@ -1708,78 +2404,115 @@ async function onDeletePersona(id_persona) {
   const toBoolOrNull = (v) => (v === 'true') ? true : (v === 'false') ? false : null;
 
   // ---------- UI Blocks ----------
-    //empresa block
-  function empresaBlock() {
-    const div = document.createElement('div');
-    div.className = 'list-item';
+    function empresaBlock() {
+      const div = document.createElement('div');
+      div.className = 'list-item';
 
-    div.innerHTML = `
-      <div class="row g-2 align-items-end">
-        <div class="col-md-4">
-          <label class="form-label">Nombre de la empresa</label>
-          <input class="form-control" name="empresa_nombre" maxlength="200" autocomplete="off">
+      div.innerHTML = `
+        <div class="row g-2 align-items-end">
+          
+          <div class="col-md-4">
+            <label class="form-label">Nombre de la empresa</label>
+            <input class="form-control" name="empresa_nombre" maxlength="200" autocomplete="off">
+            <div class="invalid-feedback">Captura el nombre de la empresa.</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Tipo de vínculo</label>
+            <select class="form-select" name="empresa_rol">
+              <option value="">—</option>
+              ${ROLES_EMPRESA.map(r => `<option value="${r}">${r}</option>`).join("")}
+            </select>
+          </div>
+
+          <!-- 👇 SIN ID REPETIDO -->
+          <div class="col-md-3 d-none" data-role-otro-wrap>
+            <label class="form-label">Rol (Otro)</label>
+            <input class="form-control" name="empresa_rol_otro" maxlength="120" placeholder="Especifica el rol">
+            <div class="invalid-feedback">Captura el rol.</div>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Periodo</label>
+            <input class="form-control" name="empresa_periodo" placeholder="2025 o 2025-2026" maxlength="9">
+            <div class="invalid-feedback">Usa 2025 o 2025-2026.</div>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Nombre del titular principal o persona relacionada</label>
+            <input class="form-control" name="empresa_nombre_relacionado" maxlength="200" autocomplete="off">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Relación</label>
+            <input class="form-control" name="empresa_relacion" maxlength="120" placeholder="Ej. Socio, familiar, amigo, etc.">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Observaciones relevantes</label>
+            <textarea 
+              class="form-control" 
+              name="empresa_notas" 
+              rows="2" 
+              maxlength="500"
+              style="resize: vertical;"
+            ></textarea>
+          </div>
+
+          <div class="col-md-1 text-end">
+            <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+          </div>
+
+          <input type="hidden" name="id_empresa_persona">
         </div>
+      `;
 
-        <div class="col-md-3">
-          <label class="form-label">Rol (opcional)</label>
-          <input class="form-control" name="empresa_rol" maxlength="120" placeholder="Socio / Colaborador">
-        </div>
+      const inpPeriodo = div.querySelector('input[name="empresa_periodo"]');
+      const selRol = div.querySelector('select[name="empresa_rol"]');
+      const wrapRolOtro = div.querySelector('[data-role-otro-wrap]');
+      const inpRolOtro = div.querySelector('input[name="empresa_rol_otro"]');
 
-        <div class="col-md-2">
-          <label class="form-label">Periodo (opcional)</label>
-          <input class="form-control" name="empresa_periodo" placeholder="2025 o 2025-2026" maxlength="9">
-          <div class="invalid-feedback">Usa 2025 o 2025-2026.</div>
-        </div>
+      function toggleRolOtro() {
+        const v = (selRol?.value || "").trim().toLowerCase();
+        const esOtro = v === "otro";
 
-        <div class="col-md-2">
-          <label class="form-label">Notas (opcional)</label>
-          <input class="form-control" name="empresa_notas" maxlength="200">
-        </div>
+        wrapRolOtro?.classList.toggle("d-none", !esOtro);
 
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-        </div>
-      </div>
-    `;
-    const inpPeriodo = div.querySelector('input[name="empresa_periodo"]');
-
-    if (inpPeriodo) {
-      inpPeriodo.addEventListener('blur', () => {
-        const val = inpPeriodo.value.trim();
-        if (!val) {
-          inpPeriodo.classList.remove('is-invalid');
-          return;
+        if (!esOtro && inpRolOtro) {
+          inpRolOtro.value = "";
+          inpRolOtro.classList.remove("is-invalid");
         }
-
-        const re = /^\d{4}(-\d{4})?$/;
-
-        if (!re.test(val)) {
-          inpPeriodo.classList.add('is-invalid');
-        } else {
-          inpPeriodo.classList.remove('is-invalid');
-        }
-      });
-    }
-    div.querySelector('.btnRemove').addEventListener('click', () => {
-      div.remove();
-      refreshPreview?.();
-    });
-
-    // valida periodo en vivo (si ya tienes isPeriodoValido/normalizePeriodo)
-    const inpPer = div.querySelector('input[name="empresa_periodo"]');
-    inpPer?.addEventListener('input', () => {
-      const v = (inpPer.value || '').trim();
-      if (!v) {
-        inpPer.classList.remove('is-invalid');
-        return;
       }
-      inpPer.classList.toggle('is-invalid', !isPeriodoValido(v));
-    });
 
-    div.addEventListener('input', () => refreshPreview?.());
-    div.addEventListener('change', () => refreshPreview?.());
-    return div;
-  }
+      selRol?.addEventListener("change", () => {
+        toggleRolOtro();
+        refreshPreview?.();
+      });
+
+      // Validación periodo
+      if (inpPeriodo) {
+        inpPeriodo.addEventListener('blur', () => {
+          const val = inpPeriodo.value.trim();
+          if (!val) {
+            inpPeriodo.classList.remove('is-invalid');
+            return;
+          }
+
+          const re = /^\d{4}(-\d{4})?$/;
+          inpPeriodo.classList.toggle('is-invalid', !re.test(val));
+        });
+      }
+
+      div.querySelector('.btnRemove')?.addEventListener('click', () => {
+        div.remove();
+        refreshPreview?.();
+      });
+
+      // Estado inicial correcto
+      toggleRolOtro();
+
+      return div;
+    }
+  
 //eventos
 function movEventoBlock() {
   const div = document.createElement('div');
@@ -2099,14 +2832,16 @@ function movEventoBlock() {
     div.className = 'list-item';
     div.dataset.tempId = tempId;
 
+    const rels = window.__relSentCatalog || [];
+
     div.innerHTML = `
       <div class="row g-2 align-items-end">
-        <div class="col-md-5">
+        <div class="col-md-4">
           <label class="form-label">Nombre pareja</label>
           <input class="form-control" name="nombre_pareja" maxlength="150" autocomplete="off">
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label">Tipo relación</label>
           <select class="form-select" name="tipo_relacion">
             <option value="">Seleccione</option>
@@ -2115,7 +2850,16 @@ function movEventoBlock() {
           </select>
         </div>
 
-        <div class="col-md-2">
+        <!-- ✅ NUEVO: relación sentimental (catálogo) -->
+        <div class="col-md-3">
+          <label class="form-label">Relación sentimental</label>
+          <select class="form-select" name="id_relacion_sentimental">
+            <option value="">Seleccione</option>
+            ${rels.map(r => `<option value="${r.id_relacion_sentimental}">${r.nombre}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="col-md-3">
           <label class="form-label">Año o periodo</label>
           <input class="form-control" name="periodo"
                 placeholder="2025 o 2015-2025"
@@ -2136,7 +2880,6 @@ function movEventoBlock() {
       refreshHijosParejasSelects();
     });
 
-    // opcional: permitir sólo dígitos, espacios y guion
     div.addEventListener('input', () => {
       const inp = div.querySelector('input[name="periodo"]');
       if (inp) inp.value = inp.value.replace(/[^\d\- ]/g, '');
@@ -2146,23 +2889,26 @@ function movEventoBlock() {
 
     return div;
   }
-
- function hijoBlock() {
+// hijos block (solo Edad -> anios)
+function hijoBlock() {
   const div = document.createElement('div');
   div.className = 'list-item';
+
   div.innerHTML = `
     <div class="row g-2 align-items-end">
-      <div class="col-md-4">
+      <div class="col-md-5">
         <label class="form-label">Con quién</label>
         <select class="form-select" name="pareja_temp_id">
           <option value="">(Sin especificar)</option>
         </select>
       </div>
-      <div class="col-md-4">
-        <label class="form-label">Año nacimiento</label>
-        <input type="number" class="form-control" name="anio_nacimiento" min="1900" max="2100">
-      </div>
+
       <div class="col-md-3">
+        <label class="form-label">Edad (aprox.)</label>
+        <input type="number" class="form-control" name="anios" min="0" max="120" placeholder="Ej. 12">
+      </div>
+
+      <div class="col-md-2">
         <label class="form-label">Género</label>
         <select class="form-select" name="sexo">
           <option value="">Seleccione</option>
@@ -2170,7 +2916,8 @@ function movEventoBlock() {
           <option value="M">M</option>
         </select>
       </div>
-      <div class="col-md-1 text-end">
+
+      <div class="col-md-2 text-end">
         <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
       </div>
     </div>
@@ -2178,7 +2925,6 @@ function movEventoBlock() {
 
   div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
 
-  // ✅ llena SOLO este select (no depende del DOM global)
   const sel = div.querySelector('select[name="pareja_temp_id"]');
   fillHijoParejaSelect(sel);
 
@@ -2311,20 +3057,20 @@ function refreshHijosParejasSelects() {
 
       return div;
   }
-//elecciones block
+  //elecciones block
   function eleccionBlock() {
     const div = document.createElement('div');
     div.className = 'list-item border rounded-3 p-3 mb-2';
 
     div.innerHTML = `
       <div class="row g-2">
-
-        <div class="col-6 col-lg-2">
+        
+        <div class="col-12 col-md-3 col-lg-2">
           <label class="form-label">Año</label>
           <input type="number" class="form-control" name="anio_eleccion" min="1900" max="2100" inputmode="numeric">
         </div>
 
-        <div class="col-6 col-lg-2">
+        <div class="col-12 col-md-3 col-lg-2">
           <label class="form-label">Resultado</label>
           <select class="form-select" name="resultado">
             <option value="">Seleccione</option>
@@ -2333,22 +3079,22 @@ function refreshHijosParejasSelects() {
           </select>
         </div>
 
-        <div class="col-12 col-lg-4">
+        <div class="col-12 col-md-6 col-lg-4">
           <label class="form-label">Candidatura</label>
           <input class="form-control" name="candidatura" placeholder="Ej. Presidencia municipal">
         </div>
 
-        <div class="col-12 col-lg-2">
+        <div class="col-12 col-md-3 col-lg-2">
           <label class="form-label">Partido</label>
           <input class="form-control" name="partido_postulacion" placeholder="Ej. PAN / PRI / MORENA">
         </div>
 
-        <div class="col-6 col-lg-1">
+        <div class="col-6 col-md-3 col-lg-1">
           <label class="form-label">Votos</label>
           <input type="number" class="form-control" name="diferencia_votos" min="0" inputmode="numeric">
         </div>
 
-        <div class="col-6 col-lg-1">
+        <div class="col-6 col-md-3 col-lg-1">
           <label class="form-label">% Dif.</label>
           <div class="input-group">
             <input
@@ -2375,6 +3121,7 @@ function refreshHijosParejasSelects() {
     div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
     return div;
   }
+
 
   function equipoBlock() {
     const div = document.createElement('div');
@@ -2420,16 +3167,21 @@ function refreshHijosParejasSelects() {
         </div>
 
         <div class="col-md-3">
+          <label class="form-label">Cargo</label>
+          <input class="form-control" name="cargo" autocomplete="off" placeholder="Ej. Líder social / Dirigente / ...">
+        </div>
+
+        <div class="col-md-2">
           <label class="form-label">Nombre(s)</label>
           <input class="form-control" name="nombres" autocomplete="off">
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label">Apellido paterno</label>
           <input class="form-control" name="apellido_paterno" autocomplete="off">
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label">Apellido materno</label>
           <input class="form-control" name="apellido_materno" autocomplete="off">
         </div>
@@ -2555,87 +3307,181 @@ function refreshHijosParejasSelects() {
       return div;
     }
 
-  function familiarBlock() {
-    const div = document.createElement('div');
-    div.className = 'list-item';
-    div.innerHTML = `
-      <div class="row g-2 align-items-end">
-        <div class="col-md-4">
-          <label class="form-label">Nombre</label>
-          <input class="form-control" name="nombre">
+    function familiarBlock() {
+      const div = document.createElement('div');
+      div.className = 'list-item';
+      div.innerHTML = `
+        <div class="row g-2 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label">Nombre</label>
+            <input class="form-control" name="nombre" placeholder="Ej. Juan Pérez">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Parentesco</label>
+            <select class="form-control form-select" name="parentesco">
+              <option value="">Selecciona...</option>
+              ${PARENTESCOS_FAMILIARES.map(p => 
+                `<option value="${p.value}">${p.label}</option>`
+              ).join('')}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Cargo</label>
+            <input class="form-control" name="cargo" placeholder="Ej. Diputado">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Institución</label>
+            <input class="form-control" name="institucion" placeholder="Ej. Congreso">
+          </div>
+          <div class="col-md-1 text-end">
+            <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+          </div>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">Parentesco</label>
-          <input class="form-control" name="parentesco" placeholder="Hermano / Padre / etc">
+      `;
+      
+      // ✅ Evento del botón X (igual que tenías)
+      div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+      
+      return div;
+    }
+
+
+    //Eleccion popular
+    let cargoEleccionCounter = 0;
+
+    function cargoEleccionBlock() {
+      cargoEleccionCounter += 1;
+
+      const div = document.createElement("div");
+      div.className = "list-item";
+
+      const ordenes = window.__ordenGobCatalog || [];
+      const partidos = window.__partidosCatalog || [];
+
+      div.innerHTML = `
+        <div class="row g-2 align-items-end">
+
+          <div class="col-md-2">
+            <label class="form-label">Periodo</label>
+            <input class="form-control" name="periodo" placeholder="2021 o 2018-2021" maxlength="9">
+            <div class="invalid-feedback">Usa AAAA o AAAA-AAAA.</div>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Orden</label>
+            <select class="form-select" name="id_orden_gobierno">
+              <option value="">Seleccione</option>
+              ${ordenes.map(o => `<option value="${o.id_orden}">${o.nombre}</option>`).join("")}
+            </select>
+            <div class="invalid-feedback">Selecciona el orden.</div>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Cargo</label>
+            <select class="form-select" name="id_cargo_catalogo" disabled>
+              <option value="">Seleccione orden primero</option>
+            </select>
+            <div class="invalid-feedback">Selecciona el cargo.</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Partido postulante</label>
+            <select class="form-select" name="id_partido_postulante">
+              <option value="">—</option>
+              ${partidos.map(p => `<option value="${p.id_partido}">${p.nombre}</option>`).join("")}
+            </select>
+          </div>
+
+          <div class="col-md-1">
+            <label class="form-label">MR/RP</label>
+            <select class="form-select" name="modalidad">
+              <option value="">—</option>
+              <option value="mr">MR</option>
+              <option value="rp">RP</option>
+              <option value="pm">PM</option>
+            </select>
+          </div>
+
+          <!-- ✅ Suplente -->
+          <div class="col-md-3 mt-2">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="es_suplente" id="chkSupl_${cargoEleccionCounter}">
+              <label class="form-check-label" for="chkSupl_${cargoEleccionCounter}">
+                Fue suplente
+              </label>
+            </div>
+          </div>
+
+          <!-- ✅ Titular (solo si es suplente) -->
+          <div class="col-md-9 mt-2 d-none" data-suplt-wrap>
+            <label class="form-label">Titular de la candidatura</label>
+            <input class="form-control" name="titular_candidatura" placeholder="Nombre completo del titular">
+            <div class="invalid-feedback">Captura el titular si fue suplente.</div>
+          </div>
+
+          <!-- legacy (por compatibilidad / no estorban) -->
+          <input type="hidden" name="cargo">
+          <input type="hidden" name="partido_postulante">
+
+          <div class="col-12 text-end mt-2">
+            <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
+          </div>
         </div>
-        <div class="col-md-3">
-          <label class="form-label">Cargo</label>
-          <input class="form-control" name="cargo">
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Institución</label>
-          <input class="form-control" name="institucion">
-        </div>
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-        </div>
-      </div>
-    `;
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
-    return div;
-  }
+      `;
 
-  //Eleccion popular
-  let cargoEleccionCounter = 0;
+      const selOrden = div.querySelector('select[name="id_orden_gobierno"]');
+      const selCargo = div.querySelector('select[name="id_cargo_catalogo"]');
 
-  function cargoEleccionBlock() {
-    cargoEleccionCounter += 1;
+      selOrden?.addEventListener("change", async () => {
+        const idOrden = Number(selOrden.value || 0) || null;
 
-    const div = document.createElement("div");
-    div.className = "list-item";
+        if (!idOrden) {
+          selCargo.disabled = true;
+          selCargo.innerHTML = `<option value="">Seleccione orden primero</option>`;
+          return;
+        }
 
-    div.innerHTML = `
-      <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-          <label class="form-label">Periodo</label>
-          <input class="form-control" name="periodo" placeholder="2021 o 2018-2021" maxlength="9">
-          <div class="invalid-feedback">Usa AAAA o AAAA-AAAA.</div>
-        </div>
+        selCargo.disabled = true;
+        selCargo.innerHTML = `<option value="">Cargando...</option>`;
+        selCargo.value = "";
+        try {
+          const cargos = await fetchCargosEleccionByOrden(idOrden);
+          fillSelectFromRows(selCargo, cargos, "id_cargo", "nombre", "Seleccione");
+          selCargo.disabled = false;
+        } catch (e) {
+          console.error(e);
+          selCargo.innerHTML = `<option value="">Error al cargar</option>`;
+          selCargo.disabled = true;
+        }
+      });
 
-        <div class="col-md-4">
-          <label class="form-label">Cargo</label>
-          <input class="form-control" name="cargo" maxlength="120">
-          <div class="invalid-feedback">Indica el cargo.</div>
-        </div>
+      // ✅ toggle suplente => muestra/oculta y limpia
+      const chkSupl = div.querySelector('input[name="es_suplente"]');
+      const wrapSupl = div.querySelector('[data-suplt-wrap]');
+      const inpTit = div.querySelector('input[name="titular_candidatura"]');
 
-        <div class="col-md-3">
-          <label class="form-label">Partido postulante</label>
-          <input class="form-control" name="partido_postulante" maxlength="120">
-        </div>
+      function setSuplUI(on) {
+        wrapSupl?.classList.toggle("d-none", !on);
+        if (!on) {
+          if (inpTit) {
+            inpTit.value = "";
+            inpTit.classList.remove("is-invalid", "is-valid");
+          }
+        }
+      }
 
-        <div class="col-md-1">
-          <label class="form-label">MR/RP</label>
-          <select class="form-select" name="modalidad">
-            <option value="">—</option>
-            <option value="mr">MR</option>
-            <option value="rp">RP</option>
-          </select>
-        </div>
+      chkSupl?.addEventListener("change", () => setSuplUI(chkSupl.checked));
+      setSuplUI(false);
 
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-        </div>
-      </div>
-    `;
+      div.querySelector(".btnRemove")?.addEventListener("click", () => div.remove());
+      return div;
+    }
 
-    div.querySelector(".btnRemove").addEventListener("click", () => div.remove());
-    return div;
-  }
-
-  document.getElementById("btnAddCargoEleccion").addEventListener("click", () => {
-    document.getElementById("cargosEleccionContainer").appendChild(cargoEleccionBlock());
-  });
-//funcion para habilitar los grados academicos:
+    document.getElementById("btnAddCargoEleccion")?.addEventListener("click", () => {
+      if (document.getElementById("chkSinCargosEleccion")?.checked) return;
+      document.getElementById("cargosEleccionContainer")?.appendChild(cargoEleccionBlock());
+    });
+  //funcion para habilitar los grados academicos:
 
   function toggleFormacionAcademicaUI() {
     const nivel = ($('#fa_nivel')?.value || '').trim();
@@ -2644,52 +3490,53 @@ function refreshHijosParejasSelects() {
     const wrapGrado = $('#fa_grado_wrap');
     const wrapInst  = $('#fa_inst_wrap');
     const wrapTitulado = document.getElementById('faTituladoWrap');
+
     const inpGrado  = $('#fa_grado_obtenido');
     const inpInst   = $('#fa_institucion');
 
-    wrapTitulado?.classList.toggle('d-none', !requiere);
-
-    if (!requiere) {
-      document.getElementById('fa_titulado').value = '';
-    }
-
-    if (!wrapGrado || !wrapInst || !inpGrado || !inpInst) return;
-
-    wrapGrado.style.display = requiere ? '' : 'none';
-    wrapInst.style.display  = requiere ? '' : 'none';
-
-    inpGrado.required = requiere;
-    inpInst.required  = requiere;
-
-    // Si ya no aplica, limpia (evita “basura fantasma” en el payload)
-    if (!requiere) {
-      inpGrado.value = '';
-      inpInst.value = '';
-      inpGrado.classList.remove('is-invalid');
-      inpInst.classList.remove('is-invalid');
-    }
-    
-  }
-
-  function toggleCedulaUI() {
     const selTit = document.querySelector('[name="fa_titulado"]') || document.getElementById('fa_titulado');
     const inpCed = document.querySelector('[name="fa_cedula_profesional"]') || document.getElementById('fa_cedula_profesional');
-    const wrap   = document.getElementById('faCedulaWrap'); // ponle este id al contenedor del input (div)
+    const wrapCed = document.getElementById('faCedulaWrap');
 
-    if (!selTit || !inpCed || !wrap) return;
+    // 1) Mostrar/ocultar base (grado/inst/titulado) según nivel
+    wrapTitulado?.classList.toggle('d-none', !requiere);
 
-    const show = (selTit.value === "true");
-    wrap.classList.toggle('d-none', !show);
+    if (wrapGrado) wrapGrado.style.display = requiere ? '' : 'none';
+    if (wrapInst)  wrapInst.style.display  = requiere ? '' : 'none';
 
-    if (!show) {
-      inpCed.value = "";
-      inpCed.classList.remove("is-invalid");
+    if (inpGrado) inpGrado.required = requiere;
+    if (inpInst)  inpInst.required  = requiere;
+
+    // 2) Si NO requiere: limpiar todo y ocultar cédula SIEMPRE (aquí estaba el bug)
+    if (!requiere) {
+      if (selTit) selTit.value = '';
+      if (inpGrado) {
+        inpGrado.value = '';
+        inpGrado.classList.remove('is-invalid');
+      }
+      if (inpInst) {
+        inpInst.value = '';
+        inpInst.classList.remove('is-invalid');
+      }
+
+      // ✅ cédula: limpiar + ocultar
+      if (inpCed) {
+        inpCed.value = '';
+        inpCed.classList.remove('is-invalid');
+      }
+      wrapCed?.classList.add('d-none');
+      return;
+    }
+
+    // 3) Si requiere: cédula depende de "titulado"
+    const showCedula = (selTit?.value === 'true');
+    wrapCed?.classList.toggle('d-none', !showCedula);
+
+    if (!showCedula && inpCed) {
+      inpCed.value = '';
+      inpCed.classList.remove('is-invalid');
     }
   }
-
-  document.querySelector('[name="fa_titulado"]')?.addEventListener('change', toggleCedulaUI);
-  toggleCedulaUI();
-
 
   function toggleTemaOtroUI() {
     const wrap = document.getElementById('temaOtroWrap');
@@ -2721,63 +3568,179 @@ function refreshHijosParejasSelects() {
 
       return ids;
     }
-  // ---------- Build payload ----------insercion en el formulario y validacion 
-  function buildPayload() {
-  const fd = new FormData($('#personaForm'));
+    //validacion campos field
+    // ✅ Regex: letras + espacios + guion + apóstrofe
+    const SOLO_LETRAS_RE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]*$/;
 
-  const munLegal   = toIntOrNull(fd.get('municipio_residencia_legal'));
-  const munRealSel = toIntOrNull(fd.get('municipio_residencia_real'));
-  const munTrabSel = toIntOrNull(fd.get('municipio_trabajo_politico'));
+    function validarSoloLetrasField(formEl, fieldName, obligatorio = false, mode = "submit") {
+      const el = formEl.querySelector(`[name="${fieldName}"]`);
+      if (!el) return true;
 
-  const chkMunRealIgual    = $('#chkMunRealIgual')?.checked || false;
-  const chkMunTrabajoIgual = $('#chkMunTrabajoIgual')?.checked || false;
+      const v = (el.value || "").toString().trim().replace(/\s+/g, ' ');
 
-  const selectedTemaIds = getSelectedTemasIds();
-  const temas_interes = selectedTemaIds.map(id => ({ id_tema: id }));
+      // preview/init: NO pintes nada
+      if (mode !== "submit") {
+        if (!v) return !obligatorio;
+        return SOLO_LETRAS_RE.test(v);
+      }
 
-  // --- Formación académica (array, aunque hoy sea solo 1) ---
-  const fa_nivel = (fd.get('fa_nivel') || '').toString().trim();
-  const fa_grado_obtenido = (fd.get('fa_grado_obtenido') || '').toString().trim();
-  const fa_institucion = (fd.get('fa_institucion') || '').toString().trim();
-  let controversias = [];
-  
+      // submit: aquí sí pinta invalid/valid
+      el.classList.remove("is-invalid", "is-valid");
 
-  const persona = {
-    nombre: (fd.get('nombre') || '').toString().trim(),
-    apellido_paterno: (fd.get('apellido_paterno') ||'').toString().trim() || null,
-    apellido_materno: (fd.get('apellido_materno') || '').toString().trim() || null,
-    curp: (fd.get('curp') || '').toString().trim() || null,
-    rfc: (fd.get('rfc') || '').toString().trim() || null,
-    clave_elector: (fd.get('clave_elector') || '').toString().trim() || null,
-    estado_civil: (fd.get('estado_civil') || '').toString().trim() || null,
-    escala_influencia: (fd.get('escala_influencia') || '').toString().trim() || null,
-    sin_servicio_publico: $('#sin_sp').checked,
-    ha_contendido_eleccion: toBoolOrNull(fd.get('ha_contendido_eleccion')),
-    partido_otro_texto: (fd.get('partido_otro_texto') || '').toString().trim() || null,
-    foto_url: (document.getElementById("foto_url")?.value || "").trim() || null,
-    // ❌ NO enviar creado_por: lo asigna el backend con req.user.id_usuario
-    // creado_por: null,
+      if (!v) {
+        if (obligatorio) {
+          el.classList.add("is-invalid");
+          return false;
+        }
+        return true;
+      }
 
-    municipio_residencia_legal: munLegal,
-    municipio_residencia_real: chkMunRealIgual ? munLegal : munRealSel,
-    municipio_trabajo_politico: chkMunTrabajoIgual ? munLegal : munTrabSel,
-    sin_controversias_publicas: document.getElementById('chkSinControversias')?.checked ?? false,
-    id_partido_actual: toIntOrNull(fd.get('id_partido_actual')),
-    id_grupo_postulacion: toIntOrNull(fd.get('id_grupo_postulacion')),
-    id_ideologia_politica: toIntOrNull(fd.get('id_ideologia_politica')),
-    nivel_confiabilidad: (fd.get("nivel_confiabilidad") || "").toString().trim().toLowerCase() || null,
-  };
+      if (!SOLO_LETRAS_RE.test(v)) {
+        el.classList.add("is-invalid");
+        return false;
+      }
+
+      el.classList.add("is-valid");
+      return true;
+    }
+  // ---------- Build payload ---------- inserción en el formulario y validación
+  function buildPayload({ validate = true } = {}) {
+    const fd = new FormData($('#personaForm'));
+
+    // 👇 modo para validaciones que NO deben pintar/alertar en preview
+    const mode = validate ? "submit" : "preview";
+
+    const munLegal   = toIntOrNull(fd.get('municipio_residencia_legal'));
+    const munRealSel = toIntOrNull(fd.get('municipio_residencia_real'));
+    const munTrabSel = toIntOrNull(fd.get('municipio_trabajo_politico'));
+
+    // ===============================
+    // FUERA EDOMEX (LEGAL / REAL) - CORREGIDO
+    // ===============================
+    const chkLegalFuera = document.getElementById("chkLegalFueraEdomex")?.checked === true;
+    const chkRealFuera0 = document.getElementById("chkRealFueraEdomex")?.checked === true;
+
+    const chkMunRealIgual    = document.getElementById("chkMunRealIgual")?.checked === true;
+    const chkMunTrabajoIgual = document.getElementById("chkMunTrabajoIgual")?.checked === true;
+
+    const legal_estado_texto = (document.getElementById("legal_estado_texto")?.value || "").trim();
+    const legal_municipio_texto = (document.getElementById("legal_municipio_texto")?.value || "").trim();
+
+    const real_estado_texto0 = (document.getElementById("real_estado_texto")?.value || "").trim();
+    const real_municipio_texto0 = (document.getElementById("real_municipio_texto")?.value || "").trim();
+
+    // Si "igual que legal", REAL hereda el modo + valores de LEGAL
+    const realFuera = chkMunRealIgual ? chkLegalFuera : chkRealFuera0;
+
+    // Municipios finales (IDs EdoMéx o null si fuera)
+    const final_munLegal = chkLegalFuera ? null : munLegal;
+    let final_munReal = null;
+
+    // Textos finales (solo si fuera)
+    const final_res_legal_estado_texto = chkLegalFuera ? (legal_estado_texto || null) : null;
+    const final_res_legal_municipio_texto = chkLegalFuera ? (legal_municipio_texto || null) : null;
+
+    let final_res_real_estado_texto = null;
+    let final_res_real_municipio_texto = null;
+
+    if (chkMunRealIgual) {
+      if (chkLegalFuera) {
+        // real fuera: copia textos de legal
+        final_munReal = null;
+        final_res_real_estado_texto = final_res_legal_estado_texto;
+        final_res_real_municipio_texto = final_res_legal_municipio_texto;
+      } else {
+        // real edomex: copia ID de legal
+        final_munReal = final_munLegal;
+        final_res_real_estado_texto = null;
+        final_res_real_municipio_texto = null;
+      }
+    } else {
+      if (realFuera) {
+        // real fuera: usa textos propios
+        final_munReal = null;
+        final_res_real_estado_texto = real_estado_texto0 || null;
+        final_res_real_municipio_texto = real_municipio_texto0 || null;
+      } else {
+        // real edomex: usa select
+        final_munReal = munRealSel;
+        final_res_real_estado_texto = null;
+        final_res_real_municipio_texto = null;
+      }
+    }
+
+    // Validación suave (para pasar CHECK y UX) -> SOLO en submit
+    if (validate) {
+      if (chkLegalFuera && (!final_res_legal_estado_texto || !final_res_legal_municipio_texto)) {
+        showAlert?.("Residencia legal: si NO es del EdoMéx, captura Estado y Municipio/Alcaldía.", "warning");
+        return null;
+      }
+      if (realFuera && (!final_res_real_estado_texto || !final_res_real_municipio_texto)) {
+        showAlert?.("Residencia actual: si NO es del EdoMéx, captura Estado y Municipio/Alcaldía.", "warning");
+        return null;
+      }
+    }
+
+    // ===============================
+    // FIN FUERA EDOMEX
+    // ===============================
+    const selectedTemaIds = getSelectedTemasIds();
+    const temas_interes = selectedTemaIds.map(id => ({ id_tema: id }));
+
+    // --- Formación académica (array, aunque hoy sea solo 1) ---
+    const fa_nivel = (fd.get('fa_nivel') || '').toString().trim();
+    const fa_grado_obtenido = (fd.get('fa_grado_obtenido') || '').toString().trim();
+    const fa_institucion = (fd.get('fa_institucion') || '').toString().trim();
+    let controversias = [];
+
+    const persona = {
+      nombre: (fd.get('nombre') || '').toString().trim(),
+      apellido_paterno: (fd.get('apellido_paterno') || '').toString().trim() || null,
+      apellido_materno: (fd.get('apellido_materno') || '').toString().trim() || null,
+      curp: (fd.get('curp') || '').toString().trim() || null,
+      rfc: (fd.get('rfc') || '').toString().trim() || null,
+      clave_elector: (fd.get('clave_elector') || '').toString().trim() || null,
+      estado_civil: (fd.get('estado_civil') || '').toString().trim() || null,
+      escala_influencia: (fd.get('escala_influencia') || '').toString().trim() || null,
+      sin_servicio_publico: document.getElementById('sin_sp')?.checked ?? false,
+      ha_contendido_eleccion: toBoolOrNull(fd.get('ha_contendido_eleccion')),
+      partido_otro_texto: (fd.get('partido_otro_texto') || '').toString().trim() || null,
+      foto_url: (document.getElementById("foto_url")?.value || "").trim() || null,
+
+      municipio_residencia_legal: final_munLegal,
+      municipio_residencia_real: final_munReal,
+      municipio_trabajo_politico: chkMunTrabajoIgual ? final_munLegal : munTrabSel,
+
+      // 🔥 banderas (importante)
+      res_legal_fuera_edomex: chkLegalFuera,
+      res_real_fuera_edomex: realFuera,
+
+      // 🔥 textos fuera EdoMéx (nombres correctos a tu BD)
+      res_legal_estado_texto: final_res_legal_estado_texto,
+      res_legal_municipio_texto: final_res_legal_municipio_texto,
+      res_real_estado_texto: final_res_real_estado_texto,
+      res_real_municipio_texto: final_res_real_municipio_texto,
+
+      sin_controversias_publicas: document.getElementById('chkSinControversias')?.checked ?? false,
+      id_partido_actual: toIntOrNull(fd.get('id_partido_actual')),
+      id_grupo_postulacion: toIntOrNull(fd.get('id_grupo_postulacion')),
+      id_ideologia_politica: toIntOrNull(fd.get('id_ideologia_politica')),
+      nivel_confiabilidad: (fd.get("nivel_confiabilidad") || "").toString().trim().toLowerCase() || null,
+    };
+
     function validarLenField(formEl, fieldName, len, label) {
       const el = formEl.querySelector(`[name="${fieldName}"]`);
       if (!el) return true;
 
       const v = (el.value || "").trim().toUpperCase();
       el.value = v;
-      el.classList.remove("is-invalid");
+
+      // 👇 solo pinta en submit
+      if (validate) el.classList.remove("is-invalid");
 
       if (!v) return true; // vacío permitido
       if (v.length !== len) {
-        el.classList.add("is-invalid");
+        if (validate) el.classList.add("is-invalid");
         return false;
       }
       return true;
@@ -2789,44 +3752,23 @@ function refreshHijosParejasSelects() {
     const okRfc   = validarLenField(formEl, "rfc", 13, "RFC");
     const okClave = validarLenField(formEl, "clave_elector", 18, "Clave de elector");
 
-    if (!okCurp || !okRfc || !okClave) {
-      showAlert?.("Revisa CURP/RFC/Clave de elector: longitud inválida.", "warning");
+    if ((!okCurp || !okRfc || !okClave)) {
+      if (validate) showAlert?.("Revisa CURP/RFC/Clave de elector: longitud inválida.", "warning");
       return null;
     }
-    // ✅ Solo letras (nombres y apellidos)
-    const SOLO_LETRAS_RE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+$/;
 
-    function validarSoloLetrasField(formEl, fieldName, obligatorio = false) {
-      const el = formEl.querySelector(`[name="${fieldName}"]`);
-      if (!el) return true;
-
-      const v = (el.value || "").toString().trim();
-      el.value = v;
-      el.classList.remove("is-invalid");
-
-      if (!v) {
-        if (obligatorio) {
-          el.classList.add("is-invalid");
-          return false;
-        }
-        return true; // vacío permitido si no es obligatorio
-      }
-
-      if (!SOLO_LETRAS_RE.test(v)) {
-        el.classList.add("is-invalid");
-        return false;
-      }
-      return true;
-    }
-
-    const okNombre  = validarSoloLetrasField(formEl, "nombre", true);
-    const okApPat   = validarSoloLetrasField(formEl, "apellido_paterno", true);
-    const okApMat   = validarSoloLetrasField(formEl, "apellido_materno", true);
+  
+    // ✅ IMPORTANTE: pasar mode
+    const okNombre = validarSoloLetrasField(formEl, "nombre", true, mode);
+    const okApPat  = validarSoloLetrasField(formEl, "apellido_paterno", true, mode);
+    const okApMat  = validarSoloLetrasField(formEl, "apellido_materno", true, mode);
 
     if (!okNombre || !okApPat || !okApMat) {
-      showAlert?.("Nombre y apellidos solo pueden contener letras (con acentos), espacios, guion o apóstrofe.", "warning");
+      if (validate) {
+        showAlert?.("Nombre y apellidos solo pueden contener letras (con acentos), espacios, guion o apóstrofe.", "warning");
+      }
       return null;
-    }    
+    }
     const formacion_academica = [];
     if (fa_nivel) {
       const requiere = (fa_nivel === 'Educación Superior' || fa_nivel === 'Posgrado');
@@ -2893,38 +3835,66 @@ function refreshHijosParejasSelects() {
       return true;
     }
 
+    // ========= PAREJAS =========
+    const sinParejas = document.getElementById('chkSinParejas')?.checked === true;
+
     const parejas = [];
     document.querySelectorAll('#parejasContainer .list-item').forEach(item => {
-      const nombre_pareja = item.querySelector('input[name="nombre_pareja"]').value.trim();
-      const tipo_relacion = item.querySelector('select[name="tipo_relacion"]').value.trim();
+      const nombre_pareja = item.querySelector('input[name="nombre_pareja"]')?.value.trim() || "";
+      const tipo_relacion = item.querySelector('select[name="tipo_relacion"]')?.value.trim() || "";
 
       const periodoInput = item.querySelector('input[name="periodo"]');
       const periodo = normalizePeriodo(periodoInput?.value);
 
+      const id_rel_sent = Number(item.querySelector('select[name="id_relacion_sentimental"]')?.value || 0) || null;
+
       // si el bloque tiene algo, valida periodo (si viene)
-      if ((nombre_pareja || tipo_relacion || periodo) && !isPeriodoValido(periodo)) {
-        periodoInput.classList.add("is-invalid");
-      } else if (periodoInput) {
-        periodoInput.classList.remove("is-invalid");
+      const tieneAlgo = (nombre_pareja || tipo_relacion || periodo);
+      if (tieneAlgo && !isPeriodoValido(periodo)) {
+        periodoInput?.classList.add("is-invalid");
+      } else {
+        periodoInput?.classList.remove("is-invalid");
       }
 
-      if (nombre_pareja || tipo_relacion || periodo) {
+      // solo agrega si capturaron algo
+      if (tieneAlgo) {
         parejas.push({
           temp_id: item.dataset.tempId,
           nombre_pareja: nombre_pareja || null,
           tipo_relacion: tipo_relacion || null,
+          id_relacion_sentimental: id_rel_sent,
           periodo: periodo || null
         });
       }
     });
-//hijos
+
+    // ✅ arreglo final según switch
+    const parejasFinal = sinParejas ? [] : parejas;
+
+
+    // ========= HIJOS =========
+    const sinHijos = document.getElementById('chkSinHijos')?.checked === true;
+
     const hijos = [];
     document.querySelectorAll('#hijosContainer .list-item').forEach(item => {
-      const pareja_temp_id = item.querySelector('select[name="pareja_temp_id"]').value || null;
-      const anio = item.querySelector('input[name="anio_nacimiento"]').value;
-      const sexo = item.querySelector('select[name="sexo"]').value.trim();
-      if (anio || sexo) hijos.push({ pareja_temp_id, anio_nacimiento: anio ? Number(anio) : null, sexo: sexo || null });
+      const pareja_temp_id = item.querySelector('select[name="pareja_temp_id"]')?.value || null;
+      const aniosRaw = item.querySelector('input[name="anios"]')?.value || "";
+      const sexo = item.querySelector('select[name="sexo"]')?.value.trim() || "";
+
+      const tieneAlgo = (aniosRaw || sexo);
+      if (!tieneAlgo) return;
+
+      const anios = (aniosRaw === "" ? null : Number(aniosRaw));
+
+      hijos.push({
+        pareja_temp_id,
+        anio_nacimiento: null, // ya no lo capturas
+        anios: Number.isFinite(anios) ? anios : null,
+        sexo: sexo || null
+      });
     });
+
+    const hijosFinal = sinHijos ? [] : hijos;
 
     const redes = [];
     document.querySelectorAll('#redesContainer .list-item').forEach(item => {
@@ -2946,27 +3916,43 @@ function refreshHijosParejasSelects() {
 
     document.querySelectorAll('#empresasContainer .list-item').forEach(item => {
       const inpNombre  = item.querySelector('input[name="empresa_nombre"]');
-      const inpRol     = item.querySelector('input[name="empresa_rol"]');
+      const selRol     = item.querySelector('select[name="empresa_rol"]');
+      const inpRolOtro = item.querySelector('input[name="empresa_rol_otro"]');
       const inpPeriodo = item.querySelector('input[name="empresa_periodo"]');
-      const inpNotas   = item.querySelector('input[name="empresa_notas"]');
+      const inpNotas   = item.querySelector('textarea[name="empresa_notas"]');
+
+      const inpNomRel  = item.querySelector('input[name="empresa_nombre_relacionado"]');
+      const inpRel     = item.querySelector('input[name="empresa_relacion"]');
 
       const nombre_empresa = (inpNombre?.value || '').trim();
-      const rolRaw         = (inpRol?.value || '').trim();
-      const notasRaw       = (inpNotas?.value || '').trim();
+      const rol = (selRol?.value || '').trim();
+      const rol_otro = (inpRolOtro?.value || '').trim();
+      const notasRaw = (inpNotas?.value || '').trim();
 
-      // ✅ normaliza periodo como backend
+      const nombre_relacionado = (inpNomRel?.value || '').trim();
+      const relacion = (inpRel?.value || '').trim();
+
       const periodoNorm = normalizePeriodo(inpPeriodo?.value || '');
       const periodo = (periodoNorm || '').trim();
 
-      // ✅ limpiar invalid previo
+      // limpiar invalid previo
       inpNombre?.classList.remove('is-invalid');
       inpPeriodo?.classList.remove('is-invalid');
+      inpRolOtro?.classList.remove('is-invalid');
 
-      const tieneAlgo = nombre_empresa || rolRaw || periodo || notasRaw;
+      const tieneAlgo =
+        nombre_empresa || rol || rol_otro || nombre_relacionado || relacion || periodo || notasRaw;
+
       if (!tieneAlgo) return;
 
       if (!nombre_empresa) {
         inpNombre?.classList.add('is-invalid');
+        hasEmpresasError = true;
+        return;
+      }
+
+      if (rol.toLowerCase() === "otro" && !rol_otro) {
+        inpRolOtro?.classList.add('is-invalid');
         hasEmpresasError = true;
         return;
       }
@@ -2979,18 +3965,17 @@ function refreshHijosParejasSelects() {
 
       empresas_persona.push({
         nombre_empresa,
-        rol: rolRaw || null,
+        rol: rol || null,
+        rol_otro: (rol.toLowerCase() === "otro") ? (rol_otro || null) : null,
+        nombre_relacionado: nombre_relacionado || null,
+        relacion: relacion || null,
         periodo: periodo || null,
         notas: notasRaw || null
       });
     });
 
-    // ✅ si hay errores, aborta el submit antes de enviar al backend
     if (hasEmpresasError) {
       throw new Error('Revisa el módulo Empresas: hay campos inválidos.');
-      // o si tú usas showAlert:
-      // showAlert('Revisa el módulo Empresas: hay campos inválidos.', 'warning');
-      // return null;
     }
     //elecciones
     const haContendido = toBoolOrNull(fd.get('ha_contendido_eleccion'));
@@ -3098,53 +4083,101 @@ function refreshHijosParejasSelects() {
       const activo = item.querySelector('select[name="activo"]').value;
       if (nombre_equipo) equipos.push({ nombre_equipo, activo: activo === 'true' });
     });
+    // =====================
+    // LIDERAZGO E INFLUENCIA
+    // =====================
+    const liderazgo_nivel_el = document.querySelector('input[name="liderazgo_nivel"]:checked');
+    const liderazgo_nivel = liderazgo_nivel_el?.value?.trim() || null;
 
-    //referentes
-function cleanText(v) {
-  return (v || "").toString().trim().replace(/\s+/g, " "); // colapsa espacios dobles
-}
+    const tipos = Array.from(document.querySelectorAll('.lid-tipo:checked'))
+      .map(x => x.value?.trim())
+      .filter(Boolean);
 
-  const referentes = [];
-  let referentesInvalidos = 0;
-
-  document.querySelectorAll('#referentesContainer .list-item').forEach(item => {
-    const nivelEl = item.querySelector('select[name="nivel"]');
-    const nombresEl = item.querySelector('input[name="nombres"]');
-    const apEl = item.querySelector('input[name="apellido_paterno"]');
-    const amEl = item.querySelector('input[name="apellido_materno"]');
-
-    const nivel = cleanText(nivelEl.value);
-    const nombres = cleanText(nombresEl.value);
-    const apellido_paterno = cleanText(apEl.value);
-    const apellido_materno = cleanText(amEl.value);
-
-    const tieneAlgo = nivel || nombres || apellido_paterno || apellido_materno;
-    if (!tieneAlgo) {
-      // limpia estados por si borraron todo
-      nivelEl.classList.remove("is-invalid");
-      nombresEl.classList.remove("is-invalid");
-      return;
+    let tipo_otro_texto = null;
+    if (tipos.includes('otro')) {
+      const t = document.getElementById('lidTipoOtroTexto')?.value?.trim();
+      tipo_otro_texto = t || null;
+      document.getElementById('lidTipoOtroTexto')?.classList.toggle('is-invalid', !tipo_otro_texto);
+    } else {
+      document.getElementById('lidTipoOtroTexto')?.classList.remove('is-invalid');
     }
 
-    // Validación suave: si capturó algo, exige nivel + nombres
-    const okNivel = !!nivel;
-    const okNombres = !!nombres;
+    const estructura_raw = document.getElementById('lidEstructura')?.value?.trim() || '';
+    const cuenta_con_estructura = estructura_raw === '' ? null : (estructura_raw === 'true');
 
-    nivelEl.classList.toggle("is-invalid", !okNivel);
-    nombresEl.classList.toggle("is-invalid", !okNombres);
+    const presencia_raw = document.getElementById('lidPresencia')?.value?.trim() || '';
+    const presencia_territorial = presencia_raw || null;
 
-    if (!okNivel || !okNombres) {
-      referentesInvalidos += 1;
-      return; // no metemos al payload si está incompleto
+    // ✅ solo exigir nivel + tipo si “empezaron” a capturar algo
+    const liderazgoTieneAlgo =
+      !!liderazgo_nivel ||
+      tipos.length > 0 ||
+      tipo_otro_texto != null ||
+      cuenta_con_estructura !== null ||
+      !!presencia_territorial;
+
+    if (liderazgoTieneAlgo && (!liderazgo_nivel || tipos.length === 0)) {
+      showAlert?.("Liderazgo: Completa nivel y al menos un tipo.", "warning");
+      return null;
     }
 
-    referentes.push({
-      nivel: nivel || null,
-      nombres: nombres || null,
-      apellido_paterno: apellido_paterno || null,
-      apellido_materno: apellido_materno || null
+    // ✅ objeto final (puedes dejarlo null si no tiene algo; yo recomiendo mandarlo siempre)
+    const liderazgo_influencia = liderazgoTieneAlgo ? {
+      nivel: liderazgo_nivel,
+      tipos, // text[]
+      tipo_otro_texto,
+      cuenta_con_estructura,
+      presencia_territorial
+    } : null;
+
+   //referentes
+    function cleanText(v) {
+      return (v || "").toString().trim().replace(/\s+/g, " ");
+    }
+
+    const referentes = [];
+    let referentesInvalidos = 0;
+
+    document.querySelectorAll('#referentesContainer .list-item').forEach(item => {
+      const nivelEl   = item.querySelector('select[name="nivel"]');
+      const cargoEl   = item.querySelector('input[name="cargo"]'); // ✅ NUEVO
+      const nombresEl = item.querySelector('input[name="nombres"]');
+      const apEl      = item.querySelector('input[name="apellido_paterno"]');
+      const amEl      = item.querySelector('input[name="apellido_materno"]');
+
+      const nivel = cleanText(nivelEl?.value);
+      const cargo = cleanText(cargoEl?.value); // ✅ NUEVO
+      const nombres = cleanText(nombresEl?.value);
+      const apellido_paterno = cleanText(apEl?.value);
+      const apellido_materno = cleanText(amEl?.value);
+
+      const tieneAlgo = nivel || cargo || nombres || apellido_paterno || apellido_materno; // ✅ incluye cargo
+      if (!tieneAlgo) {
+        nivelEl?.classList.remove("is-invalid");
+        nombresEl?.classList.remove("is-invalid");
+        return;
+      }
+
+      // Validación suave: si capturó algo, exige nivel + nombres
+      const okNivel = !!nivel;
+      const okNombres = !!nombres;
+
+      nivelEl?.classList.toggle("is-invalid", !okNivel);
+      nombresEl?.classList.toggle("is-invalid", !okNombres);
+
+      if (!okNivel || !okNombres) {
+        referentesInvalidos += 1;
+        return;
+      }
+
+      referentes.push({
+        nivel: nivel || null,
+        cargo: cargo || null, // ✅ NUEVO
+        nombres: nombres || null,
+        apellido_paterno: apellido_paterno || null,
+        apellido_materno: apellido_materno || null
+      });
     });
-  });
 
   // Si quieres bloquear submit:
   if (referentesInvalidos > 0) {
@@ -3177,14 +4210,16 @@ function cleanText(v) {
       distrito_local: (fd.get('ine_dl') || '').toString().trim() || null
     };
     const datosINEFinal = (datos_ine.seccion_electoral || datos_ine.distrito_federal || datos_ine.distrito_local) ? datos_ine : null;
-
+//familiares container
     const familiares = [];
     document.querySelectorAll('#familiaresContainer .list-item').forEach(item => {
       const nombre = item.querySelector('input[name="nombre"]').value.trim();
-      const parentesco = item.querySelector('input[name="parentesco"]').value.trim();
+      const parentesco = item.querySelector('select[name="parentesco"]').value.trim(); // ✅ Ahora es select
       const cargo = item.querySelector('input[name="cargo"]').value.trim();
       const institucion = item.querySelector('input[name="institucion"]').value.trim();
-      if (nombre || parentesco || cargo || institucion) {
+      
+      // ✅ Validación: requiere nombre + parentesco
+      if (nombre && parentesco) { // Solo si tiene lo esencial
         familiares.push({
           nombre: nombre || null,
           parentesco: parentesco || null,
@@ -3226,45 +4261,108 @@ function cleanText(v) {
       const m = p.match(/^(\d{4})-(\d{4})$/);
       return !m || Number(m[2]) >= Number(m[1]);
     }
-
-    const sin_cargos_eleccion_popular = document.getElementById("chkSinCargosEleccion").checked;
+    // ===========================
+    // CARGOS ELECCIÓN POPULAR
+    // ===========================
+    const sin_cargos_eleccion_popular =
+      document.getElementById("chkSinCargosEleccion")?.checked === true;
 
     const cargos_eleccion_popular = [];
     let invalidos = 0;
 
     document.querySelectorAll("#cargosEleccionContainer .list-item").forEach(item => {
       const periodoEl = item.querySelector('input[name="periodo"]');
-      const cargoEl = item.querySelector('input[name="cargo"]');
+      const periodo = normalizePeriodo(periodoEl?.value);
 
-      const periodo = normalizePeriodo(periodoEl.value);
-      const cargo = cargoEl.value.trim();
-      const partido_postulante = item.querySelector('input[name="partido_postulante"]').value.trim();
-      const modalidad = item.querySelector('select[name="modalidad"]').value.trim();
+      const idOrdenEl = item.querySelector('select[name="id_orden_gobierno"]');
+      const idCargoEl = item.querySelector('select[name="id_cargo_catalogo"]');
+      const idPartEl  = item.querySelector('select[name="id_partido_postulante"]');
 
-      const tieneAlgo = periodo || cargo || partido_postulante || modalidad;
-      if (!tieneAlgo) return;
+      const id_orden_gobierno = Number(idOrdenEl?.value || 0) || null;
+      const id_cargo_catalogo = Number(idCargoEl?.value || 0) || null;
+      const id_partido_postulante = Number(idPartEl?.value || 0) || null;
 
-      // si hay registro, exige periodo + cargo
+      const modalidad = (item.querySelector('select[name="modalidad"]')?.value || "")
+        .trim()
+        .toLowerCase();
+
+      // ✅ suplente + titular
+      const chkSupl = item.querySelector('input[name="es_suplente"]');
+      const es_suplente = chkSupl?.checked === true;
+
+      const inpTit = item.querySelector('input[name="titular_candidatura"]');
+      const titular_candidatura = (inpTit?.value || "").trim();
+
+      // limpia invalid previo titular (solo en modo validate)
+      if (validate) inpTit?.classList.remove("is-invalid");
+
+      // legacy
+      const cargoLegacy = item.querySelector('input[name="cargo"]')?.value?.trim() || "";
+      const partidoLegacy = item.querySelector('input[name="partido_postulante"]')?.value?.trim() || "";
+
+      // ✅ Importante:
+      // - NO cuentes "es_suplente" solo como "tieneAlgo"
+      // - si solo prendieron el switch y no pusieron nada más, no lo consideres registro
+      const tieneAlgo =
+        periodo || id_orden_gobierno || id_cargo_catalogo || id_partido_postulante ||
+        modalidad || cargoLegacy || partidoLegacy ||
+        titular_candidatura;
+
+      if (!tieneAlgo && !es_suplente) return;
+
+      // Validaciones base (solo pinta invalid si validate=true)
       const okPeriodo = !!periodo && isPeriodoValido(periodo);
-      const okCargo = !!cargo;
+      const okOrden   = !!id_orden_gobierno;
+      const okCargo   = !!id_cargo_catalogo;
 
-      periodoEl.classList.toggle("is-invalid", !okPeriodo);
-      cargoEl.classList.toggle("is-invalid", !okCargo);
+      if (validate) {
+        periodoEl?.classList.toggle("is-invalid", !okPeriodo);
+        idOrdenEl?.classList.toggle("is-invalid", !okOrden);
+        idCargoEl?.classList.toggle("is-invalid", !okCargo);
+      }
 
-      if (!okPeriodo || !okCargo) { invalidos += 1; return; }
+      // ✅ si es suplente, titular obligatorio
+      const okTitular = !es_suplente || !!titular_candidatura;
+      if (validate && es_suplente) {
+        inpTit?.classList.toggle("is-invalid", !okTitular);
+      }
+
+      if (!okPeriodo || !okOrden || !okCargo || !okTitular) {
+        invalidos += 1;
+        return;
+      }
 
       cargos_eleccion_popular.push({
         periodo: periodo || null,
-        cargo: cargo || null,
-        partido_postulante: partido_postulante || null,
-        modalidad: modalidad || null
+        modalidad: modalidad || null,
+        id_orden_gobierno,
+        id_cargo_catalogo,
+        id_partido_postulante,
+
+        es_suplente,
+        titular_candidatura: es_suplente ? (titular_candidatura || null) : null,
+
+        // legacy
+        cargo: cargoLegacy || null,
+        partido_postulante: partidoLegacy || null
       });
     });
-  
-    // Guardar en persona (consistencia)
+
+    // Guardar en persona
     persona.sin_cargos_eleccion_popular = sin_cargos_eleccion_popular;
-    // arreglo final (si marcó "sin cargos" => forzar vacío)
+
+    // ✅ si hay inválidos, NO dejes guardar (evita borrar todo en update)
+    if (validate && invalidos > 0) {
+      showAlert?.(
+        'Revisa "Cargos de elección popular": hay registros incompletos. Si fue suplente, el titular es obligatorio.',
+        "warning"
+      );
+      return null; // ⛔ importantísimo
+    }
+
+    // arreglo final
     const cargosEleccionFinal = sin_cargos_eleccion_popular ? [] : cargos_eleccion_popular;
+
     // ✅ Fuentes de consulta (UNIQUE por persona+fuente)
     const fuentes_consulta = [];
     const detalle = (document.getElementById("fuentesDetalle")?.value || "").trim() || null;
@@ -3292,12 +4390,12 @@ function cleanText(v) {
       persona,
       datos_ine: datosINEFinal,
       telefonos,
-      parejas,
-      hijos,
+      parejas: parejasFinal,          // ✅ CORREGIDO
+      hijos: hijosFinal,              // ✅ CORREGIDO
       redes,
       servicio_publico,
       elecciones,
-      cargos_eleccion_popular: cargosEleccionFinal,   // ✅ AQUI
+      cargos_eleccion_popular: cargosEleccionFinal,
       capacidad_movilizacion_eventos,
       equipos,
       referentes,
@@ -3307,83 +4405,110 @@ function cleanText(v) {
       temas_interes,
       experiencia_laboral,
       participacion_organizaciones,
-      empresas_persona, 
+      empresas_persona,
       fuentes_consulta,
-      municipios_trabajo, // ✅ nuevo
+      municipios_trabajo,
+      liderazgo_influencia,
     };
   }
 
 function refreshPreview() {
   try {
-    const payload = buildPayload();
+    const payload = buildPayload({ validate: false });
 
     const pre = document.getElementById('payloadPreview');
-    if (pre) {
-      pre.textContent = JSON.stringify(payload, null, 2);
+    if (!pre) return;
+
+    if (!payload) {
+      pre.textContent = ""; // o "Completa datos para ver preview..."
+      return;
     }
 
-    // si tienes otras cosas en preview, igual protégelas
+    pre.textContent = JSON.stringify(payload, null, 2);
   } catch (e) {
     console.warn('refreshPreview error:', e);
-    // NO dispares showAlert aquí, porque se llama en cada input/change
   }
 }
 
+
   function clearAll() {
-    $('#personaForm').reset();
+    // ✅ reset del form (correcto)
+    document.getElementById('personaForm')?.reset();
 
-    // limpiar contenedores
-    $('#telefonosContainer').innerHTML = '';
-    $('#parejasContainer').innerHTML = '';
-    $('#hijosContainer').innerHTML = '';
-    $('#redesContainer').innerHTML = '';
-    $('#servicioContainer').innerHTML = '';
-    $('#eleccionesContainer').innerHTML = '';
-    $('#equiposContainer').innerHTML = '';
-    $('#referentesContainer').innerHTML = '';
-    $('#controversiasContainer').innerHTML = '';
-    $('#familiaresContainer').innerHTML = '';
-    $('#participacionContainer').innerHTML = ''; // ✅ nuevo
+    // helper seguro
+    const el = (id) => document.getElementById(id);
+    const setHTML = (id, html = "") => { const n = el(id); if (n) n.innerHTML = html; };
+    const append = (id, node) => { const n = el(id); if (n && node) n.appendChild(node); };
 
-    // re-seed mínimos
-    $('#telefonosContainer').appendChild(telefonoBlock());
-    $('#parejasContainer').appendChild(parejaBlock());
-    $('#hijosContainer').appendChild(hijoBlock());
-    $('#redesContainer').appendChild(redBlock());
-    $('#servicioContainer').appendChild(servicioBlock());
-    $('#eleccionesContainer').appendChild(eleccionBlock());
-    $('#equiposContainer').appendChild(equipoBlock());
-    $('#referentesContainer').appendChild(referenteBlock());
-    $('#familiaresContainer').appendChild(familiarBlock());
+    // ✅ limpiar contenedores (sin tronar si faltan)
+    setHTML('telefonosContainer');
+    setHTML('parejasContainer');
+    setHTML('hijosContainer');
+    setHTML('redesContainer');
+    setHTML('servicioContainer');
+    setHTML('eleccionesContainer');
+    setHTML('equiposContainer');
+    setHTML('referentesContainer');
+    setHTML('controversiasContainer');
+    setHTML('familiaresContainer');
+    setHTML('participacionContainer');
+    setHTML('movEventosContainer');
+
+    // ✅ re-seed mínimos
+    append('telefonosContainer', telefonoBlock());
+    append('parejasContainer', parejaBlock());
+    append('hijosContainer', hijoBlock());
+    append('redesContainer', redBlock());
+    append('servicioContainer', servicioBlock());
+    append('eleccionesContainer', eleccionBlock());
+    append('equiposContainer', equipoBlock());
+    append('referentesContainer', referenteBlock());
+    append('movEventosContainer', movEventoBlock());
 
     // ✅ controversias: si NO está activado "sin controversias", seed 1 fila
-    const chkSin = document.getElementById('chkSinControversias');
-    const sinCont = chkSin?.checked === true;
+    const sinCont = el('chkSinControversias')?.checked === true;
     if (!sinCont) {
-      $('#controversiasContainer').appendChild(controversiaBlock());
+      append('controversiasContainer', controversiaBlock());
     } else {
-      $('#controversiasContainer').innerHTML = '';
+      setHTML('controversiasContainer', '');
     }
 
-    // ✅ Estado UI dependiente de selects/checkboxes
-    if (typeof toggleTemaOtroUI === 'function') toggleTemaOtroUI();        // Tema "Otro"
-    if (typeof setControversiasUIState === 'function') setControversiasUIState(); // Sin controversias
-    document.getElementById('movEventosContainer').innerHTML = '';
-    document.getElementById('movEventosContainer').appendChild(movEventoBlock());
+    // ✅ familiares: RESPETA el switch
+    const sinFam = el('chkSinFamiliares')?.checked === true;
+    if (!sinFam) {
+      append('familiaresContainer', familiarBlock());
+    } else {
+      setHTML('familiaresContainer', '');
+    }
+
+    // ✅ Estado UI dependiente
+    if (typeof toggleTemaOtroUI === 'function') toggleTemaOtroUI();
+    if (typeof setControversiasUIState === 'function') setControversiasUIState();
+    if (typeof toggleFamiliares === 'function') toggleFamiliares(); // aplica show/hide
 
     // ✅ limpiar foto
-    const inpFoto = document.getElementById("inpFoto");
-    const previewFoto = document.getElementById("previewFoto");
-    const hidFotoUrl = document.getElementById("foto_url");
+    const inpFoto = el("inpFoto");
+    const previewFoto = el("previewFoto");
+    const hidFotoUrl = el("foto_url");
 
-    if (inpFoto) inpFoto.value = "";          // limpia el file input
-    if (hidFotoUrl) hidFotoUrl.value = "";     // limpia URL guardada
+    if (inpFoto) inpFoto.value = "";
+    if (hidFotoUrl) hidFotoUrl.value = "";
     if (previewFoto) {
       previewFoto.src = "";
-      previewFoto.classList.add("d-none");     // oculta preview
+      previewFoto.classList.add("d-none");
     }
-    hideAlert();
-    refreshPreview();
+    // ✅ Reset switch familiares
+    const chkFam = document.getElementById('chkSinFamiliares');
+    if (chkFam) chkFam.checked = false;
+// ✅ Reset switch parejas
+    const chkSinParejas = document.getElementById('chkSinParejas');
+    if (chkSinParejas) chkSinParejas.checked = false;
+
+    toggleParejas?.(); // esto va a seed 1 pareja
+
+    hideAlert?.();
+    refreshPreview?.();
+    toggleFamiliares?.();
   }
         //domcontainer
       document.addEventListener("DOMContentLoaded", () => {
@@ -3489,289 +4614,566 @@ function refreshPreview() {
       });
 
     //funcion para validar:
-    function initValidacionDuplicados() {
-      let dupTimer = null;
+function initValidacionDuplicados() {
+  let dupTimer = null;
+  let isChecking = false;
 
-      const getByName = (name) => document.querySelector(`[name="${name}"]`);
-      const normalize = (v) => (v || "").toString().trim();
+  const getByName = (name) => document.querySelector(`[name="${name}"]`);
+  const normalize = (v) => (v || "").toString().trim();
 
-      // Tipos de match que SÍ deben disparar warning
-      const strongTypes = new Set(["curp", "rfc", "clave_elector", "nombre"]);
+  const strongTypes = new Set(["curp", "rfc", "clave_elector"]);
+  const warningTypes = new Set(["nombre"]);
 
-      async function checkDuplicado() {
-        // ✅ Solo 1 llamada: usamos checkDuplicadoNow
-        const results = await checkDuplicadoNow(window.editingId || null);
+  function debounceCheck() {
+    clearTimeout(dupTimer);
+    dupTimer = setTimeout(async () => {
+      if (isChecking) return;
+      await checkDuplicado();
+    }, 500);
+  }
 
-        if (!Array.isArray(results)) return;
+  async function checkDuplicado() {
+    if (isChecking) return;
+    isChecking = true;
 
-        const hasStrong = results.some(r => strongTypes.has(r.match_type));
-
-        if (hasStrong) {
-          showAlert?.("warning", "Posible duplicado detectado. Revisa antes de guardar.");
-          console.log("DUPLICADOS (FUERTE):", results);
-          return;
-        }
-
-        // Si solo hay sección u otras señales débiles:
-        if (results.length) {
-          // opcional: muestra info sin asustar
-          // showAlert?.("info", "Coincidencias por sección electoral (solo referencia).");
-          console.log("DUPLICADOS (DÉBIL/INFO):", results);
-        } else {
-          window.__dupCheck = [];
-          // opcional: hideAlert?.();
-        }
-      }
-
-      function debounceCheck() {
-        clearTimeout(dupTimer);
-        dupTimer = setTimeout(checkDuplicado, 450);
-      }
-
-      // engancha a los campos principales
-      const fields = [
-        "curp",
-        "rfc",
-        "nombre",
-        "apellido_paterno",
-        "apellido_materno",
-        "municipio_residencia_legal",
-        "clave_elector",
-        "ine_seccion"
-      ];
-
-      fields.forEach(name => {
-        const el = getByName(name);
-        if (!el) return;
-        el.addEventListener("blur", checkDuplicado);
-        el.addEventListener("input", debounceCheck);
-        el.addEventListener("change", debounceCheck);
-      });
-
-      async function checkDuplicadoNow(excludeId) {
-        const curp = normalize(getByName("curp")?.value).toUpperCase();
-        const rfc  = normalize(getByName("rfc")?.value).toUpperCase();
-
-        const nombre = normalize(getByName("nombre")?.value);
-        const ap = normalize(getByName("apellido_paterno")?.value);
-        const am = normalize(getByName("apellido_materno")?.value);
-
-        const mun = normalize(getByName("municipio_residencia_legal")?.value);
-
-        const clave_elector = normalize(getByName("clave_elector")?.value).toUpperCase();
-        const seccion_electoral = normalize(getByName("ine_seccion")?.value);
-
-        // no molestar si todavía no hay nada relevante
-        if (!curp && !rfc && !(nombre && ap) && !clave_elector && !seccion_electoral) {
-          window.__dupCheck = [];
-          return [];
-        }
-
-        const qs = new URLSearchParams({
-          curp,
-          rfc,
-          nombre,
-          apellido_paterno: ap,
-          apellido_materno: am,
-          municipio: mun,
-          clave_elector,
-          seccion_electoral,
-          exclude_id: excludeId ? String(excludeId) : ""
-        });
-
-        try {
-          const data = await apiGet(`/personas/check-duplicado?${qs.toString()}`);
-          const results = data?.results || [];
-          window.__dupCheck = results;
-          return results;
-        } catch (e) {
-          console.warn("checkDuplicadoNow error:", e);
-          window.__dupCheck = [];
-          return [];
-        }
-      }
-
-      // 👇 expón para usarlo en submit
-      window.checkDuplicadoNow = checkDuplicadoNow;
-    }
-  // ---------- init ----------
-  (async function init() {
-    let partidosCatalog = [];
-    let gruposCatalog = [];
-    hideAlert();
     try {
-      municipiosCache = await apiGet('/municipios');
-      redesCatalog = await apiGet('/catalogos/redes');
-      controversiasCatalog = await apiGet('/catalogos/controversias');
-      partidosCatalog = await apiGet('/catalogos/partidos');
-      temasCatalog = await apiGet('/catalogos/temas-interes');
-      gruposCatalog = await apiGet('/catalogos/grupos-postulacion');
-      ideologiasCatalog = await apiGet('/catalogos/ideologias');
+      const excludeId = window.editingId || null;
+      const results = await checkDuplicadoNow(excludeId);
 
-      fillSelect($('#mun_legal'), municipiosCache, 'id_municipio', 'nombre');
-      fillSelect($('#mun_real'), municipiosCache, 'id_municipio', 'nombre');
-      fillSelect($('#mun_trabajo'), municipiosCache, 'id_municipio', 'nombre');
-
-      fillSelect($('#selPartidoActual'), partidosCatalog, 'id_partido', 'nombre');
-      fillSelect($('#selGrupoPostulacion'), gruposCatalog, 'id_grupo', 'nombre');
-      fillSelect($('#selIdeologia'), ideologiasCatalog, 'id_ideologia', 'nombre');
-
-      const munLegal = document.getElementById('mun_legal');
-      const munReal = document.getElementById('mun_real');
-      const munTrabajo = document.getElementById('mun_trabajo');
-
-      const chkMunRealIgual = document.getElementById('chkMunRealIgual');
-      const chkMunTrabajoIgual = document.getElementById('chkMunTrabajoIgual');
-
-      // ================== COBERTURA MUNICIPIOS (TRABAJO POLÍTICO) ==================
-      function initCoberturaMunicipiosUI(municipios) {
-        const selEscala = document.querySelector('[name="escala_influencia"]'); // tu select de escala
-        const selPrincipal = document.getElementById("mun_trabajo");
-
-        const wrap = document.getElementById("wrapCoberturaTrabajo");
-        const list = document.getElementById("listaCoberturaMunicipios");
-        const txt = document.getElementById("txtBuscarMunicipioCobertura");
-        const btnAll = document.getElementById("btnCoberturaAll");
-        const btnNone = document.getElementById("btnCoberturaNone");
-        const lblCount = document.getElementById("lblCoberturaCount");
-
-        const selected = new Set(); // ids seleccionados
-
-        function refreshCount() {
-          if (lblCount) lblCount.textContent = `${selected.size} seleccionados`;
-        }
-
-        function renderList(filter = "") {
-          const q = (filter || "").toLowerCase();
-          const items = municipios.filter(m => (m.nombre || "").toLowerCase().includes(q));
-
-          list.innerHTML = items.map(m => {
-            const checked = selected.has(m.id_municipio) ? "checked" : "";
-            return `
-              <div class="form-check">
-                <input class="form-check-input covChk" type="checkbox" value="${m.id_municipio}" id="cov_${m.id_municipio}" ${checked}>
-                <label class="form-check-label" for="cov_${m.id_municipio}">${m.nombre}</label>
-              </div>
-            `;
-          }).join("");
-
-          list.querySelectorAll(".covChk").forEach(chk => {
-            chk.addEventListener("change", () => {
-              const id = Number(chk.value);
-              if (chk.checked) selected.add(id);
-              else selected.delete(id);
-              refreshCount();
-            });
-          });
-
-          refreshCount();
-        }
-
-        function shouldEnableMulti() {
-          const escala = (selEscala?.value || "").toLowerCase();
-          // 👇 ajusta aquí si quieres incluir estatal/nacional
-          return ["regional", "distrital"].includes(escala);
-        }
-
-        function ensurePrincipalInside() {
-          const principal = Number(selPrincipal?.value);
-          if (Number.isFinite(principal) && principal > 0) selected.add(principal);
-        }
-
-        function showOrHide() {
-          const enable = shouldEnableMulti();
-          wrap.classList.toggle("d-none", !enable);
-
-          if (!enable) {
-            // si no aplica multi, limpiamos cobertura
-            selected.clear();
-            renderList(txt?.value || "");
-            return;
-          }
-
-          // si aplica multi, aseguramos principal
-          ensurePrincipalInside();
-          renderList(txt?.value || "");
-        }
-
-        // Buscar
-        txt?.addEventListener("input", () => renderList(txt.value));
-
-        // Todos / Limpiar
-        btnAll?.addEventListener("click", () => {
-          municipios.forEach(m => selected.add(m.id_municipio));
-          renderList(txt?.value || "");
-        });
-
-        btnNone?.addEventListener("click", () => {
-          selected.clear();
-          ensurePrincipalInside();
-          renderList(txt?.value || "");
-        });
-
-        // cambios de escala / principal
-        selEscala?.addEventListener("change", showOrHide);
-        selPrincipal?.addEventListener("change", () => {
-          if (!wrap.classList.contains("d-none")) {
-            ensurePrincipalInside();
-            renderList(txt?.value || "");
-          }
-        });
-
-        // Exponer para build/apply
-        window.__getCoberturaTrabajoIds = () => Array.from(selected);
-        window.__setCoberturaTrabajoIds = (ids = []) => {
-          selected.clear();
-          ids.forEach(id => {
-            const n = Number(id);
-            if (Number.isFinite(n) && n > 0) selected.add(n);
-          });
-          showOrHide();
-        };
-
-        // init
-        renderList("");
-        showOrHide();
+      if (!Array.isArray(results) || !results.length) {
+        window.__dupCheck = [];
+        return;
       }
 
-      // ✅ llama esto al final de tu init (cuando ya tienes municipiosCache y fills)
-      initCoberturaMunicipiosUI(municipiosCache);
+      // ✅ Filtrar PROPIO registro
+      const otherResults = results.filter(r => 
+        !excludeId || r.id_persona != excludeId
+      );
 
-      function syncMunicipio(selectTarget, checked) {
-        if (checked) {
-          selectTarget.value = munLegal.value;
-          selectTarget.disabled = true;
+      // CRÍTICOS: alerta fuerte
+      const criticals = otherResults.filter(r => strongTypes.has(r.match_type));
+      if (criticals.length) {
+        console.log("🚨 DUPLICADO CRÍTICO:", criticals);
+        showAlert?.("warning", 
+          `⚠️ DUPLICADO (${criticals[0].match_type.toUpperCase()}). Revisa antes de guardar.`
+        );
+        return;
+      }
+
+      window.__dupCheck = otherResults;
+
+    } catch (e) {
+      console.warn("checkDuplicado error:", e);
+    } finally {
+      isChecking = false;
+    }
+  }
+
+  // ✅ FIXED: seccion_elector → seccion_electoral
+  async function checkDuplicadoNow(excludeId) {
+    const curp = normalize(getByName("curp")?.value).toUpperCase();
+    const rfc = normalize(getByName("rfc")?.value).toUpperCase();
+    const nombre = normalize(getByName("nombre")?.value);
+    const ap = normalize(getByName("apellido_paterno")?.value);
+    const am = normalize(getByName("apellido_materno")?.value);
+    const mun = getByName("municipio_residencia_legal")?.value;
+    const clave_elector = normalize(getByName("clave_elector")?.value).toUpperCase();
+    const seccion_electoral = normalize(getByName("ine_seccion")?.value); // ✅ CORREGIDO
+
+    if (!curp && !rfc && !clave_elector && !(nombre && ap)) {
+      window.__dupCheck = [];
+      return [];
+    }
+
+    const qs = new URLSearchParams({
+      curp: curp || "",
+      rfc: rfc || "",
+      nombre: nombre || "",
+      apellido_paterno: ap || "",
+      apellido_materno: am || "",
+      municipio: mun || "",
+      clave_elector: clave_elector || "",
+      seccion_electoral: seccion_electoral || "", // ✅ CORREGIDO
+      exclude_id: excludeId ? String(excludeId) : ""
+    });
+
+    try {
+      const data = await apiGet(`/personas/check-duplicado?${qs.toString()}`);
+      return data?.results || [];
+    } catch (e) {
+      console.warn("checkDuplicadoNow error:", e);
+      return [];
+    }
+  }
+
+  const fields = [
+    "curp", "rfc", "clave_elector",
+    "nombre", "apellido_paterno", 
+    "apellido_materno", "municipio_residencia_legal"
+  ];
+
+  fields.forEach(name => {
+    const el = getByName(name);
+    if (!el) return;
+    
+    const handler = () => debounceCheck();
+    el.addEventListener("blur", handler);
+    el.addEventListener("change", handler);
+    el.addEventListener("input", handler);
+  });
+
+  window.checkDuplicadoNow = checkDuplicadoNow;
+  window.getDuplicadosStatus = () => window.__dupCheck || [];
+}
+  //FUNCION PARA EFECTO GUARDADO:
+  function showSuccessCheckmark(idGuardado, isEdit) {
+  document.querySelector('.success-checkmark')?.remove();
+
+  const texto = isEdit 
+    ? `<span>EDITADO</span><br><small>ID: ${idGuardado}</small>`
+    : `<span>GUARDADO</span><br><small>ID: ${idGuardado}</small>`;
+
+  const container = document.createElement('div');
+  container.className = 'success-checkmark';
+  container.innerHTML = `
+    <!-- ✅ ICONO SVG SIMPLE Y PERFECTO -->
+    <svg class="success-icon" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" fill="none"/>
+      <path d="M7 12l2.5 2.5L17 8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="success-text">${texto}</div>
+  `;
+
+  container.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    text-align: center;
+  `;
+
+  document.body.appendChild(container);
+
+  setTimeout(() => {
+    showAlert('success', isEdit 
+      ? `Persona actualizada correctamente`
+      : `Nueva persona guardada correctamente`
+    );
+    
+    setTimeout(() => {
+      container.style.animation = 'fadeOut 0.5s ease-out forwards';
+      setTimeout(() => container.remove(), 500);
+    }, 2000);
+  }, 1000);
+}
+//GLOBAL FAMILIA
+
+//toggle municipios , personas que no son del edomex:
+      // ===============================
+        // MUNICIPIOS: EdoMéx vs Fuera
+        // ===============================
+    function toggleResidenciaFueraEdomex(tipo /* 'legal' | 'real' */, forcedFuera = null, opts = {}) {
+      const isLegal = tipo === "legal";
+
+      const chk = document.getElementById(isLegal ? "chkLegalFueraEdomex" : "chkRealFueraEdomex");
+      const wrapEdomex = document.getElementById(isLegal ? "wrapLegalEdomex" : "wrapRealEdomex");
+      const wrapFuera  = document.getElementById(isLegal ? "wrapLegalFuera"  : "wrapRealFuera");
+
+      const sel = document.getElementById(isLegal ? "mun_legal" : "mun_real");
+
+      const inpEstado = document.getElementById(isLegal ? "legal_estado_texto" : "real_estado_texto");
+      const inpMunTxt = document.getElementById(isLegal ? "legal_municipio_texto" : "real_municipio_texto");
+
+      if (!chk || !wrapEdomex || !wrapFuera || !sel || !inpEstado || !inpMunTxt) return;
+
+      const fuera = (forcedFuera === null) ? (chk.checked === true) : !!forcedFuera;
+
+      // si nos forzaron el modo, reflejarlo en el checkbox
+      if (forcedFuera !== null) chk.checked = fuera;
+
+      // UI
+      wrapEdomex.classList.toggle("d-none", fuera);
+      wrapFuera.classList.toggle("d-none", !fuera);
+
+      // enable/disable
+      sel.disabled = fuera;
+      inpEstado.disabled = !fuera;
+      inpMunTxt.disabled = !fuera;
+
+      // Limpieza SOLO si lo piden (evento usuario)
+      if (opts.clean === true) {
+        if (fuera) {
+          sel.value = "";     // por CHECK: municipio debe NULL
         } else {
-          selectTarget.disabled = false;
+          inpEstado.value = ""; // por CHECK: textos deben vacíos
+          inpMunTxt.value = "";
         }
       }
+    }
 
-      // Cuando cambia el municipio legal
-      munLegal.addEventListener('change', () => {
-        if (chkMunRealIgual.checked) {
-          munReal.value = munLegal.value;
+    function copyResidenciaLegalToReal() {
+      const legalFuera = document.getElementById("chkLegalFueraEdomex")?.checked === true;
+
+      // Copia modo al real (sin limpiar)
+      toggleResidenciaFueraEdomex("real", legalFuera, { clean: true }); // aquí sí limpio lo incompatible
+
+      if (legalFuera) {
+        const le = (document.getElementById("legal_estado_texto")?.value || "").trim();
+        const lm = (document.getElementById("legal_municipio_texto")?.value || "").trim();
+        const re = document.getElementById("real_estado_texto");
+        const rm = document.getElementById("real_municipio_texto");
+        if (re) re.value = le;
+        if (rm) rm.value = lm;
+        const selReal = document.getElementById("mun_real");
+        if (selReal) selReal.value = "";
+      } else {
+        const selLegal = document.getElementById("mun_legal");
+        const selReal  = document.getElementById("mun_real");
+        if (selLegal && selReal) selReal.value = selLegal.value || "";
+        const re = document.getElementById("real_estado_texto");
+        const rm = document.getElementById("real_municipio_texto");
+        if (re) re.value = "";
+        if (rm) rm.value = "";
+      }
+    }
+    // ================== COBERTURA MUNICIPIOS (TRABAJO POLÍTICO) ==================
+function initCoberturaMunicipiosUI(municipios) {
+  const selEscala = document.querySelector('[name="escala_influencia"]');
+  const selPrincipal = document.getElementById("mun_trabajo");
+
+  const wrap = document.getElementById("wrapCoberturaTrabajo");
+  const list = document.getElementById("listaCoberturaMunicipios");
+  const txt = document.getElementById("txtBuscarMunicipioCobertura");
+  const btnAll = document.getElementById("btnCoberturaAll");
+  const btnNone = document.getElementById("btnCoberturaNone");
+  const lblCount = document.getElementById("lblCoberturaCount");
+
+  if (!wrap || !list) return;
+
+  const selected = new Set();
+
+  function refreshCount() {
+    if (lblCount) lblCount.textContent = `${selected.size} seleccionados`;
+  }
+
+  function renderList(filter = "") {
+    const q = (filter || "").toLowerCase();
+    const items = municipios.filter(m => (m.nombre || "").toLowerCase().includes(q));
+
+    list.innerHTML = items.map(m => {
+      const checked = selected.has(m.id_municipio) ? "checked" : "";
+      return `
+        <div class="form-check">
+          <input class="form-check-input covChk" type="checkbox" value="${m.id_municipio}" id="cov_${m.id_municipio}" ${checked}>
+          <label class="form-check-label" for="cov_${m.id_municipio}">${m.nombre}</label>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll(".covChk").forEach(chk => {
+      chk.addEventListener("change", () => {
+        const id = Number(chk.value);
+        if (chk.checked) selected.add(id);
+        else selected.delete(id);
+        refreshCount();
+      });
+    });
+
+    refreshCount();
+  }
+
+  function shouldEnableMulti() {
+    const escala = (selEscala?.value || "").toLowerCase();
+    return ["regional", "distrital"].includes(escala);
+  }
+
+  function ensurePrincipalInside() {
+    const principal = Number(selPrincipal?.value);
+    if (Number.isFinite(principal) && principal > 0) selected.add(principal);
+  }
+
+  function showOrHide() {
+    const enable = shouldEnableMulti();
+    wrap.classList.toggle("d-none", !enable);
+
+    if (!enable) {
+      selected.clear();
+      renderList(txt?.value || "");
+      return;
+    }
+
+    ensurePrincipalInside();
+    renderList(txt?.value || "");
+  }
+
+  // Buscar
+  txt?.addEventListener("input", () => renderList(txt.value));
+
+  // Todos / Limpiar
+  btnAll?.addEventListener("click", () => {
+    municipios.forEach(m => selected.add(m.id_municipio));
+    renderList(txt?.value || "");
+  });
+
+  btnNone?.addEventListener("click", () => {
+    selected.clear();
+    ensurePrincipalInside();
+    renderList(txt?.value || "");
+  });
+
+  // cambios de escala / principal
+  selEscala?.addEventListener("change", showOrHide);
+  selPrincipal?.addEventListener("change", () => {
+    if (!wrap.classList.contains("d-none")) {
+      ensurePrincipalInside();
+      renderList(txt?.value || "");
+    }
+  });
+
+  // Exponer para build/apply
+  window.__getCoberturaTrabajoIds = () => Array.from(selected);
+  window.__setCoberturaTrabajoIds = (ids = []) => {
+    selected.clear();
+    ids.forEach(id => {
+      const n = Number(id);
+      if (Number.isFinite(n) && n > 0) selected.add(n);
+    });
+    showOrHide();
+  };
+
+  // init
+  renderList("");
+  showOrHide();
+}
+//togle ocultar equipos y refrentes
+function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
+  const chk = document.getElementById(chkId);
+  const wrap = document.getElementById(wrapId);
+  const btn = document.getElementById(btnId);
+  const container = document.getElementById(containerId);
+
+  if (!chk || !wrap) return;
+
+  const sin = chk.checked === true;
+
+  wrap.classList.toggle("d-none", sin);
+  if (btn) btn.disabled = sin;
+
+  // 🔥 Limpia para evitar que buildPayload lea basura
+  if (sin && container) container.innerHTML = "";
+
+  refreshPreview?.();
+}
+      //proper guia de ayuda :)
+      // Inicializar todos los popovers cuando la página cargue
+      document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar popover específico
+        var popoverTrigger = document.getElementById('popover-liderazgo');
+        var popover = new bootstrap.Popover(popoverTrigger, {
+          trigger: 'hover focus', // Se abre con hover o click
+          delay: { show: 200, hide: 100 }
+        });
+        
+        // Si tienes más popovers, inicialízalos así:
+        // var popover2 = new bootstrap.Popover(document.getElementById('otro-popover'));
+      });
+
+    // ---------- init ----------
+    (async function init() {
+      let partidosCatalog = [];
+      let gruposCatalog = [];
+      let relacionesSentCatalog = [];
+
+      hideAlert();
+
+      try {
+        municipiosCache = await apiGet('/municipios');
+        redesCatalog = await apiGet('/catalogos/redes');
+        controversiasCatalog = await apiGet('/catalogos/controversias');
+        partidosCatalog = await apiGet('/catalogos/partidos');
+        temasCatalog = await apiGet('/catalogos/temas-interes');
+        gruposCatalog = await apiGet('/catalogos/grupos-postulacion');
+        ideologiasCatalog = await apiGet('/catalogos/ideologias');
+        relacionesSentCatalog = await apiGet('/catalogos/relacion-sentimental');
+
+        window.__relSentCatalog = relacionesSentCatalog;
+
+        ordenGobiernoCatalog = await apiGet('/catalogos/orden-gobierno');
+        window.__ordenGobCatalog = ordenGobiernoCatalog;
+
+        window.__cargosEleccionByOrden = window.__cargosEleccionByOrden || {};
+        window.__partidosCatalog = partidosCatalog;
+
+        // Fill selects municipios
+        fillSelect($('#mun_legal'), municipiosCache, 'id_municipio', 'nombre');
+        fillSelect($('#mun_real'), municipiosCache, 'id_municipio', 'nombre');
+        fillSelect($('#mun_trabajo'), municipiosCache, 'id_municipio', 'nombre');
+
+        // Fill selects catálogos
+        fillSelect($('#selPartidoActual'), partidosCatalog, 'id_partido', 'nombre');
+        fillSelect($('#selGrupoPostulacion'), gruposCatalog, 'id_grupo', 'nombre');
+        fillSelect($('#selIdeologia'), ideologiasCatalog, 'id_ideologia', 'nombre');
+
+        // --- refs ---
+        const munLegal   = document.getElementById('mun_legal');
+        const munReal    = document.getElementById('mun_real');
+        const munTrabajo = document.getElementById('mun_trabajo');
+
+        const chkMunRealIgual    = document.getElementById('chkMunRealIgual');
+        const chkMunTrabajoIgual = document.getElementById('chkMunTrabajoIgual');
+
+        const chkLegalFuera = document.getElementById("chkLegalFueraEdomex");
+        const chkRealFuera  = document.getElementById("chkRealFueraEdomex");
+
+        // ✅ Cobertura municipios (TRABAJO POLÍTICO)
+        // (la función debe existir afuera del init)
+        initCoberturaMunicipiosUI(municipiosCache);
+
+        // util para igualar municipio legal
+        function syncMunicipio(selectTarget, checked) {
+          if (!selectTarget) return;
+          if (checked) {
+            selectTarget.value = munLegal?.value || "";
+            selectTarget.disabled = true;
+          } else {
+            selectTarget.disabled = false;
+          }
         }
-        if (chkMunTrabajoIgual.checked) {
-          munTrabajo.value = munLegal.value;
-        }
-      });
 
-      // Checkbox residencia real
-      chkMunRealIgual.addEventListener('change', (e) => {
-        syncMunicipio(munReal, e.target.checked);
-      });
+        // -----------------------------
+        // LISTENERS (únicos, sin duplicar)
+        // -----------------------------
 
-      // Checkbox trabajo político
-      chkMunTrabajoIgual.addEventListener('change', (e) => {
-        syncMunicipio(munTrabajo, e.target.checked);
-      });
+        // Cuando cambia municipio legal
+        munLegal?.addEventListener('change', () => {
+          // Si "real igual" y NO está en modo fuera, copia select
+          if (chkMunRealIgual?.checked) {
+            const legalFuera = chkLegalFuera?.checked === true;
+            if (!legalFuera && munReal) munReal.value = munLegal.value;
+            // si es fuera, la copia se hace por textos en copyResidenciaLegalToReal()
+            copyResidenciaLegalToReal?.();
+          }
 
-      // seed blocks
-      clearAll();
+          // Trabajo igual
+          if (chkMunTrabajoIgual?.checked && munTrabajo) {
+            munTrabajo.value = munLegal.value;
+          }
+
+          refreshPreview?.();
+        });
+
+        // Checkbox "igual que residencia legal" (residencia actual)
+        chkMunRealIgual?.addEventListener('change', (e) => {
+          syncMunicipio(munReal, e.target.checked);
+          if (e.target.checked) {
+            copyResidenciaLegalToReal?.();
+          }
+          refreshPreview?.();
+        });
+
+        // Checkbox "igual que residencia legal" (trabajo político)
+        chkMunTrabajoIgual?.addEventListener('change', (e) => {
+          const legalFuera = document.getElementById("chkLegalFueraEdomex")?.checked === true;
+
+            if (legalFuera && e.target.checked) {
+              alert("La residencia legal está fuera del Estado de México. Debe seleccionar manualmente el municipio de trabajo político dentro del EdoMéx.");
+              e.target.checked = false;
+              munTrabajo.disabled = false;
+              munTrabajo.focus();
+              return;
+            }
+
+            syncMunicipio(munTrabajo, e.target.checked);
+            refreshPreview?.();
+        });
+
+        // Switch legal fuera EdoMéx (limpia incompatibles)
+        chkLegalFuera?.addEventListener("change", () => {
+          toggleResidenciaFueraEdomex?.("legal", null, { clean: true });
+
+          // si real es igual, copia modo + datos
+          if (chkMunRealIgual?.checked) {
+            copyResidenciaLegalToReal?.();
+          }
+
+          refreshPreview?.();
+        });
+
+        // Switch real fuera EdoMéx (limpia incompatibles)
+        chkRealFuera?.addEventListener("change", () => {
+          toggleResidenciaFueraEdomex?.("real", null, { clean: true });
+          refreshPreview?.();
+        });
+
+        // Estado inicial al cargar (NO limpiar)
+        toggleResidenciaFueraEdomex?.("legal");
+        toggleResidenciaFueraEdomex?.("real");
+
+        // (opcional) si al cargar ya venían checkeados los "igual"
+        if (chkMunRealIgual?.checked) syncMunicipio(munReal, true);
+        if (chkMunTrabajoIgual?.checked) syncMunicipio(munTrabajo, true);
+
+
+        //wraper ocultar equipos y referentes
+
+        document.getElementById("chkSinEquipos")?.addEventListener("change", () => {
+          toggleModuloOptional({
+            chkId: "chkSinEquipos",
+            wrapId: "wrapEquipos",
+            btnId: "btnAddEquipo",
+            containerId: "equiposContainer"
+          });
+        });
+
+        document.getElementById("chkSinReferentes")?.addEventListener("change", () => {
+          toggleModuloOptional({
+            chkId: "chkSinReferentes",
+            wrapId: "wrapReferentes",
+            btnId: "btnAddReferente",
+            containerId: "referentesContainer"
+          });
+        });
+
+        // estado inicial
+        toggleModuloOptional({
+          chkId: "chkSinEquipos",
+          wrapId: "wrapEquipos",
+          btnId: "btnAddEquipo",
+          containerId: "equiposContainer"
+        });
+
+        toggleModuloOptional({
+          chkId: "chkSinReferentes",
+          wrapId: "wrapReferentes",
+          btnId: "btnAddReferente",
+          containerId: "referentesContainer"
+        });
+
+        // seed blocks
+        clearAll();
+
       setControversiasUIState();
+      // ✅ FORZAR estado inicial del switch de familiares
+      const chkSinFamiliares = document.getElementById('chkSinFamiliares');
+      if (chkSinFamiliares) chkSinFamiliares.checked = false; // <- OFF al cargar
+
+      toggleFamiliares(); // <- aplica UI con el estado forzado
 
       togglePartidoOtroUI();
       renderTemasInteresCheckboxes();
+
+
+
+      // exportar si applyPayloadToForm está fuera
+      window.toggleParejas = toggleParejas;
+
+      // listeners
+      document.getElementById('chkSinParejas')?.addEventListener('change', toggleParejas);
+
+      //ocultar bloque hijos
+      window.toggleHijos = toggleHijos;
+      document.getElementById('chkSinHijos')?.addEventListener('change', toggleHijos);
 
       document.getElementById('temasInteresChecks')?.addEventListener('change', () => {
         toggleTemaOtroUI();
@@ -3794,21 +5196,30 @@ function refreshPreview() {
         setControversiasUIState();
         refreshPreview();
       });
-      //nvel
+
+      // NIVEL EDUCATIVO
       $('#fa_nivel')?.addEventListener('change', () => {
         toggleFormacionAcademicaUI();
         refreshPreview();
       });
-      // buttons add
-      $('#btnAddTelefono').addEventListener('click', () => { $('#telefonosContainer').appendChild(telefonoBlock()); refreshPreview(); });
-      $('#btnAddPareja').addEventListener('click', () => {
-        const pb = parejaBlock();
-        $('#parejasContainer').appendChild(pb);
 
-        // 🔥 importante: ahora sí el DOM ya tiene la nueva pareja
-        refreshHijosParejasSelects();
+      // TITULADO (para mostrar/ocultar cédula)
+      document.querySelector('[name="fa_titulado"]')?.addEventListener('change', () => {
         toggleFormacionAcademicaUI();
         refreshPreview();
+      });
+
+      // Estado inicial (importante)
+      toggleFormacionAcademicaUI();
+
+      // buttons add
+      $('#btnAddTelefono').addEventListener('click', () => { $('#telefonosContainer').appendChild(telefonoBlock()); refreshPreview(); });
+
+      document.getElementById('btnAddPareja')?.addEventListener('click', () => {
+        if (document.getElementById('chkSinParejas')?.checked) return;
+        document.getElementById('parejasContainer')?.appendChild(parejaBlock());
+        refreshHijosParejasSelects();
+        refreshPreview?.();
       });
 
       $('#btnAddHijo').addEventListener('click', () => {
@@ -3850,6 +5261,39 @@ function refreshPreview() {
       const data = await apiGet(`/personas?search=${encodeURIComponent(q || '')}&limit=30`);
       return data.items || data;
     }
+    //init liderazgo e influencia
+    function toggleLidTipoOtroWrap() {
+      const checked = document.getElementById("lid_tipo_otro")?.checked;
+      const wrap = document.getElementById("lidTipoOtroWrap");
+      const txt  = document.getElementById("lidTipoOtroTexto");
+      if (!wrap || !txt) return;
+
+      if (checked) {
+        wrap.classList.remove("d-none");
+        txt.focus();
+      } else {
+        wrap.classList.add("d-none");
+        txt.value = "";
+        txt.classList.remove("is-invalid");
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      // engancha change a todos los checks de tipo
+      document.querySelectorAll(".lid-tipo").forEach(cb => {
+        cb.addEventListener("change", toggleLidTipoOtroWrap);
+      });
+
+      // estado inicial
+      toggleLidTipoOtroWrap();
+    });
+
+    document.addEventListener("change", (e) => {
+      if (e.target && e.target.classList?.contains("lid-tipo")) {
+        toggleLidTipoOtroWrap();
+      }
+    });
+
     // init empresas
     const selTieneEmpresa = document.getElementById('selTieneEmpresa');
     const btnAddEmpresa = document.getElementById('btnAddEmpresa');
@@ -3894,6 +5338,16 @@ function refreshPreview() {
     document.querySelectorAll(".fuenteChk").forEach(chk => {
       chk.addEventListener("change", refreshFuentesUI);
     });
+    
+    // ✅ Event listeners DIRECTAMENTE (NO DOMContentLoaded)
+    document.getElementById('chkSinFamiliares')?.addEventListener('change', toggleFamiliares);
+    document.getElementById('btnAddFamiliar')?.addEventListener('click', function() {
+      document.getElementById('familiaresContainer').appendChild(familiarBlock());
+      refreshPreview();
+    });
+    
+    // ✅ Llamar toggle inicial
+    toggleFamiliares();
     // init semaforo
     function initConfiabilidadUI() {
       const badge = document.getElementById("badgeConfiabilidad");
@@ -4000,7 +5454,6 @@ function refreshPreview() {
         if (e.key === "Enter") recargarLista();
       });
 
-      //final editar eliminar
 
       // Botón recargar
       document.getElementById('btnRecargarBorradores').addEventListener('click', async () => {
@@ -4075,6 +5528,15 @@ function refreshPreview() {
           showAlert('danger', 'No pude eliminar borrador: ' + e.message);
         }
       });
+        const formEl = document.getElementById("personaForm");
+        if (!formEl) return; // seguridad extra
+      //validacion al escribir
+        ["nombre","apellido_paterno","apellido_materno"].forEach(n => {
+          const el = formEl?.querySelector(`[name="${n}"]`);
+          el?.addEventListener("input", () => {
+            validarSoloLetrasField(formEl, n, true, "submit");
+          });
+        });
 
       document.getElementById('btnAddParticipacion')?.addEventListener('click', () => {
         document.getElementById('participacionContainer')?.appendChild(participacionBlock());
@@ -4099,7 +5561,6 @@ function refreshPreview() {
         setControversiasUIState();
         refreshPreview();
       });
-      $('#btnAddFamiliar').addEventListener('click', () => { $('#familiaresContainer').appendChild(familiarBlock()); refreshPreview(); });
 
       // live preview
       $('#personaForm').addEventListener('input', refreshPreview);
@@ -4183,7 +5644,8 @@ function refreshPreview() {
         e.preventDefault();
         hideAlert();
 
-        const payload = buildPayload();
+        const payload = buildPayload({ validate: true });
+        if (!payload) return; // 👈 importantísimo para que no reviente si buildPayload regresa null
         //validacion otro este marcado en temas
         const temaOtroSel = (payload.temas_interes || []).find(t => t.otro_texto !== undefined);
         if (temaOtroSel && !temaOtroSel.otro_texto) {
@@ -4259,18 +5721,15 @@ function refreshPreview() {
 
         try {
           const isEdit = !!editingId;
-
           const url = isEdit ? `/personas/${editingId}` : `/personas`;
           const resp = isEdit ? await apiPut(url, payload) : await apiPost(url, payload);
 
-          // ✅ Mensaje OK
           const idGuardado = isEdit ? editingId : resp.id_persona;
-          showAlert('success', isEdit
-            ? `Actualizado correctamente ✅ id_persona: ${idGuardado}`
-            : `Guardado correctamente ✅ id_persona: ${idGuardado}`
-          );
+          
+          // ✅ PALOMITA SUAVE + mensaje
+          showSuccessCheckmark(idGuardado, isEdit);
 
-          // ✅ Si venía de borrador, marcar como enviado
+          // Resto del código igual...
           if (borradorActualId) {
             try {
               await apiPut(`/borradores/${borradorActualId}`, { estatus: 'enviado' });
@@ -4279,13 +5738,8 @@ function refreshPreview() {
             await cargarListaBorradores();
           }
 
-          // ✅ Salir de edición después de actualizar (importante)
           if (isEdit) setEditing(null);
-
           clearAll();
-
-          // (opcional) si tienes panel listado, refresca:
-          // if (typeof recargarLista === 'function') recargarLista();
 
         } catch (err) {
           console.error(err);
@@ -4300,30 +5754,50 @@ function refreshPreview() {
   })();
 </script>
 
+<!-- TU CÓDIGO EXACTO mejorado SIN conflictos -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasPersonas">
   <div class="offcanvas-header">
-    <h5 class="offcanvas-title">Personas capturadas</h5>
+    <h5 class="offcanvas-title">
+      👥 Personas capturadas 
+      <span class="badge bg-primary ms-2" id="badgeCount">0</span>
+    </h5>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
 
   <div class="offcanvas-body">
+    <!-- Buscador igual -->
     <div class="input-group mb-2">
       <input class="form-control" id="txtBuscarPersona" placeholder="Buscar (nombre / CURP / RFC)">
-      <button class="btn btn-outline-primary" id="btnBuscarPersona">Buscar</button>
+      <button class="btn btn-outline-primary" id="btnBuscarPersona">
+        🔍 Buscar
+      </button>
     </div>
 
-    <div class="small text-muted mb-2">Selecciona una persona para cargarla al formulario.</div>
+    <div class="small text-muted mb-2">
+      📋 Selecciona una persona para cargarla al formulario.
+    </div>
 
-    <div class="list-group" id="listaPersonas"></div>
+    <!-- SOLO CAMBIA ESTA PARTE: scroll solo lista -->
+    <div style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.5rem;">
+      <div class="list-group list-group-flush" id="listaPersonas">
+        <!-- Tus items aquí -->
+      </div>
+    </div>
 
+    <!-- Botones FIJOS (igual que tenías) -->
     <hr class="my-3">
-
     <div class="d-flex gap-2">
-      <button class="btn btn-warning w-100" id="btnSalirEdicion" disabled>Salir de edición</button>
-      <button class="btn btn-danger w-100" id="btnEliminarPersona" disabled>Eliminar</button>
+      <button class="btn btn-warning w-100" id="btnSalirEdicion" disabled>
+        ❌ Salir de edición
+      </button>
+      <button class="btn btn-danger w-100" id="btnEliminarPersona" disabled>
+        🗑️ Eliminar
+      </button>
     </div>
   </div>
 </div>
 
+
 </body>
 </html>
+
