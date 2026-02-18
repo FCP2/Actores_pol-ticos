@@ -39,7 +39,8 @@ exports.getPartidos = async (req, res) => {
            WHEN 'PVEM' THEN 5
            WHEN 'PT' THEN 6
            WHEN 'MC' THEN 7
-           WHEN 'OTRO' THEN 8 
+           WHEN 'IND' THEN 8
+           WHEN 'OTRO' THEN 9 
          END`
     );
     res.json(rows);
@@ -98,3 +99,57 @@ exports.getIdeologias = async (req, res) => {
   }
 };
 
+exports.getRelacionesSentimentales = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT id_relacion_sentimental, nombre
+      FROM catalogo_relacion_sentimental
+      WHERE activo = true
+      ORDER BY COALESCE(orden, 999), id_relacion_sentimental
+      `
+    );
+
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error al obtener relaciones sentimentales' });
+  }
+};
+
+exports.getOrdenGobierno = async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id_orden, nombre
+      FROM catalogo_orden_gobierno
+      WHERE activo = true
+      ORDER BY COALESCE(orden, 999), id_orden
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error al obtener orden de gobierno' });
+  }
+};
+
+exports.getCargosEleccion = async (req, res) => {
+  try {
+    const idOrden = Number(req.query.id_orden || 0) || null;
+
+    const { rows } = await pool.query(
+      `
+      SELECT id_cargo, id_orden, nombre
+      FROM catalogo_cargo_eleccion
+      WHERE activo = true
+        AND ($1::int IS NULL OR id_orden = $1::int)
+      ORDER BY COALESCE(orden, 999), id_cargo
+      `,
+      [idOrden]
+    );
+
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error al obtener cargos de elección' });
+  }
+};
