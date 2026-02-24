@@ -3975,7 +3975,8 @@ function refreshHijosParejasSelects() {
     });
 
     if (hasEmpresasError) {
-      throw new Error('Revisa el módulo Empresas: hay campos inválidos.');
+      if (validate) throw new Error('Revisa el módulo Empresas: hay campos inválidos.');
+      // en borrador: no bloquees
     }
     //elecciones
     const haContendido = toBoolOrNull(fd.get('ha_contendido_eleccion'));
@@ -5463,19 +5464,20 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
       // Guardar borrador (create o update)
       document.getElementById('btnGuardarBorrador').addEventListener('click', async () => {
         try {
-          const payload = buildPayload();
+          const payload = buildPayload({ validate: false }); // ✅ borrador no bloquea
+          if (!payload || typeof payload !== 'object') {
+            showAlert('warning', 'No pude construir el borrador.');
+            return;
+          }
 
-          const fa0 = (payload.formacion_academica || [])[0];
+          const fa0 = payload?.formacion_academica?.[0] || null;
 
           if (fa0 && (fa0.nivel === 'Educación Superior' || fa0.nivel === 'Posgrado')) {
             if (!fa0.grado_obtenido || !fa0.institucion) {
-              showAlert(
-                'warning',
-                'Borrador guardado, pero falta “Grado obtenido” e “Institución” para Educación Superior/Posgrado.'
-              );
-              // OJO: no hacemos return, porque es borrador
+              showAlert('warning', 'Borrador guardado, pero falta “Grado obtenido” e “Institución”.');
             }
           }
+
           const titulo = generarTituloBorrador(payload);
 
           if (!borradorActualId) {
@@ -5492,7 +5494,7 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
           refreshPreview();
         } catch (e) {
           console.error(e);
-          showAlert('danger', 'Error al guardar borrador: ' + e.message);
+          showAlert('danger', 'Error al guardar borrador: ' + (e?.message || e));
         }
       });
 
