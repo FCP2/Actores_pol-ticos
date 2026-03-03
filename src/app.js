@@ -33,6 +33,10 @@ app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'dashboard.html'));
 });
 
+app.get('/analista', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'analista.html'));
+});
+
 // ✅ Ruta del disco (Render mount path)
 app.set("trust proxy", 1);
 
@@ -52,11 +56,6 @@ app.use('/api', apiRoutes);
 // ✅ status opcional
 app.get('/api-status', (req, res) => {
   res.send('API funcionando correctamente 🚀');
-});
-
-// Health check (Render)
-app.get('/health', (req, res) => {
-  res.status(200).send('ok');
 });
 
 module.exports = app;
