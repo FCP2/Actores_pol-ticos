@@ -192,14 +192,10 @@ exports.listPersonas = async (req, res) => {
 
 
 //1.1. listar personas usuarios
+//1.1. listar personas usuarios
 exports.listPersonasAdminGrid = async (req, res) => {
   const client = await pool.connect();
   try {
-    const roles = req.user?.roles || [];
-    const isSuperadmin = roles.includes("superadmin");
-    const isAnalista   = roles.includes("analista");
-    const isCapturista = roles.includes("capturista");
-
     // -------- paginación
     const page = Math.max(parseInt(req.query.page || "1", 10), 1);
     const size = Math.min(Math.max(parseInt(req.query.size || "25", 10), 1), 200);
@@ -211,83 +207,55 @@ exports.listPersonasAdminGrid = async (req, res) => {
     const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
     const q = (req.query.q || "").trim();
 
-    // -------- ordenamiento (seguro)
+    // 👇 este filtro lo dejamos como “FINAL” (superadmin)
+    const verificado = (req.query.verificado === "1" || req.query.verificado === "0") ? req.query.verificado : null;
+
+    // -------- ordenamiento
     const sortDir = (String(req.query.sortDir || "desc").toLowerCase() === "asc") ? "ASC" : "DESC";
     const sortFieldRaw = String(req.query.sortField || "updated_at").trim();
-
-    // Campos que sí permitimos ordenar
-    const SORT_WHITELIST = new Set([
-      "id_persona",
-      "created_at",
-      "updated_at",
-      "nombre",
-      "apellido_paterno",
-      "apellido_materno",
-      // Nota: si quieres ordenar por municipio/oficina/capturista, mejor lo hacemos con alias.
-      // Por seguridad, aquí mantenemos solo campos reales de personas.
-    ]);
+    const SORT_WHITELIST = new Set(["id_persona", "created_at", "updated_at", "nombre", "apellido_paterno", "apellido_materno"]);
     const sortField = SORT_WHITELIST.has(sortFieldRaw) ? sortFieldRaw : "updated_at";
 
-    // -------- reglas por rol
-    // analista: siempre forzamos su oficina
-    if (isAnalista && !isSuperadmin) {
-      const forced = Number(req.user.id_oficina || 0);
-      if (!forced) return res.status(403).json({ error: "Usuario sin oficina asignada" });
-      oficinaId = forced;
-    }
-
-    // capturista puro: solo sus registros (por si lo habilitas para grid)
-    const forceCreadoPor = (isCapturista && !isAnalista && !isSuperadmin)
-      ? Number(req.user.id_usuario || 0)
-      : null;
-
-    // -------- WHERE dinámico
-    const where = [];
+    // -------- SMART FILTERS
+    const { addFullFilter } = req.smartFilters;
     const params = [];
+    const where = [];
+    addFullFilter(params, where);
 
+    // -------- filtros manuales
     if (oficinaId) {
       params.push(oficinaId);
       where.push(`p.id_oficina = $${params.length}`);
     }
-
     if (capturistaId) {
       params.push(capturistaId);
       where.push(`p.creado_por = $${params.length}`);
     }
-
-    if (forceCreadoPor) {
-      params.push(forceCreadoPor);
-      where.push(`p.creado_por = $${params.length}`);
-    }
-
     if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
       params.push(idMunTrabajo);
       where.push(`p.municipio_trabajo_politico = $${params.length}`);
     }
-
     if (q) {
       params.push(`%${q}%`);
       const i = params.length;
       where.push(`
-        (
-          COALESCE(p.nombre,'') ILIKE $${i}
-          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
-          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
-          OR COALESCE(p.curp,'') ILIKE $${i}
-          OR COALESCE(p.rfc,'') ILIKE $${i}
-          OR COALESCE(p.clave_elector,'') ILIKE $${i}
-        )
+        (COALESCE(p.nombre,'') ILIKE $${i}
+        OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+        OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+        OR COALESCE(p.curp,'') ILIKE $${i}
+        OR COALESCE(p.rfc,'') ILIKE $${i}
+        OR COALESCE(p.clave_elector,'') ILIKE $${i})
       `);
     }
+
+    // ✅ “verificado” sigue siendo el nivel 3 (final)
+    if (verificado === "1") where.push(`p.verificado_at IS NOT NULL`);
+    if (verificado === "0") where.push(`p.verificado_at IS NULL`);
 
     const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     // -------- TOTAL
-    const totalSql = `
-      SELECT COUNT(*)::int AS total
-      FROM personas p
-      ${whereSQL}
-    `;
+    const totalSql = `SELECT COUNT(*)::int AS total FROM personas p ${whereSQL}`;
     const { rows: totalRows } = await client.query(totalSql, params);
     const total = totalRows?.[0]?.total || 0;
     const last_page = Math.max(Math.ceil(total / size), 1);
@@ -295,44 +263,62 @@ exports.listPersonasAdminGrid = async (req, res) => {
     // -------- DATA
     const dataSql = `
       SELECT
-        p.id_persona,
-        p.nombre,
-        p.apellido_paterno,
-        p.apellido_materno,
+        p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno,
         (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
+        p.curp, p.rfc, p.clave_elector, p.id_oficina, o.nombre AS oficina_nombre,
 
-        p.curp,
-        p.rfc,
-        p.clave_elector,
+        -- trazabilidad creador / editor
+        p.creado_por, u_crea.nombre AS creado_por_nombre, u_crea.email AS creado_por_email,
+        u_crea.cargo AS creado_por_cargo, u_crea.area AS creado_por_area,
 
-        p.id_oficina,
-        o.nombre AS oficina_nombre,
+        p.modificado_por, u_mod.nombre AS modificado_por_nombre, u_mod.email AS modificado_por_email,
+        u_mod.cargo AS modificado_por_cargo, u_mod.area AS modificado_por_area,
 
-        p.creado_por,
-        u_crea.nombre AS creado_por_nombre,
-        u_crea.email  AS creado_por_email,
+        -- ✅ NIVEL 1: AREA (director)
+        p.verif_area_por,
+        p.verif_area_at,
+        u_va.nombre AS verif_area_por_nombre,
+        u_va.email  AS verif_area_por_email,
+        u_va.cargo  AS verif_area_por_cargo,
+        u_va.area   AS verif_area_por_area,
 
-        p.modificado_por,
-        u_mod.nombre AS modificado_por_nombre,
-        u_mod.email  AS modificado_por_email,
+        -- ✅ NIVEL 2: OFFICE (coordinador)
+        p.verif_office_por,
+        p.verif_office_at,
+        u_vo.nombre AS verif_office_por_nombre,
+        u_vo.email  AS verif_office_por_email,
+        u_vo.cargo  AS verif_office_por_cargo,
+        u_vo.area   AS verif_office_por_area,
 
-        p.municipio_trabajo_politico,
-        mt.nombre AS municipio_trabajo_nombre,
+        -- ✅ NIVEL 3: FINAL (superadmin) -> columnas existentes
+        p.verificado_por,
+        p.verificado_at,
+        u_ver.nombre AS verificado_por_nombre,
+        u_ver.email  AS verificado_por_email,
+        u_ver.cargo  AS verificado_por_cargo,
+        u_ver.area   AS verificado_por_area,
 
-        p.created_at,
-        p.updated_at,
-
+        -- otros
+        p.municipio_trabajo_politico, mt.nombre AS municipio_trabajo_nombre,
+        p.created_at, p.updated_at,
         t.telefono AS telefono_principal
 
       FROM personas p
       LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
+
       LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
       LEFT JOIN usuarios u_mod  ON u_mod.id_usuario  = p.modificado_por
-      LEFT JOIN municipios mt   ON mt.id_municipio   = p.municipio_trabajo_politico
 
+      -- ✅ joins nuevos
+      LEFT JOIN usuarios u_va   ON u_va.id_usuario   = p.verif_area_por
+      LEFT JOIN usuarios u_vo   ON u_vo.id_usuario   = p.verif_office_por
+
+      -- existente (nivel final)
+      LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
+
+      LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
       LEFT JOIN LATERAL (
-        SELECT telefono
-        FROM telefonos
+        SELECT telefono FROM telefonos
         WHERE id_persona = p.id_persona
         ORDER BY principal DESC, id_telefono ASC
         LIMIT 1
@@ -340,20 +326,14 @@ exports.listPersonasAdminGrid = async (req, res) => {
 
       ${whereSQL}
       ORDER BY p.${sortField} ${sortDir}, p.id_persona DESC
-      LIMIT $${params.length + 1}
-      OFFSET $${params.length + 2}
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
     const dataParams = params.concat([size, offset]);
     const { rows } = await client.query(dataSql, dataParams);
 
-    return res.json({
-      data: rows,
-      total,
-      page,
-      size,
-      last_page
-    });
+    return res.json({ data: rows, total, page, size, last_page });
+
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Error al obtener grid", detail: e.message });
@@ -361,6 +341,7 @@ exports.listPersonasAdminGrid = async (req, res) => {
     client.release();
   }
 };
+
 
 
 // 2) CREAR PERSONA COMPLETA (transacción)
@@ -1301,6 +1282,29 @@ exports.getPerfilCompleto = async (req, res) => {
         p.nombre,
         p.apellido_paterno,
         p.apellido_materno,
+        p.foto_url,
+        p.id_oficina,
+        p.creado_por,
+        p.modificado_por,
+
+        p.verificado_por,
+        p.verificado_at,
+
+        p.nivel_confiabilidad,
+
+        p.res_legal_fuera_edomex,
+        p.res_legal_estado_texto,
+        p.res_legal_municipio_texto,
+
+        p.res_real_fuera_edomex,
+        p.res_real_estado_texto,
+        p.res_real_municipio_texto,
+
+        p.partido_otro_texto,
+
+        -- Verificador
+        u_ver.nombre AS verificado_por_nombre,
+        u_ver.email  AS verificado_por_email,
         -- NUEVO
         u_crea.nombre  AS creado_por_nombre,
         u_mod.nombre   AS modificado_por_nombre,
@@ -1329,9 +1333,31 @@ exports.getPerfilCompleto = async (req, res) => {
         cgp.nombre AS grupo_postulacion,
         cip.nombre AS ideologia_politica,
 
+        p.municipio_residencia_legal  AS municipio_residencia_legal_id,
+        p.municipio_residencia_real   AS municipio_residencia_real_id,
+        p.municipio_trabajo_politico  AS municipio_trabajo_politico_id,
+
         ml.nombre AS municipio_residencia_legal,
         mr.nombre AS municipio_residencia_real,
         mt.nombre AS municipio_trabajo_politico,
+
+        CASE
+          WHEN COALESCE(p.res_legal_fuera_edomex,false) THEN
+            concat_ws(', ',
+              NULLIF(trim(p.res_legal_municipio_texto), ''),
+              NULLIF(trim(p.res_legal_estado_texto), '')
+            )
+          ELSE ml.nombre
+        END AS residencia_legal_display,
+
+        CASE
+          WHEN COALESCE(p.res_real_fuera_edomex,false) THEN
+            concat_ws(', ',
+              NULLIF(trim(p.res_real_municipio_texto), ''),
+              NULLIF(trim(p.res_real_estado_texto), '')
+            )
+          ELSE mr.nombre
+        END AS residencia_real_display,
 
         -- DATOS INE (objeto)
         (
@@ -1399,15 +1425,20 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE rsp.id_persona = p.id_persona
         ), '[]'::jsonb) AS redes_sociales,
 
+        -- EMPRESAS
+
         COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
             'nombre_empresa', e.nombre_empresa,
             'rol', e.rol,
+            'rol_otro', e.rol_otro,
+            'nombre_relacionado', e.nombre_relacionado,
+            'relacion', e.relacion,
             'periodo', e.periodo,
             'notas', e.notas
           ) ORDER BY e.id_empresa_persona ASC)
           FROM empresas_persona e
-          WHERE e.id_persona = $1
+          WHERE e.id_persona = p.id_persona
         ), '[]'::jsonb) AS empresas,
 
         -- PAREJAS + HIJOS anidados (usa "periodo" como en tu UI)
@@ -1423,6 +1454,7 @@ exports.getPerfilCompleto = async (req, res) => {
                   jsonb_build_object(
                     'id_hijo',         h.id_hijo,
                     'anio_nacimiento', h.anio_nacimiento,
+                    'anios',           h.anios,
                     'sexo',            h.sexo
                   )
                   ORDER BY h.id_hijo ASC
@@ -1471,19 +1503,28 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE ec.id_persona = p.id_persona
         ), '[]'::jsonb) AS elecciones,
 
-        -- CAPACIDAD MOVILIZACION (1:1)
-        (
-          SELECT CASE
-            WHEN cm.id_persona IS NULL THEN NULL
-            ELSE jsonb_build_object(
-              'eventos_ultimos_3_anios', cm.eventos_ultimos_3_anios,
-              'asistencia_promedio',     cm.asistencia_promedio
+        -- CAPACIDAD MOVILIZACION EVENTOS (lista + fotos)
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_evento',      cme.id_evento,
+              'nombre_evento',  cme.nombre_evento,
+              'fecha_evento',   cme.fecha_evento,
+              'asistencia',     cme.asistencia,
+              'lugar_evento',   cme.lugar_evento,
+
+              -- fotos 1:N por evento
+              'fotos', COALESCE((
+                SELECT jsonb_agg(f.foto_url ORDER BY f.id_foto ASC)
+                FROM capacidad_movilizacion_eventos_fotos f
+                WHERE f.id_evento = cme.id_evento
+              ), '[]'::jsonb)
             )
-          END
-          FROM capacidad_movilizacion cm
-          WHERE cm.id_persona = p.id_persona
-          LIMIT 1
-        ) AS capacidad_movilizacion,
+            ORDER BY cme.fecha_evento DESC NULLS LAST, cme.id_evento ASC
+          )
+          FROM capacidad_movilizacion_eventos cme
+          WHERE cme.id_persona = p.id_persona
+        ), '[]'::jsonb) AS capacidad_movilizacion_eventos,
 
         -- EQUIPOS
         COALESCE((
@@ -1499,7 +1540,7 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE ep.id_persona = p.id_persona
         ), '[]'::jsonb) AS equipos,
 
-        -- REFERENTES (nombres + apellidos, como en tu UI)
+        -- REFERENTES
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1507,7 +1548,8 @@ exports.getPerfilCompleto = async (req, res) => {
               'nivel',            rp.nivel,
               'nombres',          rp.nombres,
               'apellido_paterno', rp.apellido_paterno,
-              'apellido_materno', rp.apellido_materno
+              'apellido_materno', rp.apellido_materno,
+              'cargo',            rp.cargo
             )
             ORDER BY rp.id_referente ASC
           )
@@ -1563,19 +1605,48 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE pti.id_persona = p.id_persona
         ), '[]'::jsonb) AS temas_interes,
 
-        -- CARGOS DE ELECCION POPULAR (lista)
+        -- CARGOS DE ELECCIÓN POPULAR (lista)
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
               'id_cargo_eleccion', cep.id_cargo_eleccion,
               'periodo', cep.periodo,
+              'modalidad', cep.modalidad,
+
+              'id_orden_gobierno', cep.id_orden_gobierno,
+              'orden_gobierno', og.nombre,
+
+              'id_cargo_catalogo', cep.id_cargo_catalogo,
+              'cargo_catalogo', ce.nombre,
+
+              'id_partido_postulante', cep.id_partido_postulante,
+              'partido_postulante_catalogo', cp.nombre,
+              'partido_postulante_siglas', cp.siglas,
+
+              -- legacy (por si aún hay registros viejos)
               'cargo', cep.cargo,
               'partido_postulante', cep.partido_postulante,
-              'modalidad', cep.modalidad
+
+              -- ✅ display final (prioriza catálogo, si no usa legacy)
+              'cargo_display', COALESCE(ce.nombre, cep.cargo),
+              'partido_display', COALESCE(cp.siglas, cp.nombre, cep.partido_postulante),
+
+              'es_suplente', cep.es_suplente,
+              'titular_candidatura', cep.titular_candidatura
             )
-            ORDER BY cep.id_cargo_eleccion ASC
+            ORDER BY
+              -- ordena por periodo (cuando viene AAAA-AAAA o AAAA)
+              NULLIF(split_part(cep.periodo,'-',1),'')::int DESC NULLS LAST,
+              cep.id_cargo_eleccion ASC
           )
           FROM cargos_eleccion_popular cep
+          LEFT JOIN catalogo_orden_gobierno og
+            ON og.id_orden = cep.id_orden_gobierno
+          LEFT JOIN catalogo_cargo_eleccion ce
+            ON ce.id_orden = cep.id_orden_gobierno
+          AND ce.id_cargo = cep.id_cargo_catalogo
+          LEFT JOIN catalogo_partidos cp
+            ON cp.id_partido = cep.id_partido_postulante
           WHERE cep.id_persona = p.id_persona
         ), '[]'::jsonb) AS cargos_eleccion_popular,
 
@@ -1594,7 +1665,7 @@ exports.getPerfilCompleto = async (req, res) => {
           WHERE el.id_persona = p.id_persona
         ), '[]'::jsonb) AS experiencia_laboral,
 
-        -- CAPACIDAD MOVILIZACION EVENTOS (lista)
+        -- CAPACIDAD MOVILIZACION EVENTOS (lista + fotos)
         COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -1603,13 +1674,68 @@ exports.getPerfilCompleto = async (req, res) => {
               'fecha_evento', cme.fecha_evento,
               'asistencia', cme.asistencia,
               'lugar_evento', cme.lugar_evento,
-              'foto_evento_url', cme.foto_evento_url
+              'fotos', COALESCE((
+                SELECT jsonb_agg(f.foto_url ORDER BY f.id_foto ASC)
+                FROM capacidad_movilizacion_eventos_fotos f
+                WHERE f.id_evento = cme.id_evento
+              ), '[]'::jsonb)
             )
             ORDER BY cme.id_evento ASC
           )
           FROM capacidad_movilizacion_eventos cme
           WHERE cme.id_persona = p.id_persona
         ), '[]'::jsonb) AS capacidad_movilizacion_eventos,
+
+        -- FUENTES CONSULTA
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_fuente_persona', fp.id_fuente_persona,
+              'id_fuente',         fp.id_fuente,
+              'fuente',            cfc.nombre,
+              'detalle',           fp.detalle,
+              'fecha_consulta',    fp.fecha_consulta
+            )
+            ORDER BY cfc.nombre ASC, fp.id_fuente_persona ASC
+          )
+          FROM fuentes_persona fp
+          JOIN catalogo_fuentes_consulta cfc ON cfc.id_fuente = fp.id_fuente
+          WHERE fp.id_persona = p.id_persona
+        ), '[]'::jsonb) AS fuentes_consulta,
+
+        -- MUNICIPIOS TRABAJO (lista)
+        COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_municipio', pmt.id_municipio,
+              'municipio',    m2.nombre,
+              'es_principal', pmt.es_principal,
+              'notas',        pmt.notas
+            )
+            ORDER BY pmt.es_principal DESC, m2.nombre ASC
+          )
+          FROM personas_municipios_trabajo pmt
+          LEFT JOIN municipios m2 ON m2.id_municipio = pmt.id_municipio
+          WHERE pmt.id_persona = p.id_persona
+        ), '[]'::jsonb) AS municipios_trabajo,
+
+        -- LIDERAZGO E INFLUENCIA (1:1)
+        (
+          SELECT CASE
+            WHEN li.id_persona IS NULL THEN NULL
+            ELSE jsonb_build_object(
+              'nivel', li.nivel,
+              'tipos', li.tipos,
+              'tipo_otro_texto', li.tipo_otro_texto,
+              'cuenta_con_estructura', li.cuenta_con_estructura,
+              'presencia_territorial', li.presencia_territorial,
+              'created_at', li.created_at,
+              'updated_at', li.updated_at
+            )
+          END
+          FROM liderazgo_influencia li
+          WHERE li.id_persona = p.id_persona
+        ) AS liderazgo_influencia,
 
         -- CONTROVERSIAS (condicional)
         CASE
@@ -1640,6 +1766,7 @@ exports.getPerfilCompleto = async (req, res) => {
 
       LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
       LEFT JOIN usuarios u_mod  ON u_mod.id_usuario = p.modificado_por
+      LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
       LEFT JOIN oficinas o      ON o.id_oficina = p.id_oficina
 
       LEFT JOIN catalogo_partidos cp            ON cp.id_partido   = p.id_partido_actual
@@ -1657,9 +1784,25 @@ exports.getPerfilCompleto = async (req, res) => {
 
     // 🔒 seguridad capturista (solo sus registros)
     const roles = req.user?.roles || [];
-    if (roles.includes("capturista") && !roles.includes("analista") && !roles.includes("superadmin")) {
+    const isSuperadmin = roles.includes("superadmin");
+    const isAnalista = roles.includes("analista");
+    const isCapturista = roles.includes("capturista");
+
+    const row = rows[0];
+
+    // capturista puro: solo sus registros
+    if (isCapturista && !isAnalista && !isSuperadmin) {
       const userId = Number(req.user.id_usuario || 0);
-      if (rows[0].creado_por !== userId) {
+      if (Number(row.creado_por) !== userId) {
+        return res.status(403).json({ error: "No autorizado" });
+      }
+    }
+
+    // analista (no superadmin): solo su oficina
+    if (isAnalista && !isSuperadmin) {
+      const myOffice = Number(req.user.id_oficina || 0);
+      if (!myOffice) return res.status(403).json({ error: "Usuario sin oficina asignada" });
+      if (Number(row.id_oficina) !== myOffice) {
         return res.status(403).json({ error: "No autorizado" });
       }
     }
@@ -1673,8 +1816,6 @@ exports.getPerfilCompleto = async (req, res) => {
   }
 };
 
-
-// 4. Usuarios para filtro
 
 
 // 5. resumen por usuario
@@ -1714,6 +1855,9 @@ const puppeteer = require("puppeteer");
 
 // ===================== helpers =====================
 
+// Node 18+ ya trae fetch global. Si estás en Node <18:
+// const fetch = require("node-fetch");
+
 async function imageUrlToDataUri(url) {
   if (!url) return null;
   const s = String(url);
@@ -1733,7 +1877,6 @@ async function imageUrlToDataUri(url) {
   return `data:${ct};base64,${b64}`;
 }
 
-
 function esc(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -1741,6 +1884,11 @@ function esc(s) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function escAttr(s) {
+  // para atributos HTML (src, alt, etc.)
+  return String(s ?? "").replace(/"/g, "&quot;");
 }
 
 function fmtDate(v) {
@@ -1776,27 +1924,99 @@ function listSection(title, arr, renderItem) {
   `;
 }
 
+function titleCaseEs(s) {
+  const t = String(s ?? "").trim();
+  if (!t) return "";
+  return t
+    .toLowerCase()
+    .split(/\s+/g)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
- function escAttr(s){
-    return String(s ?? "").replace(/"/g, "&quot;");
-  }
+function normalizeTipoEnum(tipo) {
+  // "organizacion_politica" -> "Organización política"
+  const raw = String(tipo ?? "").trim();
+  if (!raw) return "";
+  const spaced = raw.replace(/_/g, " ").toLowerCase();
+  // accents simples
+  const map = {
+    "organizacion politica": "Organización política",
+    "organizacion social": "Organización social",
+    "organizacion civil": "Organización civil",
+    "partido": "Partido",
+    "partidos": "Partido",
+  };
+  return map[spaced] || (spaced.charAt(0).toUpperCase() + spaced.slice(1));
+}
 
+function parseLiderazgoTipos(tipos) {
+  const arr = asArray(tipos)
+    .map(x => String(x ?? "").trim())
+    .filter(Boolean);
+
+  if (!arr.length) return [];
+
+  const map = {
+    territorial: "Territorial",
+    politico_institucional: "Político institucional",
+    social_comunitario: "Social comunitario",
+    mediatico: "Mediático",
+    tecnico_especializado: "Técnico especializado",
+    economico_empresarial: "Económico empresarial",
+  };
+
+  return arr.map(k => map[k] || titleCaseEs(k.replace(/_/g, " ")));
+}
+
+function confiabilidadInfo(nivel) {
+  const v = String(nivel ?? "").trim().toLowerCase();
+  if (v === "alto")  return { label: "Confiabilidad: Alta",  cls: "ok" };
+  if (v === "medio") return { label: "Confiabilidad: Media", cls: "warn" };
+  if (v === "bajo")  return { label: "Confiabilidad: Baja",  cls: "bad" };
+  if (v) return { label: `Confiabilidad: ${titleCaseEs(v)}`, cls: "mut" };
+  return null;
+}
+
+// ===================== buildPerfilHtml (ACTUALIZADO) =====================
 
 function buildPerfilHtml(p) {
-
   const nombreCompleto = joinFullName(p) || "—";
   const partido = p.partido_actual_siglas || p.partido_actual || "";
-  const municipio = p.municipio_trabajo_politico || p.municipio_residencia_real || p.municipio_residencia_legal || "—";
+  const municipioTop =
+    p.municipio_trabajo_politico ||
+    p.residencia_real_display ||
+    p.municipio_residencia_real ||
+    p.residencia_legal_display ||
+    p.municipio_residencia_legal ||
+    "—";
+
   const foto = p.foto_url ? String(p.foto_url) : "";
 
- 
-  
+  const munLegal = p.residencia_legal_display || p.municipio_residencia_legal || "—";
+  const munReal  = p.residencia_real_display  || p.municipio_residencia_real  || "—";
+  const munTrab  = p.municipio_trabajo_politico || "—";
+
+  const confi = confiabilidadInfo(p.nivel_confiabilidad);
+  const escalaInfl = p.escala_influencia ? titleCaseEs(p.escala_influencia) : "";
 
   const flags = [
     p.sin_servicio_publico === true ? badge("Sin servicio público", "sec") : "",
     p.ha_contendido_eleccion === true ? badge("Ha contendió elección", "prim") : "",
     p.sin_controversias_publicas === true ? badge("Sin controversias", "ok") : "",
   ].filter(Boolean).join("");
+
+  // Liderazgo (1:1)
+  const li = p.liderazgo_influencia || null;
+  const liNivel = li?.nivel ? titleCaseEs(li.nivel) : "";
+  const liTipos = parseLiderazgoTipos(li?.tipos);
+  const liPres  = li?.presencia_territorial ? titleCaseEs(li.presencia_territorial) : "";
+  const liEstructura =
+    li?.cuenta_con_estructura === true ? "Sí" :
+    li?.cuenta_con_estructura === false ? "No" : "";
+
+  // Municipios de trabajo (lista)
+  const municipiosTrabajo = asArray(p.municipios_trabajo);
 
   return `<!doctype html>
 <html lang="es">
@@ -1812,6 +2032,8 @@ function buildPerfilHtml(p) {
       --bg:#ffffff;
       --line:#e5e7eb;
       --ok:#16a34a;
+      --warn:#f59e0b;
+      --bad:#dc2626;
     }
     *{ box-sizing:border-box; }
     body{
@@ -1844,7 +2066,7 @@ function buildPerfilHtml(p) {
     .title{ flex:1 1 auto; min-width:0; }
     .h1{ font-size:20px; margin:0; color:var(--prim); font-weight:800; }
     .sub{ margin-top:6px; color:var(--mut); font-size:13px; }
-    .badges{ margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; }
+    .badges{ margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
     .badge{
       display:inline-block;
       font-size:11px;
@@ -1857,6 +2079,10 @@ function buildPerfilHtml(p) {
     .badge.prim{ background: rgba(139,33,54,.08); border-color: rgba(139,33,54,.18); }
     .badge.sec{ background: rgba(184,144,86,.10); border-color: rgba(184,144,86,.22); }
     .badge.ok{ background: rgba(22,163,74,.10); border-color: rgba(22,163,74,.20); color:#065f46; }
+    .badge.warn{ background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.22); color:#92400e; }
+    .badge.bad{ background: rgba(220,38,38,.10); border-color: rgba(220,38,38,.18); color:#7f1d1d; }
+    .badge.mut{ background:#f3f4f6; border-color:#e5e7eb; color:#374151; }
+
     .section{
       margin-top:14px;
       border:1px solid var(--line);
@@ -1879,6 +2105,7 @@ function buildPerfilHtml(p) {
     }
     .k{ color:var(--mut); }
     .v{ color:#111827; }
+
     .grid{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -1893,6 +2120,20 @@ function buildPerfilHtml(p) {
     }
     .item .t{ font-weight:800; margin-bottom:4px; }
     .item .m{ color:var(--mut); font-size:11px; }
+
+    .photos{
+      margin-top:8px;
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+    .photos img{
+      height:48px;
+      width:auto;
+      border:1px solid var(--line);
+      border-radius:8px;
+    }
+
     .foot{
       margin-top:10px;
       color:var(--mut);
@@ -1913,12 +2154,14 @@ function buildPerfilHtml(p) {
 
     <div class="title">
       <h1 class="h1">${esc(nombreCompleto)}</h1>
-      <div class="sub">• ${esc(municipio)}</div>
+      <div class="sub">• ${esc(municipioTop)}</div>
 
       <div class="badges">
-        ${badge(p.grupo_postulacion)}
+        ${confi ? badge(confi.label, confi.cls) : ""}
+        ${escalaInfl ? badge(`Influencia: ${escalaInfl}`, "mut") : ""}
+        ${badge(p.grupo_postulacion, "mut")}
         ${partido ? badge(partido, "prim") : ""}
-        ${badge(p.ideologia_politica)}
+        ${badge(p.ideologia_politica, "mut")}
         ${badge(p.tema_interes_central, "sec")}
         ${flags}
       </div>
@@ -1933,9 +2176,9 @@ function buildPerfilHtml(p) {
       <div class="k">Clave elector</div><div class="v mono">${esc(p.clave_elector || "—")}</div>
       <div class="k">Estado civil</div><div class="v">${esc(p.estado_civil || "—")}</div>
 
-      <div class="k">Municipio legal</div><div class="v">${esc(p.municipio_residencia_legal || "—")}</div>
-      <div class="k">Municipio real</div><div class="v">${esc(p.municipio_residencia_real || "—")}</div>
-      <div class="k">Municipio trabajo</div><div class="v">${esc(p.municipio_trabajo_politico || "—")}</div>
+      <div class="k">Residencia legal</div><div class="v">${esc(munLegal)}</div>
+      <div class="k">Residencia real</div><div class="v">${esc(munReal)}</div>
+      <div class="k">Municipio trabajo</div><div class="v">${esc(munTrab)}</div>
     </div>
   </section>
 
@@ -1947,6 +2190,13 @@ function buildPerfilHtml(p) {
       <div class="k">Distrito local</div><div class="v">${esc(p?.datos_ine?.distrito_local || "—")}</div>
     </div>
   </section>
+
+  ${municipiosTrabajo.length ? listSection("Municipios de trabajo", municipiosTrabajo, (m)=>`
+    <div class="item">
+      <div class="t">${esc(m.municipio || "—")} ${m.es_principal ? badge("Principal", "ok") : ""}</div>
+      ${m.notas ? `<div class="m">${esc(m.notas)}</div>` : `<div class="m"></div>`}
+    </div>
+  `) : ""}
 
   ${listSection("Teléfonos", p.telefonos, (t)=>`
     <div class="item">
@@ -1960,13 +2210,35 @@ function buildPerfilHtml(p) {
       <div class="t">${esc([x.nivel, x.grado_obtenido || x.grado].filter(Boolean).join(" • ") || "—")}</div>
       <div class="m">${esc(x.institucion || "")}</div>
       <div class="m">${esc((x.anio_inicio || "—") + " - " + (x.anio_fin || "—"))} ${x.titulado === true ? "• Titulado" : ""}</div>
+      ${x.cedula_profesional ? `<div class="m">Cédula: ${esc(x.cedula_profesional)}</div>` : ``}
     </div>
   `)}
+
+  ${listSection("Parejas e hijos", p.parejas, (pa)=>`
+    <div class="item">
+      <div class="t">${esc(pa.nombre_pareja || "—")} (${esc(pa.tipo_relacion || "—")})</div>
+      <div class="m">${esc(pa.periodo || "—")}</div>
+      ${Array.isArray(pa.hijos) && pa.hijos.length ? pa.hijos.map(h => 
+        `<div class="m">👶 ${esc(h.anio_nacimiento || "—")} (${esc(h.anios || "—")} años, ${esc(h.sexo || "—")})</div>`
+      ).join('') : ''}
+    </div>
+  `)}
+
 
   ${listSection("Redes sociales", p.redes_sociales, (r)=>`
     <div class="item">
       <div class="t">${esc(r.red || "—")}</div>
       <div class="m">${r.url ? esc(r.url) : "—"}</div>
+    </div>
+  `)}
+
+  ${listSection("Empresas", p.empresas, (e)=>`
+    <div class="item">
+      <div class="t">${esc(e.nombre_empresa || "—")}</div>
+      <div class="m">${esc(e.rol || e.rol_otro || "—")}</div>
+      ${e.nombre_relacionado ? `<div class="m">Relacionado: ${esc(e.nombre_relacionado)} (${esc(e.relacion || "—")})</div>` : ''}
+      ${e.periodo ? `<div class="m">Período: ${esc(e.periodo)}</div>` : ''}
+      ${e.notas ? `<div class="m">${esc(e.notas)}</div>` : ''}
     </div>
   `)}
 
@@ -1979,8 +2251,18 @@ function buildPerfilHtml(p) {
 
   ${listSection("Cargos de elección popular", p.cargos_eleccion_popular, (c)=>`
     <div class="item">
-      <div class="t">${esc(c.cargo || "—")}</div>
-      <div class="m">${esc([c.periodo, c.modalidad, c.partido_postulante].filter(Boolean).join(" • ") || "")}</div>
+      <div class="t">${esc(c.cargo_display || c.cargo || "—")}</div>
+      <div class="m">${esc([c.periodo, c.modalidad, (c.partido_display || c.partido_postulante)].filter(Boolean).join(" • ") || "")}</div>
+      ${(c.orden_gobierno || c.cargo_catalogo) ? `<div class="m">${esc([c.orden_gobierno, c.cargo_catalogo].filter(Boolean).join(" • "))}</div>` : ``}
+      ${c.es_suplente ? `<div class="m">Suplente de: ${esc(c.titular_candidatura || "—")}</div>` : ``}
+    </div>
+  `)}
+
+
+  ${listSection("Experiencia laboral", p.experiencia_laboral, (x)=>`
+    <div class="item">
+      <div class="t">${esc(x.cargo || "—")}</div>
+      <div class="m">${esc(x.organizacion || "")} • ${esc(x.periodo || "")}</div>
     </div>
   `)}
 
@@ -2003,7 +2285,14 @@ function buildPerfilHtml(p) {
   ${listSection("Eventos de movilización", p.capacidad_movilizacion_eventos, (e)=>`
     <div class="item">
       <div class="t">${esc(e.nombre_evento || "—")}</div>
-      <div class="m">${esc([e.fecha_evento, (e.asistencia != null ? ("Asistencia: " + e.asistencia) : null)].filter(Boolean).join(" • ") || "")}</div>
+      <div class="m">${esc([e.fecha_evento, (e.asistencia != null ? ("Asistencia: " + e.asistencia) : null), e.lugar_evento].filter(Boolean).join(" • ") || "")}</div>
+      ${
+        Array.isArray(e.fotos) && e.fotos.length
+          ? `<div class="photos">
+              ${e.fotos.slice(0,6).map(u => `<img src="${escAttr(u)}" />`).join("")}
+            </div>`
+          : ``
+      }
     </div>
   `)}
 
@@ -2017,7 +2306,7 @@ function buildPerfilHtml(p) {
   ${listSection("Referentes políticos", p.referentes, (r)=>`
     <div class="item">
       <div class="t">${esc([r.nombres, r.apellido_paterno, r.apellido_materno].filter(Boolean).join(" ") || "—")}</div>
-      <div class="m">${esc(r.nivel || "")}</div>
+      <div class="m">${esc([r.nivel ? titleCaseEs(r.nivel) : "", r.cargo ? r.cargo : ""].filter(Boolean).join(" • "))}</div>
     </div>
   `)}
 
@@ -2030,7 +2319,7 @@ function buildPerfilHtml(p) {
 
   ${listSection("Participación en organizaciones", p.participacion_organizaciones, (o)=>`
     <div class="item">
-      <div class="t">${esc((o.tipo ? (o.tipo + ": ") : "") + (o.nombre || "—"))}</div>
+      <div class="t">${esc((normalizeTipoEnum(o.tipo) ? (normalizeTipoEnum(o.tipo) + ": ") : "") + (o.nombre || "—"))}</div>
       <div class="m">${esc([o.rol, o.periodo].filter(Boolean).join(" • ") || "")}</div>
       ${o.notas ? `<div class="m">${esc(o.notas)}</div>` : ``}
     </div>
@@ -2043,6 +2332,28 @@ function buildPerfilHtml(p) {
       <div class="m">${esc(x.periodo || "")}</div>
     </div>
   `)}
+
+  ${listSection("Fuentes de consulta", p.fuentes_consulta, (f)=>`
+    <div class="item">
+      <div class="t">${esc(f.fuente || "—")}</div>
+      <div class="m">${esc([f.fecha_consulta, f.detalle].filter(Boolean).join(" • ") || "")}</div>
+    </div>
+  `)}
+
+  ${
+    li
+      ? `<section class="section">
+          <div class="h2">Liderazgo e influencia</div>
+          <div class="kv">
+            <div class="k">Nivel</div><div class="v">${esc(liNivel || "—")}</div>
+            <div class="k">Tipos</div><div class="v">${esc(liTipos.length ? liTipos.join(", ") : "—")}</div>
+            <div class="k">Presencia territorial</div><div class="v">${esc(liPres || "—")}</div>
+            <div class="k">Estructura</div><div class="v">${esc(liEstructura || "—")}</div>
+            ${li?.tipo_otro_texto ? `<div class="k">Otro</div><div class="v">${esc(li.tipo_otro_texto)}</div>` : ``}
+          </div>
+        </section>`
+      : ""
+  }
 
   ${
     p.sin_controversias_publicas === true
@@ -2072,9 +2383,6 @@ function buildPerfilHtml(p) {
 // ===================== ENDPOINT =====================
 exports.getPerfilPdf = async (req, res) => {
   let browser = null;
- 
-
-
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
@@ -2084,337 +2392,485 @@ exports.getPerfilPdf = async (req, res) => {
       ${/* pega tu SQL exacto aquí */""}
     `;
 
+    // 🔒 reglas de acceso
+
+
     // ⬆️ En lugar de pegarlo manualmente dentro de comentario,
     // pega tu SQL string aquí abajo (ya te lo dejo integrado):
     const sqlPerfil = `
-      SELECT
-        p.id_persona,
-        p.nombre,
-        p.apellido_paterno,
-        p.apellido_materno,
-        p.curp,
-        p.rfc,
-        p.clave_elector,
-        p.estado_civil,
-        p.escala_influencia,
-        p.sin_servicio_publico,
-        p.ha_contendido_eleccion,
-        p.sin_controversias_publicas,
-        p.foto_url,
-        p.creado_por,
-        p.created_at,
-        p.updated_at,
+    SELECT
+      p.id_persona,
+      p.nombre,
+      p.apellido_paterno,
+      p.apellido_materno,
+      p.foto_url,
+      p.id_oficina,
+      p.creado_por,
+      p.modificado_por,
 
-        p.id_partido_actual,
-        p.id_tema_interes_central,
-        p.tema_interes_otro_texto,
-        p.id_grupo_postulacion,
-        p.id_ideologia_politica,
+      p.verificado_por,
+      p.verificado_at,
 
-        cp.nombre  AS partido_actual,
-        cp.siglas  AS partido_actual_siglas,
-        cti.nombre AS tema_interes_central,
-        cgp.nombre AS grupo_postulacion,
-        cip.nombre AS ideologia_politica,
+      p.nivel_confiabilidad,
 
-        ml.nombre AS municipio_residencia_legal,
-        mr.nombre AS municipio_residencia_real,
-        mt.nombre AS municipio_trabajo_politico,
+      p.res_legal_fuera_edomex,
+      p.res_legal_estado_texto,
+      p.res_legal_municipio_texto,
 
-        (
-          SELECT CASE
-            WHEN di.id_persona IS NULL THEN NULL
-            ELSE jsonb_build_object(
-              'seccion_electoral', di.seccion_electoral,
-              'distrito_federal',  di.distrito_federal,
-              'distrito_local',    di.distrito_local
-            )
-          END
-          FROM datos_ine di
-          WHERE di.id_persona = p.id_persona
-          ORDER BY di.id_ine DESC
-          LIMIT 1
-        ) AS datos_ine,
+      p.res_real_fuera_edomex,
+      p.res_real_estado_texto,
+      p.res_real_municipio_texto,
 
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_telefono', t.id_telefono,
-              'telefono',    t.telefono,
-              'tipo',        t.tipo,
-              'principal',   t.principal
-            )
-            ORDER BY t.principal DESC, t.id_telefono ASC
+      p.partido_otro_texto,
+
+      u_ver.nombre AS verificado_por_nombre,
+      u_ver.email  AS verificado_por_email,
+
+      u_crea.nombre  AS creado_por_nombre,
+      u_mod.nombre   AS modificado_por_nombre,
+      o.nombre       AS oficina_nombre,
+      p.created_at,
+      p.updated_at,
+
+      p.curp,
+      p.rfc,
+      p.clave_elector,
+      p.estado_civil,
+      p.escala_influencia,
+      p.sin_servicio_publico,
+      p.ha_contendido_eleccion,
+      p.sin_controversias_publicas,
+
+      p.id_partido_actual,
+      p.id_tema_interes_central,
+      p.tema_interes_otro_texto,
+      p.id_grupo_postulacion,
+      p.id_ideologia_politica,
+
+      cp.nombre  AS partido_actual,
+      cp.siglas  AS partido_actual_siglas,
+      cti.nombre AS tema_interes_central,
+      cgp.nombre AS grupo_postulacion,
+      cip.nombre AS ideologia_politica,
+
+      p.municipio_residencia_legal  AS municipio_residencia_legal_id,
+      p.municipio_residencia_real   AS municipio_residencia_real_id,
+      p.municipio_trabajo_politico  AS municipio_trabajo_politico_id,
+
+      ml.nombre AS municipio_residencia_legal,
+      mr.nombre AS municipio_residencia_real,
+      mt.nombre AS municipio_trabajo_politico,
+
+      CASE
+        WHEN COALESCE(p.res_legal_fuera_edomex,false) THEN
+          concat_ws(', ',
+            NULLIF(trim(p.res_legal_municipio_texto), ''),
+            NULLIF(trim(p.res_legal_estado_texto), '')
           )
-          FROM telefonos t
-          WHERE t.id_persona = p.id_persona
-        ), '[]'::jsonb) AS telefonos,
+        ELSE ml.nombre
+      END AS residencia_legal_display,
 
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_formacion',   fa.id_formacion,
-              'nivel',          fa.nivel,
-              'grado',          fa.grado,
-              'grado_obtenido', fa.grado_obtenido,
-              'institucion',    fa.institucion,
-              'anio_inicio',    fa.anio_inicio,
-              'anio_fin',       fa.anio_fin,
-              'titulado',       fa.titulado,
-              'cedula_profesional', fa.cedula_profesional
-            )
-            ORDER BY fa.id_formacion ASC
+      CASE
+        WHEN COALESCE(p.res_real_fuera_edomex,false) THEN
+          concat_ws(', ',
+            NULLIF(trim(p.res_real_municipio_texto), ''),
+            NULLIF(trim(p.res_real_estado_texto), '')
           )
-          FROM formacion_academica fa
-          WHERE fa.id_persona = p.id_persona
-        ), '[]'::jsonb) AS formacion_academica,
+        ELSE mr.nombre
+      END AS residencia_real_display,
 
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_red', crs.id_red,
-              'red',    crs.nombre,
-              'url',    rsp.url
-            )
-            ORDER BY crs.nombre ASC
+      (
+        SELECT CASE
+          WHEN di.id_persona IS NULL THEN NULL
+          ELSE jsonb_build_object(
+            'seccion_electoral', di.seccion_electoral,
+            'distrito_federal',  di.distrito_federal,
+            'distrito_local',    di.distrito_local
           )
-          FROM redes_sociales_persona rsp
-          JOIN catalogo_redes_sociales crs ON crs.id_red = rsp.id_red
-          WHERE rsp.id_persona = p.id_persona
-        ), '[]'::jsonb) AS redes_sociales,
+        END
+        FROM datos_ine di
+        WHERE di.id_persona = p.id_persona
+        ORDER BY di.id_ine DESC
+        LIMIT 1
+      ) AS datos_ine,
 
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_pareja',      pa.id_pareja,
-              'nombre_pareja',  pa.nombre_pareja,
-              'tipo_relacion',  pa.tipo_relacion,
-              'periodo',        pa.periodo,
-              'hijos', COALESCE((
-                SELECT jsonb_agg(
-                  jsonb_build_object(
-                    'id_hijo',         h.id_hijo,
-                    'anio_nacimiento', h.anio_nacimiento,
-                    'sexo',            h.sexo
-                  )
-                  ORDER BY h.id_hijo ASC
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_telefono', t.id_telefono,
+            'telefono',    t.telefono,
+            'tipo',        t.tipo,
+            'principal',   t.principal
+          )
+          ORDER BY t.principal DESC, t.id_telefono ASC
+        )
+        FROM telefonos t
+        WHERE t.id_persona = p.id_persona
+      ), '[]'::jsonb) AS telefonos,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_formacion',   fa.id_formacion,
+            'nivel',          fa.nivel,
+            'grado',          fa.grado,
+            'grado_obtenido', fa.grado_obtenido,
+            'institucion',    fa.institucion,
+            'anio_inicio',    fa.anio_inicio,
+            'anio_fin',       fa.anio_fin,
+            'titulado',       fa.titulado,
+            'cedula_profesional', fa.cedula_profesional
+          )
+          ORDER BY fa.id_formacion ASC
+        )
+        FROM formacion_academica fa
+        WHERE fa.id_persona = p.id_persona
+      ), '[]'::jsonb) AS formacion_academica,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_red', crs.id_red,
+            'red',    crs.nombre,
+            'url',    rsp.url
+          )
+          ORDER BY crs.nombre ASC
+        )
+        FROM redes_sociales_persona rsp
+        JOIN catalogo_redes_sociales crs ON crs.id_red = rsp.id_red
+        WHERE rsp.id_persona = p.id_persona
+      ), '[]'::jsonb) AS redes_sociales,
+
+      COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'nombre_empresa', e.nombre_empresa,
+          'rol', e.rol,
+          'rol_otro', e.rol_otro,
+          'nombre_relacionado', e.nombre_relacionado,
+          'relacion', e.relacion,
+          'periodo', e.periodo,
+          'notas', e.notas
+        ) ORDER BY e.id_empresa_persona ASC)
+        FROM empresas_persona e
+        WHERE e.id_persona = p.id_persona
+      ), '[]'::jsonb) AS empresas,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_pareja',      pa.id_pareja,
+            'nombre_pareja',  pa.nombre_pareja,
+            'tipo_relacion',  pa.tipo_relacion,
+            'periodo',        pa.periodo,
+            'hijos', COALESCE((
+              SELECT jsonb_agg(
+                jsonb_build_object(
+                  'id_hijo',         h.id_hijo,
+                  'anio_nacimiento', h.anio_nacimiento,
+                  'anios',           h.anios,
+                  'sexo',            h.sexo
                 )
-                FROM hijos h
-                WHERE h.id_persona = p.id_persona
-                  AND h.id_pareja = pa.id_pareja
-              ), '[]'::jsonb)
-            )
-            ORDER BY pa.id_pareja ASC
-          )
-          FROM parejas pa
-          WHERE pa.id_persona = p.id_persona
-        ), '[]'::jsonb) AS parejas,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_servicio', sp.id_servicio,
-              'periodo',     sp.periodo,
-              'cargo',       sp.cargo,
-              'dependencia', sp.dependencia
-            )
-            ORDER BY sp.id_servicio ASC
-          )
-          FROM servicio_publico sp
-          WHERE sp.id_persona = p.id_persona
-        ), '[]'::jsonb) AS servicio_publico,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_eleccion',            ec.id_eleccion,
-              'anio_eleccion',          ec.anio_eleccion,
-              'candidatura',            ec.candidatura,
-              'partido_postulacion',    ec.partido_postulacion,
-              'resultado',              ec.resultado,
-              'diferencia_votos',       ec.diferencia_votos,
-              'diferencia_porcentaje',  ec.diferencia_porcentaje
-            )
-            ORDER BY ec.anio_eleccion DESC NULLS LAST, ec.id_eleccion ASC
-          )
-          FROM elecciones_contendidas ec
-          WHERE ec.id_persona = p.id_persona
-        ), '[]'::jsonb) AS elecciones,
-
-        (
-          SELECT CASE
-            WHEN cm.id_persona IS NULL THEN NULL
-            ELSE jsonb_build_object(
-              'eventos_ultimos_3_anios', cm.eventos_ultimos_3_anios,
-              'asistencia_promedio',     cm.asistencia_promedio
-            )
-          END
-          FROM capacidad_movilizacion cm
-          WHERE cm.id_persona = p.id_persona
-          LIMIT 1
-        ) AS capacidad_movilizacion,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_equipo',     ep.id_equipo,
-              'nombre_equipo', ep.nombre_equipo,
-              'activo',        ep.activo
-            )
-            ORDER BY ep.activo DESC, ep.id_equipo ASC
-          )
-          FROM equipos_politicos ep
-          WHERE ep.id_persona = p.id_persona
-        ), '[]'::jsonb) AS equipos,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_referente',     rp.id_referente,
-              'nivel',            rp.nivel,
-              'nombres',          rp.nombres,
-              'apellido_paterno', rp.apellido_paterno,
-              'apellido_materno', rp.apellido_materno
-            )
-            ORDER BY rp.id_referente ASC
-          )
-          FROM referentes_politicos rp
-          WHERE rp.id_persona = p.id_persona
-        ), '[]'::jsonb) AS referentes,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_familiar', fp.id_familiar,
-              'nombre',      fp.nombre,
-              'parentesco',  fp.parentesco,
-              'cargo',       fp.cargo,
-              'institucion', fp.institucion
-            )
-            ORDER BY fp.id_familiar ASC
-          )
-          FROM familiares_politica fp
-          WHERE fp.id_persona = p.id_persona
-        ), '[]'::jsonb) AS familiares,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_participacion', po.id_participacion,
-              'tipo',             po.tipo,
-              'nombre',           po.nombre,
-              'rol',              po.rol,
-              'periodo',          po.periodo,
-              'notas',            po.notas
-            )
-            ORDER BY po.id_participacion ASC
-          )
-          FROM participacion_organizaciones po
-          WHERE po.id_persona = p.id_persona
-        ), '[]'::jsonb) AS participacion_organizaciones,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_tema', pti.id_tema,
-              'tema',    cti2.nombre,
-              'otro_texto', pti.otro_texto
-            )
-            ORDER BY cti2.nombre ASC NULLS LAST, pti.id_tema ASC
-          )
-          FROM personas_temas_interes pti
-          LEFT JOIN catalogo_temas_interes cti2 ON cti2.id_tema = pti.id_tema
-          WHERE pti.id_persona = p.id_persona
-        ), '[]'::jsonb) AS temas_interes,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_cargo_eleccion', cep.id_cargo_eleccion,
-              'periodo', cep.periodo,
-              'cargo', cep.cargo,
-              'partido_postulante', cep.partido_postulante,
-              'modalidad', cep.modalidad
-            )
-            ORDER BY cep.id_cargo_eleccion ASC
-          )
-          FROM cargos_eleccion_popular cep
-          WHERE cep.id_persona = p.id_persona
-        ), '[]'::jsonb) AS cargos_eleccion_popular,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_experiencia', el.id_experiencia,
-              'periodo', el.periodo,
-              'cargo', el.cargo,
-              'organizacion', el.organizacion
-            )
-            ORDER BY el.id_experiencia ASC
-          )
-          FROM experiencia_laboral el
-          WHERE el.id_persona = p.id_persona
-        ), '[]'::jsonb) AS experiencia_laboral,
-
-        COALESCE((
-          SELECT jsonb_agg(
-            jsonb_build_object(
-              'id_evento', cme.id_evento,
-              'nombre_evento', cme.nombre_evento,
-              'fecha_evento', cme.fecha_evento,
-              'asistencia', cme.asistencia
-            )
-            ORDER BY cme.id_evento ASC
-          )
-          FROM capacidad_movilizacion_eventos cme
-          WHERE cme.id_persona = p.id_persona
-        ), '[]'::jsonb) AS capacidad_movilizacion_eventos,
-
-        CASE
-          WHEN p.sin_controversias_publicas = true THEN '[]'::jsonb
-          ELSE COALESCE((
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'id_controversia', cper.id_controversia,
-                'id_tipo',         cper.id_tipo,
-                'tipo',            ccat.tipo,
-                'descripcion',     cper.descripcion,
-                'fuente',          cper.fuente,
-                'fecha_registro',  cper.fecha_registro,
-                'estatus',         cper.estatus
+                ORDER BY h.id_hijo ASC
               )
-              ORDER BY cper.id_controversia ASC
+              FROM hijos h
+              WHERE h.id_persona = p.id_persona
+                AND h.id_pareja = pa.id_pareja
+            ), '[]'::jsonb)
+          )
+          ORDER BY pa.id_pareja ASC
+        )
+        FROM parejas pa
+        WHERE pa.id_persona = p.id_persona
+      ), '[]'::jsonb) AS parejas,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_servicio', sp.id_servicio,
+            'periodo',     sp.periodo,
+            'cargo',       sp.cargo,
+            'dependencia', sp.dependencia
+          )
+          ORDER BY sp.id_servicio ASC
+        )
+        FROM servicio_publico sp
+        WHERE sp.id_persona = p.id_persona
+      ), '[]'::jsonb) AS servicio_publico,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_eleccion',            ec.id_eleccion,
+            'anio_eleccion',          ec.anio_eleccion,
+            'candidatura',            ec.candidatura,
+            'partido_postulacion',    ec.partido_postulacion,
+            'resultado',              ec.resultado,
+            'diferencia_votos',       ec.diferencia_votos,
+            'diferencia_porcentaje',  ec.diferencia_porcentaje
+          )
+          ORDER BY ec.anio_eleccion DESC NULLS LAST, ec.id_eleccion ASC
+        )
+        FROM elecciones_contendidas ec
+        WHERE ec.id_persona = p.id_persona
+      ), '[]'::jsonb) AS elecciones,
+
+      -- ✅ EVENTOS + FOTOS (solo una vez)
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_evento',      cme.id_evento,
+            'nombre_evento',  cme.nombre_evento,
+            'fecha_evento',   cme.fecha_evento,
+            'asistencia',     cme.asistencia,
+            'lugar_evento',   cme.lugar_evento,
+            'fotos', COALESCE((
+              SELECT jsonb_agg(f.foto_url ORDER BY f.id_foto ASC)
+              FROM capacidad_movilizacion_eventos_fotos f
+              WHERE f.id_evento = cme.id_evento
+            ), '[]'::jsonb)
+          )
+          ORDER BY cme.fecha_evento DESC NULLS LAST, cme.id_evento ASC
+        )
+        FROM capacidad_movilizacion_eventos cme
+        WHERE cme.id_persona = p.id_persona
+      ), '[]'::jsonb) AS capacidad_movilizacion_eventos,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_equipo',     ep.id_equipo,
+            'nombre_equipo', ep.nombre_equipo,
+            'activo',        ep.activo
+          )
+          ORDER BY ep.activo DESC, ep.id_equipo ASC
+        )
+        FROM equipos_politicos ep
+        WHERE ep.id_persona = p.id_persona
+      ), '[]'::jsonb) AS equipos,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_referente',     rp.id_referente,
+            'nivel',            rp.nivel,
+            'nombres',          rp.nombres,
+            'apellido_paterno', rp.apellido_paterno,
+            'apellido_materno', rp.apellido_materno,
+            'cargo',            rp.cargo
+          )
+          ORDER BY rp.id_referente ASC
+        )
+        FROM referentes_politicos rp
+        WHERE rp.id_persona = p.id_persona
+      ), '[]'::jsonb) AS referentes,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_familiar', fp.id_familiar,
+            'nombre',      fp.nombre,
+            'parentesco',  fp.parentesco,
+            'cargo',       fp.cargo,
+            'institucion', fp.institucion
+          )
+          ORDER BY fp.id_familiar ASC
+        )
+        FROM familiares_politica fp
+        WHERE fp.id_persona = p.id_persona
+      ), '[]'::jsonb) AS familiares,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_participacion', po.id_participacion,
+            'tipo',             po.tipo,
+            'nombre',           po.nombre,
+            'rol',              po.rol,
+            'periodo',          po.periodo,
+            'notas',            po.notas
+          )
+          ORDER BY po.id_participacion ASC
+        )
+        FROM participacion_organizaciones po
+        WHERE po.id_persona = p.id_persona
+      ), '[]'::jsonb) AS participacion_organizaciones,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_tema', pti.id_tema,
+            'tema',    cti2.nombre,
+            'otro_texto', pti.otro_texto
+          )
+          ORDER BY cti2.nombre ASC NULLS LAST, pti.id_tema ASC
+        )
+        FROM personas_temas_interes pti
+        LEFT JOIN catalogo_temas_interes cti2 ON cti2.id_tema = pti.id_tema
+        WHERE pti.id_persona = p.id_persona
+      ), '[]'::jsonb) AS temas_interes,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_cargo_eleccion', cep.id_cargo_eleccion,
+            'periodo', cep.periodo,
+            'modalidad', cep.modalidad,
+
+            'id_orden_gobierno', cep.id_orden_gobierno,
+            'orden_gobierno', og.nombre,
+
+            'id_cargo_catalogo', cep.id_cargo_catalogo,
+            'cargo_catalogo', ce.nombre,
+
+            'id_partido_postulante', cep.id_partido_postulante,
+            'partido_postulante_catalogo', cp2.nombre,
+            'partido_postulante_siglas', cp2.siglas,
+
+            'cargo', cep.cargo,
+            'partido_postulante', cep.partido_postulante,
+
+            'cargo_display', COALESCE(ce.nombre, cep.cargo),
+            'partido_display', COALESCE(cp2.siglas, cp2.nombre, cep.partido_postulante),
+
+            'es_suplente', cep.es_suplente,
+            'titular_candidatura', cep.titular_candidatura
+          )
+          ORDER BY
+            NULLIF(split_part(cep.periodo,'-',1),'')::int DESC NULLS LAST,
+            cep.id_cargo_eleccion ASC
+        )
+        FROM cargos_eleccion_popular cep
+        LEFT JOIN catalogo_orden_gobierno og
+          ON og.id_orden = cep.id_orden_gobierno
+        LEFT JOIN catalogo_cargo_eleccion ce
+          ON ce.id_orden = cep.id_orden_gobierno
+        AND ce.id_cargo = cep.id_cargo_catalogo
+        LEFT JOIN catalogo_partidos cp2 ON cp2.id_partido = cep.id_partido_postulante
+        WHERE cep.id_persona = p.id_persona
+      ), '[]'::jsonb) AS cargos_eleccion_popular,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_experiencia', el.id_experiencia,
+            'periodo', el.periodo,
+            'cargo', el.cargo,
+            'organizacion', el.organizacion
+          )
+          ORDER BY el.id_experiencia ASC
+        )
+        FROM experiencia_laboral el
+        WHERE el.id_persona = p.id_persona
+      ), '[]'::jsonb) AS experiencia_laboral,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_fuente_persona', fp.id_fuente_persona,
+            'id_fuente',         fp.id_fuente,
+            'fuente',            cfc.nombre,
+            'detalle',           fp.detalle,
+            'fecha_consulta',    fp.fecha_consulta
+          )
+          ORDER BY cfc.nombre ASC, fp.id_fuente_persona ASC
+        )
+        FROM fuentes_persona fp
+        JOIN catalogo_fuentes_consulta cfc ON cfc.id_fuente = fp.id_fuente
+        WHERE fp.id_persona = p.id_persona
+      ), '[]'::jsonb) AS fuentes_consulta,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_municipio', pmt.id_municipio,
+            'municipio',    m2.nombre,
+            'es_principal', pmt.es_principal,
+            'notas',        pmt.notas
+          )
+          ORDER BY pmt.es_principal DESC, m2.nombre ASC
+        )
+        FROM personas_municipios_trabajo pmt
+        LEFT JOIN municipios m2 ON m2.id_municipio = pmt.id_municipio
+        WHERE pmt.id_persona = p.id_persona
+      ), '[]'::jsonb) AS municipios_trabajo,
+
+      (
+        SELECT CASE
+          WHEN li.id_persona IS NULL THEN NULL
+          ELSE jsonb_build_object(
+            'nivel', li.nivel,
+            'tipos', li.tipos,
+            'tipo_otro_texto', li.tipo_otro_texto,
+            'cuenta_con_estructura', li.cuenta_con_estructura,
+            'presencia_territorial', li.presencia_territorial,
+            'created_at', li.created_at,
+            'updated_at', li.updated_at
+          )
+        END
+        FROM liderazgo_influencia li
+        WHERE li.id_persona = p.id_persona
+      ) AS liderazgo_influencia,
+
+      CASE
+        WHEN p.sin_controversias_publicas = true THEN '[]'::jsonb
+        ELSE COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id_controversia', cper.id_controversia,
+              'id_tipo',         cper.id_tipo,
+              'tipo',            ccat.tipo,
+              'descripcion',     cper.descripcion,
+              'fuente',          cper.fuente,
+              'fecha_registro',  cper.fecha_registro,
+              'estatus',         cper.estatus
             )
-            FROM controversias_persona cper
-            LEFT JOIN catalogo_controversias ccat ON ccat.id_tipo = cper.id_tipo
-            WHERE cper.id_persona = p.id_persona
-          ), '[]'::jsonb)
-        END AS controversias
+            ORDER BY cper.id_controversia ASC
+          )
+          FROM controversias_persona cper
+          LEFT JOIN catalogo_controversias ccat ON ccat.id_tipo = cper.id_tipo
+          WHERE cper.id_persona = p.id_persona
+        ), '[]'::jsonb)
+      END AS controversias
 
-      FROM personas p
-      LEFT JOIN municipios ml ON ml.id_municipio = p.municipio_residencia_legal
-      LEFT JOIN municipios mr ON mr.id_municipio = p.municipio_residencia_real
-      LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
+    FROM personas p
+    LEFT JOIN municipios ml ON ml.id_municipio = p.municipio_residencia_legal
+    LEFT JOIN municipios mr ON mr.id_municipio = p.municipio_residencia_real
+    LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
 
-      LEFT JOIN catalogo_partidos cp            ON cp.id_partido   = p.id_partido_actual
-      LEFT JOIN catalogo_temas_interes cti      ON cti.id_tema     = p.id_tema_interes_central
-      LEFT JOIN catalogo_grupos_postulacion cgp ON cgp.id_grupo    = p.id_grupo_postulacion
-      LEFT JOIN catalogo_ideologia_politica cip ON cip.id_ideologia = p.id_ideologia_politica
+    LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
+    LEFT JOIN usuarios u_mod  ON u_mod.id_usuario = p.modificado_por
+    LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
+    LEFT JOIN oficinas o      ON o.id_oficina = p.id_oficina
 
-      WHERE p.id_persona = $1
-      LIMIT 1
+    LEFT JOIN catalogo_partidos cp            ON cp.id_partido   = p.id_partido_actual
+    LEFT JOIN catalogo_temas_interes cti      ON cti.id_tema     = p.id_tema_interes_central
+    LEFT JOIN catalogo_grupos_postulacion cgp ON cgp.id_grupo    = p.id_grupo_postulacion
+    LEFT JOIN catalogo_ideologia_politica cip ON cip.id_ideologia = p.id_ideologia_politica
+
+    WHERE p.id_persona = $1
+    LIMIT 1
     `;
 
     const { rows } = await pool.query(sqlPerfil, [id]);
     if (!rows[0]) return res.status(404).json({ error: "Persona no encontrada" });
 
-    // 🔒 regla capturista
+    const perfil = rows[0];
+
+    // 🔒 reglas de acceso
     const roles = req.user?.roles || [];
-    if (roles.includes("capturista") && rows[0].creado_por !== req.user.id_usuario) {
+    const isSuper = roles.includes("superadmin");
+    const isAnalista = roles.includes("analista");
+    const isCapturista = roles.includes("capturista");
+
+    if (isCapturista && perfil.creado_por !== req.user.id_usuario) {
       return res.status(403).json({ error: "No autorizado" });
     }
 
-    const perfil = rows[0];
+    if (!isSuper && isAnalista) {
+      if (!req.user.id_oficina || perfil.id_oficina !== req.user.id_oficina) {
+        return res.status(403).json({ error: "No autorizado (oficina)" });
+      }
+    }
 
     // ✅ Foto URL -> base64 data-uri
     let fotoDataUri = null;
@@ -2423,23 +2879,16 @@ exports.getPerfilPdf = async (req, res) => {
     } catch (e) {
       console.warn("Foto no disponible para PDF:", e.message);
     }
-    console.log("foto_url:", perfil.foto_url);
-    console.log("fotoDataUri head:", (fotoDataUri || "").slice(0, 30));
+
     const html = buildPerfilHtml({ ...perfil, foto_url: fotoDataUri });
 
-    // ✅ Render-friendly
-    browser = await puppeteer.launch({
+    const browser = await puppeteer.launch({
       headless: "new",
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-      ],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
     });
 
     const page = await browser.newPage();
-
-    // Si usas base64, waitUntil:"load" es suficiente y más estable
     await page.setContent(html, { waitUntil: "load", timeout: 60000 });
 
     const pdf = await page.pdf({
@@ -2468,152 +2917,203 @@ exports.getPerfilPdf = async (req, res) => {
 };
 
 
-
-//kpi completitud de registros 
+// KPI completitud (superadmin: todo, analista: solo su oficina)
+// KPI COMPLETUD PRO - BASADO EN getPerfilCompleto
 exports.kpiCompletitud = async (req, res) => {
   try {
+    const roles = req.user?.roles || [];
+    const isSuperadmin = roles.includes("superadmin");
+    const officeId = req.user?.id_oficina ?? null;
+
     const SQL = `
-      WITH base AS (
-        SELECT
-          p.id_persona,
-          p.creado_por,
-
-          -- Base fields
-          p.nombre,
-          p.municipio_trabajo_politico,
-          p.id_partido_actual,
-          p.escala_influencia,
-          p.id_tema_interes_central,
-          p.id_grupo_postulacion,
-          p.id_ideologia_politica,
-
-          -- flags
-          p.sin_servicio_publico,
-          p.ha_contendido_eleccion,
-          p.sin_controversias_publicas,
-          
-
-          -- existence counts
-          EXISTS (SELECT 1 FROM datos_ine di WHERE di.id_persona = p.id_persona) AS has_ine,
-          (SELECT COUNT(*) FROM telefonos t WHERE t.id_persona = p.id_persona) AS n_telefonos,
-          (SELECT COUNT(*) FROM redes_sociales_persona rs WHERE rs.id_persona = p.id_persona) AS n_redes,
-          (SELECT COUNT(*) FROM formacion_academica fa WHERE fa.id_persona = p.id_persona) AS n_formacion,
-          (SELECT COUNT(*) FROM servicio_publico sp WHERE sp.id_persona = p.id_persona) AS n_serv_pub,
-          (SELECT COUNT(*) FROM elecciones_contendidas ec WHERE ec.id_persona = p.id_persona) AS n_elecciones,
-          EXISTS (SELECT 1 FROM capacidad_movilizacion cm WHERE cm.id_persona = p.id_persona) AS has_movilizacion,
-          (SELECT COUNT(*) FROM equipos_politicos ep WHERE ep.id_persona = p.id_persona) AS n_equipos,
-          (SELECT COUNT(*) FROM referentes_politicos rp WHERE rp.id_persona = p.id_persona) AS n_referentes,
-          (SELECT COUNT(*) FROM familiares_politica fp WHERE fp.id_persona = p.id_persona) AS n_familiares,
-          (SELECT COUNT(*) FROM participacion_organizaciones po WHERE po.id_persona = p.id_persona) AS n_orgs,
-          (SELECT COUNT(*) FROM controversias_persona c WHERE c.id_persona = p.id_persona) AS n_controversias
-
+      WITH personas_filtradas AS (
+        SELECT p.id_persona, p.id_oficina, p.creado_por
         FROM personas p
+        WHERE ($2::boolean = true OR p.id_oficina = $1::int)
+      ),
+      
+      -- 1. DATOS BASE (campos principales)
+      datos_base AS (
+        SELECT 
+          pf.id_persona,
+          pf.id_oficina,
+          pf.creado_por,
+          
+          -- IDENTIDAD (25%)
+          (NULLIF(TRIM(COALESCE(p.nombre,'')), '') IS NOT NULL)::int * 5 +
+          (NULLIF(TRIM(COALESCE(p.apellido_paterno,'')), '') IS NOT NULL)::int * 5 +
+          (NULLIF(TRIM(COALESCE(p.apellido_materno,'')), '') IS NOT NULL)::int * 5 +
+          (NULLIF(TRIM(COALESCE(p.curp,'')), '') IS NOT NULL)::int * 5 +
+          (NULLIF(TRIM(COALESCE(p.rfc,'')), '') IS NOT NULL)::int * 5 AS score_identidad,
+
+          -- TERRITORIO (20%)
+          (p.municipio_trabajo_politico IS NOT NULL)::int * 8 +
+          (CASE 
+            WHEN p.res_legal_fuera_edomex THEN 
+              NULLIF(TRIM(p.res_legal_municipio_texto), '') IS NOT NULL
+            ELSE p.municipio_residencia_legal IS NOT NULL 
+          END)::int * 6 +
+          (CASE 
+            WHEN p.res_real_fuera_edomex THEN 
+              NULLIF(TRIM(p.res_real_municipio_texto), '') IS NOT NULL 
+            ELSE p.municipio_residencia_real IS NOT NULL 
+          END)::int * 6 AS score_territorio,
+
+          -- POLÍTICA (20%)
+          (p.id_partido_actual IS NOT NULL)::int * 6 +
+          (p.id_tema_interes_central IS NOT NULL)::int * 6 +
+          (p.id_grupo_postulacion IS NOT NULL)::int * 4 +
+          (p.id_ideologia_politica IS NOT NULL)::int * 4 AS score_politica,
+
+          -- CONTACTO (15%)
+          (EXISTS(SELECT 1 FROM telefonos t WHERE t.id_persona = pf.id_persona))::int * 8 +
+          (EXISTS(SELECT 1 FROM datos_ine di WHERE di.id_persona = pf.id_persona))::int * 4 +
+          (EXISTS(SELECT 1 FROM redes_sociales_persona rsp WHERE rsp.id_persona = pf.id_persona))::int * 3 AS score_contacto,
+
+          -- TRAYECTORIA (20%)
+          (EXISTS(SELECT 1 FROM servicio_publico sp WHERE sp.id_persona = pf.id_persona))::int * 5 +
+          (EXISTS(SELECT 1 FROM elecciones_contendidas ec WHERE ec.id_persona = pf.id_persona))::int * 5 +
+          (EXISTS(SELECT 1 FROM cargos_eleccion_popular cep WHERE cep.id_persona = pf.id_persona))::int * 5 +
+          (EXISTS(SELECT 1 FROM experiencia_laboral el WHERE el.id_persona = pf.id_persona))::int * 5 AS score_trayectoria
+          
+        FROM personas_filtradas pf
+        JOIN personas p ON p.id_persona = pf.id_persona
       ),
 
+      -- 2. SCORES FINALES POR PERSONA
       scored AS (
-        SELECT
-          b.*,
-
-          (
-            -- ===== Base (30)
-            (CASE WHEN NULLIF(TRIM(b.nombre), '') IS NOT NULL THEN 6 ELSE 0 END) +
-            (CASE WHEN b.municipio_trabajo_politico IS NOT NULL THEN 6 ELSE 0 END) +
-            (CASE WHEN b.id_partido_actual IS NOT NULL THEN 5 ELSE 0 END) +
-            (CASE WHEN b.escala_influencia IS NOT NULL THEN 5 ELSE 0 END) +
-            (CASE WHEN b.id_tema_interes_central IS NOT NULL THEN 4 ELSE 0 END) +
-            (CASE WHEN b.id_grupo_postulacion IS NOT NULL THEN 2 ELSE 0 END) +
-            (CASE WHEN b.id_ideologia_politica IS NOT NULL THEN 2 ELSE 0 END) +
-
-            -- ===== Secciones (70)
-            (CASE WHEN b.has_ine THEN 5 ELSE 0 END) +
-            (CASE WHEN b.n_telefonos > 0 THEN 10 ELSE 0 END) +
-            (CASE WHEN b.n_redes > 0 THEN 5 ELSE 0 END) +
-            (CASE WHEN b.n_formacion > 0 THEN 7 ELSE 0 END) +
-
-            -- Servicio público (10)
-            (CASE
-              WHEN b.sin_servicio_publico = true THEN 10
-              WHEN b.sin_servicio_publico = false AND b.n_serv_pub > 0 THEN 10
-              ELSE 0
-            END) +
-
-            -- Elecciones (10)
-            (CASE
-              WHEN b.ha_contendido_eleccion = false THEN 10
-              WHEN b.ha_contendido_eleccion = true AND b.n_elecciones > 0 THEN 10
-              ELSE 0
-            END) +
-
-            (CASE WHEN b.has_movilizacion THEN 6 ELSE 0 END) +
-            (CASE WHEN b.n_equipos > 0 THEN 4 ELSE 0 END) +
-            (CASE WHEN b.n_referentes > 0 THEN 4 ELSE 0 END) +
-            (CASE WHEN b.n_familiares > 0 THEN 4 ELSE 0 END) +
-            (CASE WHEN b.n_orgs > 0 THEN 3 ELSE 0 END) +
-
-            -- Controversias (3)
-            (CASE
-              WHEN b.sin_controversias_publicas = true THEN 3
-              WHEN b.sin_controversias_publicas = false AND b.n_controversias > 0 THEN 3
-              ELSE 0
-            END)
-          )::int AS score
-
-        FROM base b
+        SELECT 
+          *,
+          (score_identidad + score_territorio + score_politica + score_contacto + score_trayectoria)::numeric(5,2) AS score_total,
+          score_identidad::numeric(5,2) AS pct_identidad,
+          score_territorio::numeric(5,2) AS pct_territorio,
+          score_politica::numeric(5,2) AS pct_politica,
+          score_contacto::numeric(5,2) AS pct_contacto,
+          score_trayectoria::numeric(5,2) AS pct_trayectoria
+        FROM datos_base
       ),
 
-      global AS (
-        SELECT
+      -- 3. GLOBAL
+      global_stats AS (
+        SELECT 
           COUNT(*)::int AS total_personas,
-          AVG(score)::numeric(5,2) AS score_promedio,
-          SUM(CASE WHEN score >= 80 THEN 1 ELSE 0 END)::int AS completos_80,
-          ROUND(100.0 * SUM(CASE WHEN score >= 80 THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 2) AS pct_completos_80,
-          SUM(CASE WHEN score < 50 THEN 1 ELSE 0 END)::int AS criticos_lt50
+          ROUND(AVG(score_total), 2) AS score_promedio,
+          ROUND(AVG(pct_identidad), 2) AS pct_identidad_prom,
+          ROUND(AVG(pct_territorio), 2) AS pct_territorio_prom,
+          ROUND(AVG(pct_politica), 2) AS pct_politica_prom,
+          ROUND(AVG(pct_contacto), 2) AS pct_contacto_prom,
+          ROUND(AVG(pct_trayectoria), 2) AS pct_trayectoria_prom,
+          
+          SUM(CASE WHEN score_total >= 80 THEN 1 ELSE 0 END)::int AS completos_80,
+          ROUND(100.0 * SUM(CASE WHEN score_total >= 80 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_completos_80,
+          
+          SUM(CASE WHEN score_total < 50 THEN 1 ELSE 0 END)::int AS criticos_lt50,
+          ROUND(100.0 * SUM(CASE WHEN score_total < 50 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_criticos_lt50
         FROM scored
       ),
 
+      -- 4. POR USUARIO
       por_usuario AS (
-        SELECT
-          u.id_usuario,
-          u.nombre,
-          u.email,
+        SELECT 
+          u.id_usuario, u.nombre, u.email, u.area,
           COUNT(s.id_persona)::int AS total,
-          AVG(s.score)::numeric(5,2) AS score_promedio,
-          SUM(CASE WHEN s.score >= 80 THEN 1 ELSE 0 END)::int AS completos_80,
-          ROUND(100.0 * SUM(CASE WHEN s.score >= 80 THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 2) AS pct_completos_80
+          ROUND(AVG(s.score_total), 2) AS score_promedio,
+          SUM(CASE WHEN s.score_total >= 80 THEN 1 ELSE 0 END)::int AS completos_80,
+          ROUND(100.0 * SUM(CASE WHEN s.score_total >= 80 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_completos_80
         FROM scored s
         JOIN usuarios u ON u.id_usuario = s.creado_por
-        GROUP BY u.id_usuario, u.nombre, u.email
+        GROUP BY u.id_usuario, u.nombre, u.email, u.area
         ORDER BY score_promedio DESC, total DESC
+      ),
+
+      -- 5. POR OFICINA
+      por_oficina AS (
+        SELECT 
+          o.id_oficina, o.nombre AS oficina,
+          COUNT(s.id_persona)::int AS total,
+          ROUND(AVG(s.score_total), 2) AS score_promedio,
+          SUM(CASE WHEN s.score_total >= 80 THEN 1 ELSE 0 END)::int AS completos_80,
+          ROUND(100.0 * SUM(CASE WHEN s.score_total >= 80 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_completos_80
+        FROM scored s
+        JOIN oficinas o ON o.id_oficina = s.id_oficina
+        GROUP BY o.id_oficina, o.nombre
+        ORDER BY score_promedio DESC
+      ),
+
+      -- 6. TOP PROBLEMAS (faltan datos críticos)
+      problemas AS (
+        SELECT 
+          'CURP'::text AS campo,
+          COUNT(*)::int AS faltantes
+        FROM personas_filtradas pf
+        JOIN personas p ON p.id_persona = pf.id_persona
+        WHERE NULLIF(TRIM(p.curp), '') IS NULL
+        
+        UNION ALL
+        
+        SELECT 
+          'Teléfonos'::text AS campo,
+          COUNT(*)::int AS faltantes
+        FROM personas_filtradas pf
+        WHERE NOT EXISTS(SELECT 1 FROM telefonos t WHERE t.id_persona = pf.id_persona)
+        
+        UNION ALL
+        
+        SELECT 
+          'Trabajo Político'::text AS campo,
+          COUNT(*)::int AS faltantes
+        FROM personas_filtradas pf
+        JOIN personas p ON p.id_persona = pf.id_persona
+        WHERE p.municipio_trabajo_politico IS NULL
       )
 
-      SELECT
-        (SELECT row_to_json(global) FROM global) AS global,
-        (SELECT COALESCE(json_agg(por_usuario), '[]'::json) FROM por_usuario) AS por_usuario;
+      SELECT 
+        (SELECT row_to_json(global_stats) FROM global_stats) AS global,
+        (SELECT COALESCE(json_agg(por_usuario), '[]') FROM por_usuario) AS por_usuario,
+        (SELECT COALESCE(json_agg(por_oficina), '[]') FROM por_oficina) AS por_oficina,
+        (SELECT COALESCE(json_agg(problemas ORDER BY faltantes DESC), '[]') FROM problemas) AS problemas_criticos,
+        
+        -- SECCIONES PROMEDIO
+        jsonb_build_object(
+          'identidad', (SELECT ROUND(AVG(pct_identidad), 1) FROM scored),
+          'territorio', (SELECT ROUND(AVG(pct_territorio), 1) FROM scored),
+          'politica', (SELECT ROUND(AVG(pct_politica), 1) FROM scored),
+          'contacto', (SELECT ROUND(AVG(pct_contacto), 1) FROM scored),
+          'trayectoria', (SELECT ROUND(AVG(pct_trayectoria), 1) FROM scored)
+        ) AS secciones_promedio
     `;
 
-    const { rows } = await pool.query(SQL);
+    const params = [officeId, isSuperadmin];
+    const { rows } = await pool.query(SQL, params);
     return res.json(rows[0]);
+
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: "Error KPI completitud", detail: e.message });
+    return res.status(500).json({ error: "Error KPI Completitud PRO", detail: e.message });
   }
 };
 
-//kpi municipio trabajo político
 
+
+// KPI MUNICIPIOS - CON FILTRO OFICINA (igual que kpiCompletitud)
 exports.kpiMunicipios = async (req, res) => {
   try {
+    const roles = req.user?.roles || [];
+    const isSuperadmin = roles.includes("superadmin");
+    const officeId = req.user?.id_oficina ?? null;
+
     const SQL = `
       WITH conteo AS (
         SELECT
           m.id_municipio,
           m.nombre AS municipio,
-          COUNT(p.id_persona)::int AS total
+          COUNT(p.id_persona)::int AS total  -- ← FIXED: COUNT real de personas
         FROM municipios m
-        LEFT JOIN personas p
-          ON p.municipio_trabajo_politico = m.id_municipio
+        LEFT JOIN personas p ON p.municipio_trabajo_politico = m.id_municipio
+          AND ($2::boolean = true OR p.id_oficina = $1::int)  -- ← FILTRO AQUÍ
         GROUP BY m.id_municipio, m.nombre
       ),
+      -- ... resto igual
       resumen AS (
         SELECT
           COUNT(*)::int AS total_municipios,
@@ -2646,13 +3146,16 @@ exports.kpiMunicipios = async (req, res) => {
         (SELECT COALESCE(json_agg(conteo ORDER BY municipio), '[]'::json) FROM conteo) AS conteo;
     `;
 
-    const { rows } = await pool.query(SQL);
+    const params = [officeId, isSuperadmin];
+    const { rows } = await pool.query(SQL, params);
     return res.json(rows[0]);
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Error KPI municipios", detail: e.message });
   }
 };
+
+
 
 //validacion de datos duplicados;
 
@@ -4280,9 +4783,12 @@ exports.getAdminCards = async (req, res) => {
       ? Number(req.user.id_usuario || 0) || null
       : null;
 
+    const { addFullFilter } = req.smartFilters;
     // WHERE dinámico
     const where = [];
     const params = [];
+    // 🎯 MÁGICO: Aplica filtros AUTOMÁTICOS por rol/cargo/area
+    addFullFilter(params, where); 
 
     if (oficinaId) {
       params.push(oficinaId);
@@ -4454,20 +4960,46 @@ exports.listOficinas = async (req, res) => {
     return res.status(500).json({ error: 'Error al listar oficinas' });
   }
 };
-// ADMIN: listar capturistas por oficina (para filtros del grid)
+
 // ADMIN: listar capturistas por oficina (para filtros del grid)
 exports.listCapturistasByOficina = async (req, res) => {
   try {
     const rolesUser = req.user?.roles || [];
     const isSuperadmin = rolesUser.includes("superadmin");
-    const isAnalista   = rolesUser.includes("analista");
+    
+    // 🆕 FUNCIÓN para parsear cargos
+    function getPermissionLevel(cargo) {
+      const cargoClean = (cargo || '').toLowerCase().trim();
+      
+      // COORDINADOR: ve TODO (incluye variaciones)
+      if (cargoClean.includes('coordinador') || 
+          cargoClean.includes('coordinadora') ||
+          cargoClean.includes('gerente') ||
+          cargoClean.includes('supervisor')) {
+        return 'coordinador'; // Ve TODOS capturistas de oficina
+      }
+      
+      // DIRECTOR: ve SOLO su área (variaciones)
+      if (cargoClean.includes('director') || 
+          cargoClean.includes('directora') ||
+          cargoClean.includes('jefe') ||
+          cargoClean.includes('jefa')) {
+        return 'director'; // Ve SOLO capturistas de SU área
+      }
+      
+      return null; // Otros cargos bloqueados
+    }
 
     let oficinaId = null;
+    const permissionLevel = getPermissionLevel(req.user.cargo);
 
-    // 🔒 Regla por rol:
-    // - Analista: siempre su oficina
-    // - Superadmin: puede mandar oficinaId en query (opcional)
-    if (isAnalista && !isSuperadmin) {
+    // 🔒 Validar permisos
+    if (!isSuperadmin && !permissionLevel) {
+      return res.status(403).json({ error: "Cargo no autorizado para esta acción" });
+    }
+
+    // Determinar oficina
+    if (!isSuperadmin) {
       oficinaId = Number(req.user.id_oficina || 0);
       if (!Number.isFinite(oficinaId) || oficinaId <= 0) {
         return res.status(403).json({ error: "Usuario sin oficina asignada" });
@@ -4479,14 +5011,30 @@ exports.listCapturistasByOficina = async (req, res) => {
     const params = [];
     const where = [];
 
+    // Filtro oficina (siempre)
     if (Number.isFinite(oficinaId) && oficinaId > 0) {
       params.push(oficinaId);
       where.push(`u.id_oficina = $${params.length}`);
     }
 
-    // ✅ Solo usuarios con rol "capturista" (y si quieres incluir analista también, lo agregamos)
-    // Aquí lo dejo: capturista (y opcionalmente analista)
-    where.push(`r.nombre IN ('capturista')`);
+    // 🔑 LÓGICA por NIVEL DE PERMISO
+    if (!isSuperadmin) {
+      if (permissionLevel === 'coordinador') {
+        // Coordinador: TODOS capturistas de oficina
+        where.push(`r.nombre = 'capturista'`);
+      } else if (permissionLevel === 'director') {
+        // Director: SOLO capturistas de SU área
+        if (!req.user.area) {
+          return res.status(403).json({ error: "Director sin área asignada" });
+        }
+        params.push(req.user.area);
+        where.push(`u.area = $${params.length}`);
+        where.push(`r.nombre = 'capturista'`);
+      }
+    } else {
+      // Superadmin: solo rol capturista
+      where.push(`r.nombre = 'capturista'`);
+    }
 
     const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
@@ -4495,10 +5043,13 @@ exports.listCapturistasByOficina = async (req, res) => {
       SELECT DISTINCT
         u.id_usuario,
         u.nombre,
-        u.email
+        u.email,
+        u.area,
+        u.cargo,
+        u.id_oficina
       FROM usuarios u
       JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
-      JOIN roles r           ON r.id_rol     = ur.id_rol
+      JOIN roles r ON r.id_rol = ur.id_rol
       ${whereSQL}
       ORDER BY u.nombre ASC
       `,
@@ -4506,11 +5057,200 @@ exports.listCapturistasByOficina = async (req, res) => {
     );
 
     return res.json(rows);
+
   } catch (e) {
     console.error(e);
     return res.status(500).json({
-      error: "Error al listar capturistas por oficina",
+      error: "Error al listar capturistas",
       detail: e.message
     });
+  }
+};
+
+
+
+exports.verificarPersona = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id_persona = Number(req.params.id);
+    if (!Number.isFinite(id_persona) || id_persona <= 0) {
+      return res.status(400).json({ error: "id inválido" });
+    }
+
+    const roles = req.user?.roles || [];
+    const scope = req.user?.scope || null;
+    const isSuperadmin = roles.includes("superadmin") || scope === "ALL";
+    const isAnalista = roles.includes("analista");
+
+    // Solo analista/superadmin, y scope permitido
+    if (!isSuperadmin && !isAnalista) return res.status(403).json({ error: "Prohibido" });
+    if (!["AREA", "OFFICE", "ALL"].includes(scope)) {
+      return res.status(403).json({ error: "Sin permiso de verificación" });
+    }
+
+    await client.query("BEGIN");
+
+    const { rows } = await client.query(
+      `
+      SELECT
+        p.id_persona, p.id_oficina,
+        p.verif_area_at, p.verif_office_at, p.verificado_at
+      FROM personas p
+      WHERE p.id_persona = $1
+      FOR UPDATE
+      `,
+      [id_persona]
+    );
+
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Persona no encontrada" });
+    }
+
+    // Alcance: superadmin todo, AREA/OFFICE solo su oficina (igual que antes)
+    if (!isSuperadmin) {
+      const forced = Number(req.user.id_oficina || 0);
+      if (!forced) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ error: "Usuario sin oficina asignada" });
+      }
+      if (Number(rows[0].id_oficina) !== forced) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ error: "No autorizado" });
+      }
+    }
+
+    // Pipeline: OFFICE requiere AREA, ALL requiere OFFICE
+    if (scope === "OFFICE" && !rows[0].verif_area_at) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Primero debe verificar el Director (AREA)." });
+    }
+    if (scope === "ALL" && !rows[0].verif_office_at) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Primero debe verificar el Coordinador (OFFICE)." });
+    }
+
+    let setSql = "";
+    if (scope === "AREA") {
+      setSql = `verif_area_por = $2, verif_area_at = now()`;
+    } else if (scope === "OFFICE") {
+      setSql = `verif_office_por = $2, verif_office_at = now()`;
+    } else {
+      // ALL (superadmin) -> reutiliza tus columnas existentes
+      setSql = `verificado_por = $2, verificado_at = now()`;
+    }
+
+    const { rows: upd } = await client.query(
+      `
+      UPDATE personas
+      SET ${setSql},
+          modificado_por = $2,
+          updated_at     = now()
+      WHERE id_persona = $1
+      RETURNING
+        id_persona,
+        verif_area_por, verif_area_at,
+        verif_office_por, verif_office_at,
+        verificado_por, verificado_at
+      `,
+      [id_persona, req.user.id_usuario]
+    );
+
+    await client.query("COMMIT");
+    return res.json({ ok: true, persona: upd[0] });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error(e);
+    return res.status(500).json({ error: "Error al verificar", detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+
+exports.desverificarPersona = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id_persona = Number(req.params.id);
+    if (!Number.isFinite(id_persona) || id_persona <= 0) {
+      return res.status(400).json({ error: "id inválido" });
+    }
+
+    const roles = req.user?.roles || [];
+    const scope = req.user?.scope || null;
+    const isSuperadmin = roles.includes("superadmin") || scope === "ALL";
+    const isAnalista = roles.includes("analista");
+
+    if (!isSuperadmin && !isAnalista) return res.status(403).json({ error: "Prohibido" });
+    if (!["AREA", "OFFICE", "ALL"].includes(scope)) {
+      return res.status(403).json({ error: "Sin permiso de desverificación" });
+    }
+
+    await client.query("BEGIN");
+
+    const { rows } = await client.query(
+      `SELECT id_persona, id_oficina FROM personas WHERE id_persona = $1 FOR UPDATE`,
+      [id_persona]
+    );
+
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Persona no encontrada" });
+    }
+
+    if (!isSuperadmin) {
+      const forced = Number(req.user.id_oficina || 0);
+      if (!forced) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ error: "Usuario sin oficina asignada" });
+      }
+      if (Number(rows[0].id_oficina) !== forced) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ error: "No autorizado" });
+      }
+    }
+
+    let setSql = "";
+    if (scope === "AREA") {
+      // si se cae AREA, se cae todo arriba
+      setSql = `
+        verif_area_por = NULL, verif_area_at = NULL,
+        verif_office_por = NULL, verif_office_at = NULL,
+        verificado_por = NULL, verificado_at = NULL
+      `;
+    } else if (scope === "OFFICE") {
+      // si se cae OFFICE, se cae admin
+      setSql = `
+        verif_office_por = NULL, verif_office_at = NULL,
+        verificado_por = NULL, verificado_at = NULL
+      `;
+    } else {
+      // ALL: solo quita el último sello
+      setSql = `verificado_por = NULL, verificado_at = NULL`;
+    }
+
+    const { rows: upd } = await client.query(
+      `
+      UPDATE personas
+      SET ${setSql},
+          modificado_por = $2,
+          updated_at     = now()
+      WHERE id_persona = $1
+      RETURNING
+        id_persona,
+        verif_area_por, verif_area_at,
+        verif_office_por, verif_office_at,
+        verificado_por, verificado_at
+      `,
+      [id_persona, req.user.id_usuario]
+    );
+
+    await client.query("COMMIT");
+    return res.json({ ok: true, persona: upd[0] });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error(e);
+    return res.status(500).json({ error: "Error al desverificar", detail: e.message });
+  } finally {
+    client.release();
   }
 };
