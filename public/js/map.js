@@ -67,11 +67,9 @@ function resaltarMunicipioById(id){
   const layer = layersById[id];
   if (!layer) return;
 
-  layer.setStyle({ color:"#831E30", fillColor:"#831E30", fillOpacity:0.55, weight:3 });
+  layer.setStyle({ color:"#000000", fillColor:"#d8ee59", fillOpacity:0.55, weight:3 });
   map.fitBounds(layer.getBounds(), { padding:[40,40] });
 }
-
-//map vs kpi
 
 // ============================
 // Cobertura por municipio (KPI)
@@ -79,51 +77,43 @@ function resaltarMunicipioById(id){
 let municipioCountById = new Map(); // id_municipio -> total actores
 let legendControl = null;
 
-// Umbrales (fácil de entender para jefe)
+// NUEVOS Umbrales según tu solicitud
 function coverageColor(count){
   const n = Number(count || 0);
-  if (n === 0) return "#dc2626";      // rojo (0)
-  if (n <= 2) return "#f97316";       // naranja (1-2)
-  if (n <= 5) return "#facc15";       // amarillo (3-5)
-  if (n <= 10) return "#86efac";      // verde claro (6-10)
-  return "#16a34a";                   // verde fuerte (11+)
+  if (n === 0 || n <= 10) return "#dc2626";      // Rojo 0-10
+  if (n <= 20) return "#f97316";                 // Naranja 11-20  
+  if (n <= 30) return "#facc15";                 // Amarillo 21-30
+  if (n <= 40) return "#86efac";                 // Verde claro 31-40
+  return "#16a34a";                              // Verde fuerte 41-60
 }
 
 function coverageLabel(count){
   const n = Number(count || 0);
-  if (n === 0) return "0";
-  if (n <= 2) return "1–2";
-  if (n <= 5) return "3–5";
-  if (n <= 10) return "6–10";
-  return "11+";
+  if (n === 0 || n <= 10) return "0-10";
+  if (n <= 20) return "11-20";
+  if (n <= 30) return "21-30";
+  if (n <= 40) return "31-40";
+  return "41-60";
 }
 
 function applyCoverageStyle(){
   Object.entries(layersById).forEach(([idStr, layer]) => {
     const id = Number(idStr);
     const total = municipioCountById.get(id) ?? 0;
-
-    // OJO: layer es L.geoJSON (tiene setStyle)
+    
+    // ✅ MISMO coverageColor() que tus tarjetas
+    const fillColor = coverageColor(total);  // ← YA ESTÁ BIEN
+    
     layer.setStyle({
-      color: "#6c757d",
-      weight: 1,
-      fillColor: coverageColor(total),
-      fillOpacity: 0.45
+      color: "#1f2937",           // Borde oscuro
+      weight: 1.5,
+      fillColor: fillColor,       // ← EXACTAMENTE igual que tarjetas
+      fillOpacity: 0.6            // Ajusta VISIBILIDAD (0.3-0.7)
     });
-
-    // Popup informativo
-    // (si ya tienes tooltip con nombre, esto complementa con datos)
-    try {
-      layer.bindPopup(`
-        <div style="min-width:200px">
-          <div style="font-weight:700; margin-bottom:4px;">${nombreById?.get?.(id) || "Municipio"}</div>
-          <div><b>Actores:</b> ${total}</div>
-          <div class="text-muted" style="font-size:12px">Cobertura: ${coverageLabel(total)}</div>
-        </div>
-      `, { closeButton: true });
-    } catch(e){}
   });
 }
+
+
 
 function addCoverageLegend(){
   // Si ya existe, la quitamos para no duplicar
@@ -143,11 +133,11 @@ function addCoverageLegend(){
     div.style.lineHeight = "1.2";
 
     const bins = [
-      { label:"0",     color: coverageColor(0) },
-      { label:"1–2",   color: coverageColor(2) },
-      { label:"3–5",   color: coverageColor(5) },
-      { label:"6–10",  color: coverageColor(10) },
-      { label:"11+",   color: coverageColor(11) }
+      { label:"0-10",   color: coverageColor(0) },
+      { label:"11-20",  color: coverageColor(15) },
+      { label:"21-30",  color: coverageColor(25) },
+      { label:"31-40",  color: coverageColor(35) },
+      { label:"41-60",  color: coverageColor(50) }
     ];
 
     div.innerHTML = `
