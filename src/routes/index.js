@@ -5,6 +5,7 @@ router.use('/personas', require('./personas.routes'));
 router.use('/municipios', require('./municipios.routes'));
 router.use('/catalogos', require('./catalogos.routes'));
 router.use('/borradores', require('./borradores.routes'));
+router.use('/analista', require('./analista.routes'));
 
 router.get('/ping', (req, res) => res.json({ ok: true }));
 
