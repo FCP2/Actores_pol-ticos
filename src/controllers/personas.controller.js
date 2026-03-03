@@ -2970,14 +2970,28 @@ exports.getPerfilPdf = async (req, res) => {
 
     const html = buildPerfilHtml({ ...perfil, foto_url: fotoDataUri });
 
-    const browser = await puppeteer.launch({
+    // ✅ Lanza browser (NO redeclares "const browser")
+    browser = await puppeteer.launch({
       headless: "new",
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      // 🔥 IMPORTANTE: en Render NO pongas path de Windows
+      // usa puppeteer.executablePath() cuando no haya env var
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH ||
+        (typeof puppeteer.executablePath === "function" ? puppeteer.executablePath() : undefined),
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--no-zygote",
+        "--single-process",
+      ],
     });
 
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "load", timeout: 60000 });
+    page.setDefaultTimeout(60000);
+    page.setDefaultNavigationTimeout(60000);
+
+    await page.setContent(html, { waitUntil: "load" });
 
     const pdf = await page.pdf({
       format: "A4",
@@ -3000,7 +3014,7 @@ exports.getPerfilPdf = async (req, res) => {
     console.error(e);
     return res.status(500).json({ error: "Error al generar PDF", detail: e.message });
   } finally {
-    try { if (browser) await browser.close(); } catch {}
+    try { if (browser) await browser.close(); } catch (e) { console.warn("close browser fail:", e.message); }
   }
 };
 
