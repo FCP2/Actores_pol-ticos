@@ -1,10 +1,32 @@
 const router = require('express').Router();
 const ctrl = require('../controllers/personas.controller');
 const { requireAuth, requireRole, requireOffice } = require('../middlewares/auth');
+const { applySmartFilters } = require('../middlewares/smartFilter'); // .js!
+
+router.post('/analista/personas/:id/verificar',
+  requireAuth,
+  requireRole('analista', 'superadmin'),
+  requireOffice,
+  ctrl.verificarPersona
+);
+
+router.post('/analista/personas/:id/desverificar',
+  requireAuth,
+  requireRole('analista', 'superadmin'),
+  requireOffice,
+  ctrl.desverificarPersona
+);
 
 router.get('/admin/resumen-por-usuario', requireAuth, requireRole('superadmin'), ctrl.resumenPersonasPorUsuario);
-router.get("/admin/grid", requireAuth, requireRole('superadmin','analista'), ctrl.listPersonasAdminGrid);
-router.get("/admin/cards", requireAuth, requireRole('superadmin','analista'), ctrl.getAdminCards);
+
+router.get("/admin/grid", [
+  requireAuth, 
+  requireRole('superadmin','analista'), 
+  applySmartFilters,  // ← AGREGAR
+  ctrl.listPersonasAdminGrid
+]);
+
+router.get("/admin/cards", requireAuth, requireRole('superadmin','analista'), applySmartFilters, ctrl.getAdminCards);
 router.get(
   '/admin/oficinas',
   requireAuth,
@@ -19,8 +41,8 @@ router.get(
   ctrl.listCapturistasByOficina
 );
 
-router.get('/admin/kpis/completitud', requireAuth, requireRole('superadmin'), ctrl.kpiCompletitud);
-router.get('/admin/kpis/municipios', requireAuth, requireRole('superadmin'), ctrl.kpiMunicipios);
+router.get('/admin/kpis/completitud', requireAuth, requireRole('superadmin','analista'), ctrl.kpiCompletitud);
+router.get('/admin/kpis/municipios', requireAuth, requireRole('superadmin','analista'), ctrl.kpiMunicipios);
 
 router.post(
   '/',
