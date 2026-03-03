@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Captura Completa - Actores Políticos</title>
+  <title>Formulario - Actores Políticos</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link rel="stylesheet" href="/static/css/main.css">
 </head>
 
 <body>
-  <script>
+<script>
   (async function guardCaptura() {
         const token = localStorage.getItem("token");
         if (!token) return (window.location.href = "/");
@@ -48,9 +48,13 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
   <div class="container-fluid">
 
-    <span class="navbar-brand fw-semibold">
-      Actores Políticos
-    </span>
+      <div class="me-3 d-flex align-items-center">
+        <img 
+          src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550" 
+          alt="Logo Gobierno del Estado de México"
+          class="navbar-logo"
+        >
+      </div>
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
       <span class="navbar-toggler-icon"></span>
@@ -3313,8 +3317,8 @@ function refreshHijosParejasSelects() {
       div.innerHTML = `
         <div class="row g-2 align-items-end">
           <div class="col-md-4">
-           <label class="form-label">Nombre completo</label>
-           <input class="form-control" name="nombre" placeholder="Ej. Juan Pérez Cruz">
+            <label class="form-label">Nombre Completo</label>
+            <input class="form-control" name="nombre" placeholder="Ej. Juan Pérez Cruz">
           </div>
           <div class="col-md-2">
             <label class="form-label">Parentesco</label>
@@ -3818,7 +3822,7 @@ function refreshHijosParejasSelects() {
       const principal = item.querySelector('input[name="principal"]').checked;
       if (telefono) telefonos.push({ telefono, tipo: tipo || null, principal });
     });
-//parejas
+    //parejas
     function normalizePeriodo(str) {
       return (str || "").toString().replace(/\s+/g, "").trim();
     }
@@ -4180,11 +4184,11 @@ function refreshHijosParejasSelects() {
       });
     });
 
-  // Si quieres bloquear submit:
-  if (referentesInvalidos > 0) {
-    // muestra alerta / toast / etc.
-    // return;
-  }
+    // Si quieres bloquear submit:
+    if (referentesInvalidos > 0) {
+      // muestra alerta / toast / etc.
+      // return;
+    }
 
     if (!persona.sin_controversias_publicas) {
       document.querySelectorAll('#controversiasContainer .list-item').forEach(item => {
@@ -4211,7 +4215,7 @@ function refreshHijosParejasSelects() {
       distrito_local: (fd.get('ine_dl') || '').toString().trim() || null
     };
     const datosINEFinal = (datos_ine.seccion_electoral || datos_ine.distrito_federal || datos_ine.distrito_local) ? datos_ine : null;
-//familiares container
+    //familiares container
     const familiares = [];
     document.querySelectorAll('#familiaresContainer .list-item').forEach(item => {
       const nombre = item.querySelector('input[name="nombre"]').value.trim();
