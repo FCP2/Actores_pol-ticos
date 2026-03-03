@@ -641,3 +641,971 @@ hr.border-institucional {
     padding: 1rem 2rem;
   }
 }
+
+/* Mejoras visuales analista.html====================== */
+#badgeEstadoIcon .bi-circle-fill {
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+}
+
+/* Hover efectos */
+.btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+
+.timeline-container {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.timeline {
+  position: relative;
+  padding-left: 25px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, #e9ecef, #dee2e6);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 1.2rem;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -27px;
+  top: 0.3rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e9ecef;
+  z-index: 1;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -27px;
+  top: 0.3rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.1);
+  z-index: 2;
+}
+
+.timeline-content {
+  background: #fff;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border-left: 3px solid #e9ecef;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.timeline-item.pending .timeline-content {
+  border-left-color: #ffc107;
+}
+
+.small { font-size: 0.875rem; }
+
+/*kpi contadores analista.html total de registros*/
+.kpi-card {
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.12) !important;
+}
+
+.kpi-icon i {
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+}
+
+.kpi-number {
+  font-size: 1.5rem !important;  /* ← REDUCIDO de 2rem */
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.kpi-label {
+  font-size: 0.75rem !important;  /* ← MÁS PEQUEÑO */
+  margin-bottom: 0.25rem;
+}
+
+.kpi-percent {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.card-body {
+  padding: 1rem !important;  /* ← PADDING REDUCIDO */
+}
+
+/* Progress más delgado */
+.progress {
+  height: 3px !important;  /* ← MÁS DELGADO */
+}
+
+/* Compacto en desktop */
+@media (min-width: 992px) {
+  .kpi-card { min-height: 120px; }
+}
+
+/* Móvil optimizado */
+@media (max-width: 768px) {
+  .kpi-number { font-size: 1.25rem !important; }
+  .kpi-icon i { font-size: 1.5rem !important; }
+}
+
+
+/* COLOR INSTITUCIONAL - AZUL GOBIERNO MÉXICO */
+/* 🎨 EDO MÉXICO GUINDA - SUPERIOR E INFERIOR IGUAL */
+.edomex-navbar {
+  background: linear-gradient(135deg, #8B1538 0%, #A61C3E 50%, #8B1538 100%) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,.15) !important; /* Superior */
+}
+
+.edomex-navbar.fixed-bottom {
+  border-top: 1px solid rgba(255,255,255,.15) !important;
+  border-bottom: none !important;
+}
+
+.pill-label {
+  background: rgba(255,255,255,0.18);
+  padding: 0.4rem 0.8rem;
+  border-radius: 25px;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.25);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  font-weight: 600;
+}
+
+.pill-label:hover {
+  background: rgba(255,255,255,0.28) !important;
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+/* Botón salir consistente */
+.btn-outline-light.btn-sm {
+  border-color: rgba(255,255,255,.3);
+  color: rgba(255,255,255,.9);
+}
+
+.btn-outline-light.btn-sm:hover {
+  background: rgba(255,255,255,.15);
+  border-color: rgba(255,255,255,.5);
+}
+/*mejora css*/
+/* =========================
+   DASHBOARD SKIN · ANALISTA
+   ========================= */
+
+:root{
+  --inst-prim: #8b2136;
+  --inst-sec:  #b89056;
+
+  --bg: #f4f6fb;
+  --card: rgba(255,255,255,.92);
+  --border: rgba(15, 23, 42, .08);
+  --muted: #64748b;
+  --text: #0f172a;
+
+  --shadow-sm: 0 8px 18px rgba(15,23,42,.06);
+  --shadow-md: 0 14px 34px rgba(15,23,42,.10);
+  --radius: 16px;
+}
+
+html, body { height: 100%; }
+body{
+  background:
+    radial-gradient(1200px 650px at 15% 0%, rgba(184,144,86,.18), transparent 55%),
+    radial-gradient(900px 520px at 85% 25%, rgba(139,33,54,.14), transparent 60%),
+    linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+}
+
+/* Layout general */
+main.container-fluid{
+  padding-bottom: 78px; /* espacio por navbar inferior */
+}
+
+/* ALERT */
+#alertBox{
+  border: 0;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* NAVBAR institucional */
+.edomex-navbar{
+  background: linear-gradient(90deg, rgba(139,33,54,1) 0%, rgba(111,23,44,1) 40%, rgba(184,144,86,1) 100%);
+  border-bottom: 1px solid rgba(255,255,255,.12);
+}
+.navbar .navbar-brand{
+  letter-spacing: .2px;
+}
+.navbar .btn{
+  border-radius: 999px;
+}
+
+/* Cards */
+.card{
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  background: var(--card);
+  backdrop-filter: blur(6px);
+}
+.card.shadow-sm{
+  box-shadow: var(--shadow-sm) !important;
+}
+.card-header{
+  border-bottom: 1px solid rgba(15,23,42,.06) !important;
+}
+
+/* Separadores */
+hr{
+  opacity: .12;
+}
+
+/* Inputs & selects */
+.form-label{
+  color: #334155;
+  font-weight: 600;
+}
+.form-control,
+.form-select{
+  border-radius: 12px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.92);
+}
+.form-control::placeholder{ color: #94a3b8; }
+.form-control:focus,
+.form-select:focus{
+  border-color: rgba(139,33,54,.45);
+  box-shadow: 0 0 0 .2rem rgba(139,33,54,.15);
+}
+
+/* Botones */
+.btn{
+  border-radius: 12px;
+  font-weight: 600;
+}
+.btn-primary{
+  background: linear-gradient(180deg, rgba(139,33,54,1), rgba(111,23,44,1));
+  border: 0;
+  box-shadow: 0 10px 20px rgba(139,33,54,.18);
+}
+.btn-primary:hover{
+  filter: brightness(1.03);
+}
+.btn-outline-secondary{
+  border-color: rgba(15,23,42,.18);
+}
+.btn-success{
+  box-shadow: 0 10px 20px rgba(22,163,74,.12);
+}
+
+/* KPI */
+.kpi-card{
+  border-radius: 18px !important;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(560px 220px at 20% 0%, rgba(139,33,54,.10), transparent 55%),
+    radial-gradient(560px 220px at 80% 100%, rgba(184,144,86,.10), transparent 60%);
+  pointer-events:none;
+}
+.kpi-card .card-body{ position:relative; }
+.kpi-number{ letter-spacing: -0.5px; }
+.progress{
+  background: rgba(15,23,42,.06);
+  border-radius: 999px;
+}
+/* ========================================
+   DASHBOARD KPI COMPLETUD - DISEÑO FUTURISTA
+   Nombres únicos para evitar conflictos
+======================================== */
+
+/* ROOT VARIABLES FUTURISTAS */
+:root {
+  --futurista-kpi-glow: 0 0 20px rgba(59, 130, 246, 0.4);
+  --futurista-kpi-glow-strong: 0 0 30px rgba(59, 130, 246, 0.6);
+  --futurista-kpi-neon-blue: #3b82f6;
+  --futurista-kpi-neon-green: #10b981;
+  --futurista-kpi-neon-purple: #8b5cf6;
+  --futurista-kpi-bg-glass: rgba(255, 255, 255, 0.1);
+  --futurista-kpi-bg-glass-dark: rgba(17, 24, 39, 0.8);
+}
+
+/* HEADER */
+.futurista-kpi-header {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.futurista-kpi-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+  animation: futurista-kpi-float 6s ease-in-out infinite;
+}
+
+@keyframes futurista-kpi-float {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(20px, -20px) rotate(120deg); }
+  66% { transform: translate(-10px, 10px) rotate(240deg); }
+}
+
+.futurista-kpi-title-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 2;
+}
+
+.futurista-kpi-icon-pulse {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--futurista-kpi-neon-blue), var(--futurista-kpi-neon-purple));
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--futurista-kpi-glow-strong);
+  animation: futurista-kpi-pulse 2s ease-in-out infinite;
+}
+
+@keyframes futurista-kpi-pulse {
+  0%, 100% { box-shadow: var(--futurista-kpi-glow-strong), 0 0 0 0 rgba(59, 130, 246, 0.7); }
+  50% { box-shadow: 0 0 50px rgba(59, 130, 246, 0.8), 0 0 0 20px rgba(59, 130, 246, 0); }
+}
+
+.futurista-kpi-icon-glow {
+  font-size: 24px;
+  color: white;
+  text-shadow: 0 0 10px currentColor;
+}
+
+.futurista-kpi-title {
+  color: white;
+  font-weight: 800;
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.025em;
+}
+
+.futurista-kpi-subtitle {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.875rem;
+}
+
+.futurista-kpi-score-badge {
+  background: linear-gradient(135deg, var(--futurista-kpi-neon-green), #059669);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 50px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  box-shadow: var(--futurista-kpi-glow);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* GRID CARDS */
+.futurista-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.futurista-kpi-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.futurista-kpi-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+}
+
+.futurista-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--futurista-kpi-neon-blue), var(--futurista-kpi-neon-purple));
+}
+
+.futurista-kpi-card-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 2;
+}
+
+.futurista-kpi-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  transition: all 0.3s ease;
+}
+
+.futurista-kpi-icon-people { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; }
+.futurista-kpi-icon-success { background: linear-gradient(135deg, var(--futurista-kpi-neon-green), #059669); color: white; }
+.futurista-kpi-icon-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+.futurista-kpi-icon-gauge { 
+  background: conic-gradient(from 0deg, var(--futurista-kpi-neon-purple), var(--futurista-kpi-neon-blue), var(--futurista-kpi-neon-green));
+  color: white;
+}
+
+.futurista-kpi-content > * {
+  margin: 0;
+}
+
+.futurista-kpi-label {
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.futurista-kpi-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.futurista-kpi-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.futurista-kpi-trend-up { color: var(--futurista-kpi-neon-green); }
+.futurista-kpi-trend-down { color: #ef4444; }
+
+.futurista-kpi-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.futurista-kpi-progress-bar {
+  height: 6px;
+  background: linear-gradient(90deg, var(--futurista-kpi-neon-green), #10b981);
+  border-radius: 3px;
+  transition: width 1.5s ease-out;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.futurista-kpi-gauge {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: conic-gradient(transparent, transparent 50%, #e2e8f0 50%, #e2e8f0 100%);
+  position: relative;
+  margin: 0 auto;
+}
+
+.futurista-kpi-gauge-fill {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  border-radius: 50%;
+  background: conic-gradient(var(--futurista-kpi-neon-blue) 0deg, var(--futurista-kpi-neon-green) 180deg, transparent 180deg);
+  transition: all 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transform: rotate(-90deg);
+}
+
+.futurista-kpi-gauge-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  background: radial-gradient(circle, var(--futurista-kpi-neon-blue), transparent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.6;
+}
+
+/* TABLA */
+/* 🎯 FIX SCROLL VIBRACIÓN + ÁREAS LARGAS */
+.futurista-kpi-table-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;  /* ← CRÍTICO: contiene scroll */
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  transform: translateZ(0);  /* ← FIX GPU rendering */
+  backface-visibility: hidden;  /* ← FIX vibración */
+}
+
+.futurista-kpi-table-body {
+  max-height: 400px;  /* ← Altura fija para scroll */
+  overflow-y: auto;   /* ← Solo scroll vertical */
+  -webkit-overflow-scrolling: touch;  /* ← Smooth iOS */
+  scrollbar-width: thin;  /* ← Scrollbar delgada Firefox */
+}
+
+.futurista-kpi-table-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.futurista-kpi-table-body::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.5);
+  border-radius: 3px;
+}
+
+.futurista-kpi-table-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--futurista-kpi-neon-blue), var(--futurista-kpi-neon-purple));
+  border-radius: 3px;
+}
+
+.futurista-kpi-table-body::-webkit-scrollbar-thumb:hover {
+  background: var(--futurista-kpi-neon-blue);
+}
+
+/* 🛑 DESACTIVA HOVER EN SCROLL */
+.futurista-kpi-user-row {
+  transition: background-color 0.2s ease, transform 0.1s ease !important;  /* ← Más rápido */
+  will-change: transform;  /* ← Optimiza */
+}
+
+.futurista-kpi-user-row:hover {
+  background: rgba(59, 130, 246, 0.08) !important;  /* ← Menos agresivo */
+  transform: none !important;  /* ← SIN scale en tabla */
+}
+
+/* 📱 ÁREAS LARGAS - TOOLTIP + WRAP */
+/* CSS MEJORADO - ÁREA COMPLETA */
+/* ÁREA MULTILÍNEA - SALTO DE LÍNEA AUTOMÁTICO */
+.futurista-kpi-area-badge-multiline {
+  display: inline-block !important;
+  padding: 4px 8px !important;
+  margin: 0 !important;
+  border-radius: 10px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+  color: white !important;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3) !important;
+  
+  /* ESPACIO SUFICIENTE */
+  max-width: 200px !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 24px !important;
+  
+  /* MULTILÍNEA REAL */
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  white-space: normal !important;
+  text-align: center !important;
+  overflow: visible !important;
+}
+
+/* STATS MUNICIPIOS - DISEÑO PRO */
+.futurista-kpi-muni-stats-grid {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  padding: 16px 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.futurista-kpi-stat-item {
+  flex: 1;
+  text-align: center;
+  position: relative;
+}
+
+.futurista-kpi-stat-number {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1;
+  margin-bottom: 4px;
+  background: linear-gradient(135deg, var(--futurista-kpi-neon-blue), var(--futurista-kpi-neon-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.active-munis .futurista-kpi-stat-number {
+  background: linear-gradient(135deg, var(--futurista-kpi-neon-green), #059669);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.total-personas .futurista-kpi-stat-number {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.futurista-kpi-stat-label {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.futurista-kpi-stat-total {
+  font-size: 0.75rem;
+  color: rgba(99, 116, 139, 0.8);
+  font-weight: 500;
+}
+
+.futurista-kpi-stat-progress {
+  height: 4px;
+  background: rgba(226, 232, 240, 0.6);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.futurista-kpi-stat-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--futurista-kpi-neon-green), #10b981);
+  border-radius: 2px;
+  transition: width 1s ease-out;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.futurista-kpi-stat-separator {
+  width: 2px;
+  height: 48px;
+  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.1));
+  border-radius: 1px;
+  margin: 0 16px;
+}
+
+/* HOVER ANIMADO */
+.futurista-kpi-muni-stats-grid:hover .futurista-kpi-stat-item {
+  transform: scale(1.02);
+  transition: transform 0.3s ease;
+}
+
+.futurista-kpi-muni-stats-grid:hover .futurista-kpi-stat-number {
+  text-shadow: 0 0 20px currentColor;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .futurista-kpi-muni-stats-grid {
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  }
+  
+  .futurista-kpi-stat-separator {
+    display: none;
+  }
+  
+  .futurista-kpi-stat-number {
+    font-size: 1.5rem;
+  }
+}
+
+
+/* ERROR STATE */
+.futurista-kpi-error {
+  padding: 40px;
+  text-align: center;
+  color: #ef4444;
+}
+
+.futurista-kpi-error-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 20px rgba(239, 68, 68, 0.3));
+}
+
+/* ANIMACIONES INICIALES */
+@keyframes futurista-kpi-slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.futurista-kpi-card,
+.futurista-kpi-table-card {
+  animation: futurista-kpi-slideInUp 0.6s ease-out forwards;
+}
+
+.futurista-kpi-card:nth-child(1) { animation-delay: 0.1s; }
+.futurista-kpi-card:nth-child(2) { animation-delay: 0.2s; }
+.futurista-kpi-card:nth-child(3) { animation-delay: 0.3s; }
+.futurista-kpi-card:nth-child(4) { animation-delay: 0.4s; }
+/* TOP MUNICIPIOS TRABAJO POLÍTICO */
+/* CHARTS FUTURISTAS */
+.futurista-kpi-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.futurista-kpi-chart-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+  height: 380px;
+}
+
+.futurista-kpi-chart-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--futurista-kpi-neon-blue), var(--futurista-kpi-neon-purple));
+}
+
+.futurista-kpi-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.futurista-kpi-chart-header h6 {
+  margin: 0;
+  font-weight: 800;
+  color: #1e293b;
+  font-size: 1.1rem;
+}
+
+.futurista-kpi-legend {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--futurista-kpi-neon-blue);
+  box-shadow: 0 0 8px currentColor;
+}
+
+canvas {
+  max-height: 280px !important;
+  width: 100% !important;
+}
+
+/* MAPA */
+#map{
+  height: 420px; /* ajusta si quieres */
+  border-radius: 14px;
+  border: 1px solid rgba(15,23,42,.10);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* Panel cards municipio */
+#cardsContainer{
+  background: rgba(255,255,255,.95);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Badges */
+.badge{
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+/* Auditoría card */
+#panelTrazabilidad{
+  padding: 12px 12px;
+  border: 1px dashed rgba(15,23,42,.18);
+  border-radius: 12px;
+  background: rgba(248,250,252,.8);
+}
+
+/* Modal perfil: header gradiente */
+.bg-gradient-perfil{
+  background: linear-gradient(90deg, rgba(139,33,54,1), rgb(139,33,54,1));
+}
+
+/* Tabs del perfil */
+.nav-tabs-custom .nav-tabs{
+  background: rgba(255,255,255,.92);
+  border-bottom: 1px solid rgba(15,23,42,.08);
+}
+.nav-tabs-custom .nav-link{
+  border: 0 !important;
+  color: #475569;
+  font-weight: 700;
+}
+.nav-tabs-custom .nav-link.active{
+  color: var(--inst-prim);
+  background: transparent !important;
+  position: relative;
+}
+.nav-tabs-custom .nav-link.active::after{
+  content:"";
+  position:absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--inst-prim), var(--inst-sec));
+}
+
+/* Cards del perfil */
+.card-perfil{
+  border-radius: 16px !important;
+}
+
+/* Navbar inferior */
+.navbar.fixed-bottom{
+  border-top: 1px solid rgba(255,255,255,.14) !important;
+}
+.pill-label{
+  background: rgba(255,255,255,.14);
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+/* Responsive */
+@media (max-width: 1200px){
+  #map{ height: 360px; }
+}
+@media (max-width: 576px){
+  main.container-fluid{ padding-left: 12px; padding-right: 12px; }
+  .navbar .navbar-brand{ font-size: .95rem; }
+  #map{ height: 320px; }
+}
+
+/*botones tarjetas*/
+.btn-fixed {
+  min-width: 48px;
+  max-width: 72px;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.btn-group .btn-fixed:not(:first-child) {
+  border-left: 1px solid rgba(0,0,0,0.1);
+}
+
+.btn-fixed:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  color: inherit !important;
+}
+
+.btn-fixed:active {
+  transform: translateY(0);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .btn-fixed {
+    min-width: 40px;
+    padding: 0.25rem 0.375rem;
+    font-size: 0.7rem;
+  }
+}
