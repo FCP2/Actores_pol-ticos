@@ -61,16 +61,7 @@ function isPeriodoValido(p) {
     return p;
   }
 
-//helpers para actualizar:
-async function getPersonaScope(client, id_persona) {
-    const { rows } = await client.query(
-      `SELECT id_persona, id_oficina, creado_por
-      FROM personas
-      WHERE id_persona = $1`,
-      [id_persona]
-    );
-    return rows[0] || null;
-  }
+
 
   function isSuperadmin(req) {
     return (req.user?.roles || []).includes('superadmin');
@@ -1858,6 +1849,7 @@ const puppeteer = require("puppeteer");
 // Node 18+ ya trae fetch global. Si estás en Node <18:
 // const fetch = require("node-fetch");
 
+
 async function imageUrlToDataUri(url) {
   if (!url) return null;
   const s = String(url);
@@ -2015,8 +2007,29 @@ function buildPerfilHtml(p) {
     li?.cuenta_con_estructura === true ? "Sí" :
     li?.cuenta_con_estructura === false ? "No" : "";
 
+function parseResultado(raw) 
+ { 
+    if (!raw) return "—"; 
+    const map = { "no_ganada": "No ganada",
+      "ganada": "Ganada", 
+      "pendiente": "Pendiente", 
+      "impugnada": "Impugnada", 
+      "cancelada": "Cancelada" }; 
+      return map[raw] || raw.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()); 
+  }
   // Municipios de trabajo (lista)
   const municipiosTrabajo = asArray(p.municipios_trabajo);
+
+  const partidoColors = { "MORENA": 
+    "morena", 
+    "PAN": "pan", 
+    "PRI": "pri", 
+    "PVEM": "pvem", 
+    "PT": "pt", 
+    "MC": "mc", 
+    "PRD": "prd", 
+    "OTRO": "otro", 
+    "IND": "ind" };
 
   return `<!doctype html>
 <html lang="es">
@@ -2025,124 +2038,156 @@ function buildPerfilHtml(p) {
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Perfil - ${esc(nombreCompleto)}</title>
   <style>
-    :root{
-      --prim:#8b2136;
-      --sec:#b89056;
-      --mut:#6b7280;
-      --bg:#ffffff;
-      --line:#e5e7eb;
-      --ok:#16a34a;
-      --warn:#f59e0b;
-      --bad:#dc2626;
-    }
-    *{ box-sizing:border-box; }
-    body{
-      font-family: Arial, Helvetica, sans-serif;
-      background: var(--bg);
-      margin: 0;
-      padding: 22px;
-      color:#111827;
-    }
-    .top{
-      display:flex;
-      gap:16px;
-      align-items:flex-start;
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:16px;
-    }
-    .photo{
-      width:110px; height:140px;
-      border-radius:12px;
-      border:1px solid var(--line);
-      background:#f3f4f6;
-      overflow:hidden;
-      flex:0 0 auto;
-      display:flex; align-items:center; justify-content:center;
-      color:var(--mut);
-      font-size:12px;
-    }
-    .photo img{ width:100%; height:100%; object-fit:cover; }
-    .title{ flex:1 1 auto; min-width:0; }
-    .h1{ font-size:20px; margin:0; color:var(--prim); font-weight:800; }
-    .sub{ margin-top:6px; color:var(--mut); font-size:13px; }
-    .badges{ margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-    .badge{
-      display:inline-block;
-      font-size:11px;
-      padding:4px 8px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      background:#fafafa;
-      white-space:nowrap;
-    }
-    .badge.prim{ background: rgba(139,33,54,.08); border-color: rgba(139,33,54,.18); }
-    .badge.sec{ background: rgba(184,144,86,.10); border-color: rgba(184,144,86,.22); }
-    .badge.ok{ background: rgba(22,163,74,.10); border-color: rgba(22,163,74,.20); color:#065f46; }
-    .badge.warn{ background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.22); color:#92400e; }
-    .badge.bad{ background: rgba(220,38,38,.10); border-color: rgba(220,38,38,.18); color:#7f1d1d; }
-    .badge.mut{ background:#f3f4f6; border-color:#e5e7eb; color:#374151; }
+:root {
+  --prim:#8b2136;
+  --sec:#b89056;
+  --mut:#6b7280;
+  --bg:#f9fafb;
+  --line:#e5e7eb;
+  --ok:#16a34a;
+  --warn:#f59e0b;
+  --bad:#dc2626;
+}
 
-    .section{
-      margin-top:14px;
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:14px 16px;
-    }
-    .h2{
-      font-size:12px;
-      letter-spacing:.3px;
-      color:var(--prim);
-      font-weight:800;
-      margin:0 0 10px 0;
-      text-transform:uppercase;
-    }
-    .kv{
-      display:grid;
-      grid-template-columns: 190px 1fr;
-      gap:8px 12px;
-      font-size:12px;
-    }
-    .k{ color:var(--mut); }
-    .v{ color:#111827; }
+* { box-sizing: border-box; }
 
-    .grid{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:10px;
-    }
-    .item{
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:10px;
-      font-size:12px;
-      break-inside: avoid;
-    }
-    .item .t{ font-weight:800; margin-bottom:4px; }
-    .item .m{ color:var(--mut); font-size:11px; }
+body {
+  font-family: 'Inter', 'Roboto', Arial, sans-serif;
+  background: var(--bg);
+  margin: 0;
+  padding: 24px;
+  color: #1f2937;
+}
 
-    .photos{
-      margin-top:8px;
-      display:flex;
-      gap:6px;
-      flex-wrap:wrap;
-    }
-    .photos img{
-      height:48px;
-      width:auto;
-      border:1px solid var(--line);
-      border-radius:8px;
-    }
+.top {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
 
-    .foot{
-      margin-top:10px;
-      color:var(--mut);
-      font-size:10px;
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-    }
-    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.photo {
+  width: 110px; height: 140px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #f3f4f6;
+  overflow: hidden;
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--mut);
+  font-size: 12px;
+}
+.photo img { width: 100%; height: 100%; object-fit: cover; }
+
+.title { flex: 1 1 auto; min-width: 0; }
+.h1 { font-size: 22px; margin: 0; color: var(--prim); font-weight: 800; }
+.sub { margin-top: 6px; color: var(--mut); font-size: 13px; }
+
+.badges {
+  margin-top: 10px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid var(--line);
+}
+
+.badge.ok { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.badge.warn { background: #fef9c3; color: #92400e; border-color: #fde68a; }
+.badge.bad { background: #fee2e2; color: #7f1d1d; border-color: #fecaca; }
+.badge.prim { background: #fce7f3; color: #9d174d; border-color: #fbcfe8; }
+.badge.sec { background: #fef3c7; color: #78350f; border-color: #fde68a; }
+
+.badge.morena { background:#fef2f2; color:#7f1d1d; border-color:#fecaca; }
+.badge.pan    { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
+.badge.pri    { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
+.badge.pvem   { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
+.badge.pt     { background:#fee2e2; color:#7f1d1d; border-color:#fecaca; }
+.badge.mc     { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
+.badge.prd    { background:#fef9c3; color:#78350f; border-color:#fde68a; }
+.badge.otro   { background:#f3f4f6; color:#374151; border-color:#e5e7eb; }
+.badge.ind    { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
+
+
+.section {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-top: 18px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.h2 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 6px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px 14px;
+  font-size: 12px;
+}
+.k { font-weight: 600; color: var(--mut); }
+.v { color: #111827; }
+
+.item {
+  background: #f9fafb;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.item .t { font-weight: 700; margin-bottom: 4px; color: #111827; }
+.item .m { font-size: 11px; color: var(--mut); }
+
+.photos {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.photos img {
+  height: 48px;
+  width: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.foot {
+  margin-top: 10px;
+  color: var(--mut);
+  font-size: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
   </style>
 </head>
 <body>
@@ -2160,7 +2205,7 @@ function buildPerfilHtml(p) {
         ${confi ? badge(confi.label, confi.cls) : ""}
         ${escalaInfl ? badge(`Influencia: ${escalaInfl}`, "mut") : ""}
         ${badge(p.grupo_postulacion, "mut")}
-        ${partido ? badge(partido, "prim") : ""}
+        ${partido ? badge(partido, partidoColors[partido] || "mut") : ""}
         ${badge(p.ideologia_politica, "mut")}
         ${badge(p.tema_interes_central, "sec")}
         ${flags}
@@ -2258,14 +2303,6 @@ function buildPerfilHtml(p) {
     </div>
   `)}
 
-
-  ${listSection("Experiencia laboral", p.experiencia_laboral, (x)=>`
-    <div class="item">
-      <div class="t">${esc(x.cargo || "—")}</div>
-      <div class="m">${esc(x.organizacion || "")} • ${esc(x.periodo || "")}</div>
-    </div>
-  `)}
-
   ${listSection("Servicio público", p.servicio_publico, (s)=>`
     <div class="item">
       <div class="t">${esc(s.cargo || "—")}</div>
@@ -2274,13 +2311,16 @@ function buildPerfilHtml(p) {
     </div>
   `)}
 
-  ${listSection("Elecciones contendidas", p.elecciones, (e)=>`
-    <div class="item">
-      <div class="t">${esc([e.anio_eleccion, e.candidatura].filter(Boolean).join(" • ") || "—")}</div>
-      <div class="m">${esc([e.partido_postulacion, e.resultado].filter(Boolean).join(" • ") || "")}</div>
-      ${(e.diferencia_votos || e.diferencia_porcentaje) ? `<div class="m">Diferencia: ${esc(e.diferencia_votos ?? "—")} votos • ${esc(e.diferencia_porcentaje ?? "—")}%</div>` : `<div class="m"></div>`}
-    </div>
-  `)}
+${listSection("Elecciones contendidas", p.elecciones, (e)=>`
+  <div class="item">
+    <div class="t">${esc([e.anio_eleccion, e.candidatura].filter(Boolean).join(" • ") || "—")}</div>
+    <div class="m">${esc([e.partido_postulacion, parseResultado(e.resultado)].filter(Boolean).join(" • ") || "")}</div>
+    ${(e.diferencia_votos || e.diferencia_porcentaje) 
+      ? `<div class="m">Diferencia: ${esc(e.diferencia_votos ?? "—")} votos • ${esc(e.diferencia_porcentaje ?? "—")}%</div>` 
+      : `<div class="m"></div>`}
+  </div>
+`)}
+
 
   ${listSection("Eventos de movilización", p.capacidad_movilizacion_eventos, (e)=>`
     <div class="item">
@@ -2371,6 +2411,40 @@ function buildPerfilHtml(p) {
         `)
   }
 
+  <section class="section">
+    <div class="h2">Trazabilidad</div>
+    <div class="kv">
+      <div class="k">Oficina</div><div class="v">${esc(p.oficina_nombre || "—")}</div>
+
+      <div class="k">Capturó</div><div class="v">${esc(p.creado_por_nombre || "—")}</div>
+      <div class="k">Creado</div><div class="v">${esc(fmtDate(p.created_at))}</div>
+
+      <div class="k">Modificó</div><div class="v">${esc(p.modificado_por_nombre || "—")}</div>
+      <div class="k">Actualizado</div><div class="v">${esc(fmtDate(p.updated_at))}</div>
+
+      <div class="k">Verificación AREA</div>
+      <div class="v">
+        ${esc(p.verif_area_por_nombre || "—")}
+        ${p.verif_area_por_email ? `<span class="m"> • ${esc(p.verif_area_por_email)}</span>` : ""}
+        ${p.verif_area_at ? `<div class="m">${esc(fmtDate(p.verif_area_at))}</div>` : `<div class="m">—</div>`}
+      </div>
+
+      <div class="k">Verificación OFFICE</div>
+      <div class="v">
+        ${esc(p.verif_office_por_nombre || "—")}
+        ${p.verif_office_por_email ? `<span class="m"> • ${esc(p.verif_office_por_email)}</span>` : ""}
+        ${p.verif_office_at ? `<div class="m">${esc(fmtDate(p.verif_office_at))}</div>` : `<div class="m">—</div>`}
+      </div>
+
+      <div class="k">Verificación FINAL</div>
+      <div class="v">
+        ${esc(p.verificado_por_nombre || "—")}
+        ${p.verificado_por_email ? `<span class="m"> • ${esc(p.verificado_por_email)}</span>` : ""}
+        ${p.verificado_at ? `<div class="m">${esc(fmtDate(p.verificado_at))}</div>` : `<div class="m">—</div>`}
+      </div>
+    </div>
+  </section>
+
   <div class="foot">
     <div>Generado: ${esc(fmtDate(new Date()))}</div>
     <div>ID persona: ${esc(p.id_persona)}</div>
@@ -2428,9 +2502,20 @@ exports.getPerfilPdf = async (req, res) => {
 
       u_crea.nombre  AS creado_por_nombre,
       u_mod.nombre   AS modificado_por_nombre,
+
+      u_area.nombre   AS verif_area_por_nombre,
+      u_area.email    AS verif_area_por_email,
+      u_office.nombre AS verif_office_por_nombre,
+      u_office.email  AS verif_office_por_email,
+
       o.nombre       AS oficina_nombre,
       p.created_at,
       p.updated_at,
+
+      p.verif_area_por,
+      p.verif_area_at,
+      p.verif_office_por,
+      p.verif_office_at,
 
       p.curp,
       p.rfc,
@@ -2841,6 +2926,9 @@ exports.getPerfilPdf = async (req, res) => {
     LEFT JOIN usuarios u_mod  ON u_mod.id_usuario = p.modificado_por
     LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
     LEFT JOIN oficinas o      ON o.id_oficina = p.id_oficina
+
+    LEFT JOIN usuarios u_area   ON u_area.id_usuario   = p.verif_area_por
+    LEFT JOIN usuarios u_office ON u_office.id_usuario = p.verif_office_por
 
     LEFT JOIN catalogo_partidos cp            ON cp.id_partido   = p.id_partido_actual
     LEFT JOIN catalogo_temas_interes cti      ON cti.id_tema     = p.id_tema_interes_central
@@ -3598,7 +3686,6 @@ exports.updatePersonaCompleta = async (req, res) => {
         sin_cargos_eleccion_popular = $26,
         foto_url = $27,
         id_oficina = $28,
-        updated_at = now(),
         modificado_por = $29,
         nivel_confiabilidad = $30
       WHERE id_persona = $1
