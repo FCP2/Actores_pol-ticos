@@ -165,7 +165,7 @@ function renderCards(list){
               </div>
             </div>
 
-            <div class="flex-shrink-0 d-flex gap-2">
+            <div class="flex-shrink-0 d-flex align-items-center gap-1" style="height:46px;">
               <button class="btn btn-outline-secondary btn-sm"
                       data-action="pdf"
                       data-id="${p.id_persona}">
@@ -432,6 +432,92 @@ function renderSimpleList(items, renderRow){
   return `<div class="vstack gap-2">${items.map(renderRow).join('')}</div>`;
 }
 
+// 1) Diccionario -> etiqueta bonita
+const LID_TIPO_LABELS = {
+  territorial: "Territorial",
+  politico_institucional: "Político",
+  social_comunitario: "Social",
+  empresarial: "Empresarial",
+  mediatico: "Mediático",
+  tecnico_especializado: "Técnico",
+  otro: "Otro",
+};
+
+// 2) Convierte array/string crudo a array limpio de etiquetas
+function prettyLiderazgoTipos(tipos, otroTexto) {
+  let arr = [];
+
+  if (Array.isArray(tipos)) arr = tipos;
+  else if (typeof tipos === "string") arr = tipos.split(","); // por si llega "a,b,c"
+  else arr = [];
+
+  const clean = arr
+    .map(x => String(x || "").trim())
+    .filter(Boolean);
+
+  return clean.map(t => {
+    const key = t.toLowerCase();
+    if (key === "otro" && otroTexto) return `Otro: ${otroTexto}`;
+    return LID_TIPO_LABELS[key] || t; // fallback
+  });
+}
+//baner nivel de confiabilidad
+function renderConfiabilidadBanner(nivel) {
+  if (!nivel) return "";
+
+  const key = String(nivel).trim().toLowerCase();
+
+  const map = {
+    alto:  { label: "Alto",  cls: "alert-success", icon: "bi-shield-check" },
+    media: { label: "Medio", cls: "alert-warning", icon: "bi-shield-exclamation" }, // por si llega "media"
+    medio: { label: "Medio", cls: "alert-warning", icon: "bi-shield-exclamation" },
+    bajo:  { label: "Bajo",  cls: "alert-danger",  icon: "bi-shield-x" }
+  };
+
+  const c = map[key] || { label: nivel, cls: "alert-secondary", icon: "bi-info-circle" };
+
+  // puntito tipo semáforo
+  const dot =
+    c.cls.includes("success") ? "background:#16a34a" :
+    c.cls.includes("warning") ? "background:#f59e0b" :
+    c.cls.includes("danger")  ? "background:#dc2626" :
+    "background:#6b7280";
+
+  return `
+    <div class="alert ${c.cls} d-flex align-items-center justify-content-between mb-0 py-2 px-3">
+      <div class="d-flex align-items-center gap-2">
+        <span style="width:10px;height:10px;border-radius:999px;${dot};display:inline-block"></span>
+        <i class="bi ${c.icon} fs-5"></i>
+        <div class="fw-semibold">Confiabilidad: ${c.label}</div>
+      </div>
+      <span class="badge text-bg-light border">Semáforo</span>
+    </div>
+  `;
+}
+//mapeo participacion 
+function labelParticipacionTipo(tipoRaw) {
+  const t = (tipoRaw || "").toString().trim().toLowerCase();
+
+  const map = {
+    partido: "Partido",
+    organizacion_politica: "Organización política",
+    organizacion_social: "Organización social",
+    organizacion_civil: "Organización civil",
+    sindicato: "Sindicato",
+    camara_empresarial: "Cámara empresarial",
+    otro: "Otro",
+  };
+
+  // si no está en el mapa, lo "humaniza"
+  if (map[t]) return map[t];
+
+  // fallback: "organizacion_politica" -> "Organizacion politica" (sin acentos)
+  // si quieres acentos perfectos, agrega el tipo al map de arriba
+  return t
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
 async function openPerfilModal(idPersona){
   const el = document.getElementById('perfilModal');
   if (!perfilModalInstance) perfilModalInstance = new bootstrap.Modal(el);
@@ -442,16 +528,54 @@ async function openPerfilModal(idPersona){
   document.getElementById('perfilModalSubtitle').textContent = '';
   document.getElementById('perfilBadges').innerHTML = '';
   showPerfilState({loading:true, error:null});
+ // reset foto borrar estado anterior
+  const img = document.getElementById("perfilFoto");
+  const fb  = document.getElementById("perfilFotoFallback");
+  img.src = "";
+  img.style.display = "none";
+  fb.style.display = "inline-block";
 
   try {
       const p = await apiGet(`/personas/${idPersona}/perfil`);
-      
+      // NIVEL DE CONFIABILIDAD
+      const banner = document.getElementById("perfilConfiabilidadBanner");
+      if (p.nivel_confiabilidad) {
+        banner.innerHTML = renderConfiabilidadBanner(p.nivel_confiabilidad);
+        banner.classList.remove("d-none");
+      } else {
+        banner.innerHTML = "";
+        banner.classList.add("d-none");
+      }
+    // FOTO
+    const img = document.getElementById("perfilFoto");
+    const fb  = document.getElementById("perfilFotoFallback");
+
+    const url = (p.foto_url || "").trim();
+
+    if (url) {
+      img.src = url;
+      img.style.display = "inline-block";
+      fb.style.display = "none";
+
+      // fallback si falla la imagen
+      img.onerror = () => {
+        img.style.display = "none";
+        fb.style.display = "inline-block";
+        img.onerror = null;
+      };
+    } else {
+      img.style.display = "none";
+      fb.style.display = "inline-block";
+    }
     // Nombre completo
     const nombreCompleto = [p.nombre, p.apellido_paterno, p.apellido_materno].filter(Boolean).join(' ');
     document.getElementById('perfilModalTitle').textContent = nombreCompleto || 'Perfil';
 
     // Municipio subtitle (prioridad: trabajo > real > legal)
-    const mun = p.municipio_trabajo_politico || p.municipio_residencia_real || p.municipio_residencia_legal || '—';
+    const mun = p.municipio_trabajo_politico
+      || p.residencia_real_display
+      || p.residencia_legal_display
+      || '—';
     document.getElementById('perfilModalSubtitle').textContent = `• ${mun}`;
 
     // Badges principales
@@ -515,9 +639,9 @@ async function openPerfilModal(idPersona){
     setText('v_clave', p.clave_elector);
     setText('v_ecivil', p.estado_civil);
 
-    setText('v_mun_legal', p.municipio_residencia_legal);
-    setText('v_mun_real',  p.municipio_residencia_real);
-    setText('v_mun_trab',  p.municipio_trabajo_politico);
+    setText('v_mun_legal', p.residencia_legal_display || p.municipio_residencia_legal || '—');
+    setText('v_mun_real',  p.residencia_real_display  || p.municipio_residencia_real  || '—');
+    setText('v_mun_trab',  p.municipio_trabajo_politico || '—');
 
     // Flags
     const flags = [];
@@ -587,15 +711,122 @@ async function openPerfilModal(idPersona){
         </div>
       `;
     }) || `<span class="text-muted small">—</span>`);
-    // Cargos elección popular
-    const cargosEP = listOrEmpty(p.cargos_eleccion_popular);
-    setHtmlIfExists('v_cargos_ep', renderSimpleList(cargosEP, (c) => {
-      const head = esc(c.cargo || '—');
-      const meta = [c.periodo, c.modalidad, c.partido_postulante].filter(Boolean).map(esc).join(' • ');
+
+    //Municipalidades de trabajo (lista nueva)
+    const munTrab = listOrEmpty(p.municipios_trabajo);
+    setHtmlIfExists('v_municipios_trabajo', renderSimpleList(munTrab, (m) => {
+      const pri = m.es_principal ? `<span class="badge text-bg-success ms-2">Principal</span>` : '';
+      const notas = m.notas ? `<div class="text-muted small">${esc(m.notas)}</div>` : '';
+      return `
+        <div class="border rounded p-2">
+          <div class="d-flex align-items-center justify-content-between gap-2">
+            <div class="fw-semibold">${esc(m.municipio || '—')}</div>
+            <div>${pri}</div>
+          </div>
+          ${notas}
+        </div>
+      `;
+    }) || `<span class="text-muted small">—</span>`);
+
+    //Fuentes de consulta (nueva)
+    const fuentes = listOrEmpty(p.fuentes_consulta);
+    setHtmlIfExists('v_fuentes', renderSimpleList(fuentes, (f) => {
+      const head = esc(f.fuente || `Fuente #${f.id_fuente || '—'}`);
+      const fecha = f.fecha_consulta ? `<div class="text-muted small">Fecha: ${esc(f.fecha_consulta)}</div>` : '';
+      const det = f.detalle ? `<div class="text-muted small">${esc(f.detalle)}</div>` : '';
+
       return `
         <div class="border rounded p-2">
           <div class="fw-semibold">${head}</div>
-          ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
+          ${fecha}
+          ${det}
+        </div>
+      `;
+    }) || `<span class="text-muted small">—</span>`);
+
+    // Liderazgo e influencia
+    const lid = p.liderazgo_influencia;
+
+    if (!lid) {
+      document.getElementById("v_liderazgo").innerHTML = `<span class="text-muted small">—</span>`;
+    } else {
+      const nivel = lid.nivel ? esc(String(lid.nivel).toUpperCase()) : "—";
+      const presencia = lid.presencia_territorial ? esc(lid.presencia_territorial) : "—";
+      const cuenta = (lid.cuenta_con_estructura === true) ? "Sí" : (lid.cuenta_con_estructura === false ? "No" : "—");
+
+      const tiposBonitos = prettyLiderazgoTipos(lid.tipos, lid.tipo_otro_texto);
+
+      const tiposHtml = tiposBonitos.length
+        ? `<div class="d-flex flex-wrap gap-1">
+            ${tiposBonitos.map(t => `<span class="badge text-bg-light border">${esc(t)}</span>`).join("")}
+          </div>`
+        : `<span class="text-muted small">—</span>`;
+
+      document.getElementById("v_liderazgo").innerHTML = `
+        <div class="border rounded p-2">
+          <div class="row g-2 small">
+            <div class="col-12"><span class="text-muted">Nivel:</span> <b>${nivel}</b></div>
+            <div class="col-12"><span class="text-muted">Presencia territorial:</span> <b>${esc(presencia)}</b></div>
+            <div class="col-12"><span class="text-muted">Cuenta con estructura:</span> <b>${esc(cuenta)}</b></div>
+            <div class="col-12 mt-1"><span class="text-muted">Tipos:</span><div class="mt-1">${tiposHtml}</div></div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Empresas 
+    const emps = listOrEmpty(p.empresas);
+    setHtmlIfExists('v_empresas', renderSimpleList(emps, (e) => {
+      const head = esc(e.nombre_empresa || '—');
+      const rol = [e.rol, e.rol_otro].filter(Boolean).map(esc).join(' / ');
+      const rel = [e.nombre_relacionado, e.relacion].filter(Boolean).map(esc).join(' • ');
+      const per = e.periodo ? `<div class="text-muted small">${esc(e.periodo)}</div>` : '';
+      const notas = e.notas ? `<div class="text-muted small">${esc(e.notas)}</div>` : '';
+      return `
+        <div class="border rounded p-2">
+          <div class="fw-semibold">${head}</div>
+          ${rol ? `<div class="text-muted small">${rol}</div>` : ''}
+          ${rel ? `<div class="text-muted small">${rel}</div>` : ''}
+          ${per}
+          ${notas}
+        </div>
+      `;
+    }) || `<span class="text-muted small">—</span>`);
+
+    // Cargos elección popular
+    const cargosEP = listOrEmpty(p.cargos_eleccion_popular);
+    setHtmlIfExists('v_cargos_ep', renderSimpleList(cargosEP, (c) => {
+      // ✅ display primero (nuevo), si no existe usa legacy
+      const cargoTxt = c.cargo_display || c.cargo_catalogo || c.cargo || '—';
+      const partidoTxt = c.partido_display || c.partido_postulante_siglas || c.partido_postulante_catalogo || c.partido_postulante || null;
+
+      const metaParts = [
+        c.periodo,
+        c.modalidad ? String(c.modalidad).toUpperCase() : null,
+        partidoTxt
+      ].filter(Boolean).map(esc);
+
+      const suplente = (c.es_suplente === true)
+        ? `<span class="badge text-bg-warning ms-2">Suplente</span>`
+        : '';
+
+      const titular = (c.es_suplente === true && c.titular_candidatura)
+        ? `<div class="text-muted small mt-1">Titular: <b>${esc(c.titular_candidatura)}</b></div>`
+        : '';
+
+      const orden = c.orden_gobierno
+        ? `<span class="badge text-bg-light border ms-2">${esc(c.orden_gobierno)}</span>`
+        : '';
+
+      return `
+        <div class="border rounded p-2">
+          <div class="d-flex align-items-center flex-wrap gap-2">
+            <div class="fw-semibold">${esc(cargoTxt)}</div>
+            ${suplente}
+            ${orden}
+          </div>
+          ${metaParts.length ? `<div class="text-muted small">${metaParts.join(' • ')}</div>` : ''}
+          ${titular}
         </div>
       `;
     }) || `<span class="text-muted small">—</span>`);
@@ -604,12 +835,28 @@ async function openPerfilModal(idPersona){
     const eventos = listOrEmpty(p.capacidad_movilizacion_eventos);
     setHtmlIfExists('v_eventos_movilizacion', renderSimpleList(eventos, (e) => {
       const head = esc(e.nombre_evento || '—');
-      const meta = [e.fecha_evento, e.asistencia != null ? `Asistencia: ${e.asistencia}` : null]
-        .filter(Boolean).map(esc).join(' • ');
+      const meta = [
+        e.fecha_evento ? `Fecha: ${e.fecha_evento}` : null,
+        e.asistencia != null ? `Asistencia: ${e.asistencia}` : null,
+        e.lugar_evento ? `Lugar: ${e.lugar_evento}` : null
+      ].filter(Boolean).map(esc).join(' • ');
+
+      const fotos = Array.isArray(e.fotos) ? e.fotos.filter(Boolean) : [];
+      const fotosHtml = fotos.length ? `
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          ${fotos.map(url => `
+            <a href="${escAttr(url)}" target="_blank" rel="noopener">
+              <img src="${escAttr(url)}" style="width:92px;height:64px;object-fit:cover" class="rounded border">
+            </a>
+          `).join('')}
+        </div>
+      ` : '';
+
       return `
         <div class="border rounded p-2">
           <div class="fw-semibold">${head}</div>
           ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
+          ${fotosHtml}
         </div>
       `;
     }) || `<span class="text-muted small">—</span>`);
@@ -632,9 +879,12 @@ async function openPerfilModal(idPersona){
     // Participación
     const po = listOrEmpty(p.participacion_organizaciones);
     document.getElementById('v_participacion').innerHTML = renderSimpleList(po, (o) => {
-      const top = `${o.tipo ? esc(o.tipo) + ': ' : ''}${esc(o.nombre || '—')}`;
+      const tipoLabel = o.tipo ? labelParticipacionTipo(o.tipo) : null;
+      const top = `${tipoLabel ? esc(tipoLabel) + ': ' : ''}${esc(o.nombre || '—')}`;
+
       const meta = [o.rol, o.periodo].filter(Boolean).map(esc).join(' • ');
       const notas = o.notas ? `<div class="text-muted small">${esc(o.notas)}</div>` : '';
+
       return `
         <div class="border rounded p-2">
           <div class="fw-semibold">${top}</div>
@@ -681,6 +931,7 @@ async function openPerfilModal(idPersona){
                 <div class="d-flex gap-2 flex-wrap align-items-center">
                   <span class="fw-semibold">${esc(h.sexo || '—')}</span>
                   <span class="text-muted small">Año: ${esc(h.anio_nacimiento || '—')}</span>
+                  <span class="text-muted small">Años: ${esc(h.anios ?? '—')}</span>
                 </div>
               </div>
             `).join('')}
@@ -754,16 +1005,31 @@ async function openPerfilModal(idPersona){
     });
 
     // Referentes (CORREGIDO)
+    // Referentes (FIX: cargo no definido)
     const refs = listOrEmpty(p.referentes);
+
     document.getElementById('v_referentes').innerHTML = renderSimpleList(refs, (r) => {
-      const nombreRef = [r.nombres, r.apellido_paterno, r.apellido_materno].filter(Boolean).map(esc).join(' ') || '—';
-      const lvl  = r.nivel ? `<span class="badge text-bg-info ms-2">${esc(r.nivel)}</span>` : '';
+      const nombreRef = [r.nombres, r.apellido_paterno, r.apellido_materno]
+        .filter(Boolean)
+        .map(esc)
+        .join(' ') || '—';
+
+      const lvl = r.nivel
+        ? `<span class="badge text-bg-info ms-2">${esc(r.nivel)}</span>`
+        : '';
+
+      // ✅ aquí estaba el bug: antes usabas `cargo` sin declararlo
+      const cargoHtml = r.cargo
+        ? `<div class="text-muted small mt-1">${esc(r.cargo)}</div>`
+        : '';
+
       return `
         <div class="border rounded p-2">
           <div class="d-flex align-items-center flex-wrap gap-2">
             <div class="fw-semibold">${nombreRef}</div>
             ${lvl}
           </div>
+          ${cargoHtml}
         </div>
       `;
     });
