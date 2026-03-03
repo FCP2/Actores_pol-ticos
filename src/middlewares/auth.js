@@ -32,8 +32,11 @@ function requireAuth(req, res, next) {
     req.user = {
       id_usuario: decoded.id_usuario,
       email: decoded.email,
+      cargo: decoded.cargo || null,        // ✅ decoded.cargo
+      area: decoded.area || null,          // ✅ decoded.area   
       roles: decoded.roles || [],
-      id_oficina: decoded.id_oficina ?? null
+      id_oficina: decoded.id_oficina ?? null,
+      scope: decoded.scope || null
     };
 
     next();
