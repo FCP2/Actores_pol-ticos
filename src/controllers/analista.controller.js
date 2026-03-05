@@ -4,20 +4,30 @@ exports.coberturaMunicipios = async (req, res) => {
   const client = await pool.connect();
   try {
     const roles = req.user?.roles || [];
-    const isSuperadmin = roles.includes('superadmin');
-    const isAnalista = roles.includes('analista');
+    const isSuperadmin = roles.includes("superadmin");
+    const isAnalista   = roles.includes("analista");
 
     if (!isSuperadmin && !isAnalista) {
-      return res.status(403).json({ error: 'Prohibido' });
+      return res.status(403).json({ error: "Prohibido" });
     }
 
-    const oficinaId = isSuperadmin
-      ? (req.query.oficinaId ? Number(req.query.oficinaId) : null)
-      : Number(req.user.id_oficina || 0);
+    // ✅ usa smartFilters para que cuente EXACTAMENTE lo que el usuario puede ver
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+    addFullFilter(params, where);
 
-    if (!oficinaId) {
-      return res.status(403).json({ error: 'Usuario sin oficina asignada' });
+    // ✅ opcional: si superadmin manda oficinaId, se aplica como filtro adicional
+    const oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    if (isSuperadmin && oficinaId) {
+      params.push(oficinaId);
+      where.push(`p.id_oficina = $${params.length}`);
     }
+
+    // municipio obligatorio
+    where.push(`p.municipio_trabajo_politico IS NOT NULL`);
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const { rows } = await client.query(
       `
@@ -29,18 +39,17 @@ exports.coberturaMunicipios = async (req, res) => {
         (COUNT(*) - COUNT(p.verificado_at))::int AS pendientes
       FROM personas p
       LEFT JOIN municipios m ON m.id_municipio = p.municipio_trabajo_politico
-      WHERE p.id_oficina = $1
-        AND p.municipio_trabajo_politico IS NOT NULL
+      ${whereSQL}
       GROUP BY p.municipio_trabajo_politico, m.nombre
       ORDER BY m.nombre ASC
       `,
-      [oficinaId]
+      params
     );
 
-    res.json({ ok: true, data: rows });
+    return res.json({ ok: true, data: rows });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: 'Error cobertura municipios', detail: e.message });
+    return res.status(500).json({ error: "Error cobertura municipios", detail: e.message });
   } finally {
     client.release();
   }
