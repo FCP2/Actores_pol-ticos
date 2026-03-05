@@ -62,8 +62,16 @@ router.get(
 router.put('/:id', requireAuth, requireRole('capturista','analista','superadmin'), requireOffice, ctrl.updatePersonaCompleta);
 router.get('/:id/payload', requireAuth, requireRole('capturista','analista','superadmin'), requireOffice, ctrl.getPayloadEdicion);
 router.delete('/:id', requireAuth, requireRole('capturista','analista','superadmin'), requireOffice, ctrl.deletePersona);
+//buscar personas en index.html filtro 
+router.get(
+  '/',
+  requireAuth,
+  requireRole('capturista','analista','superadmin'),
+  requireOffice,
+  applySmartFilters,   // 👈 este es el clave
+  ctrl.listPersonas
+);
 
-router.get('/', requireAuth, requireRole('capturista', 'analista', 'superadmin'), ctrl.listPersonas);
 router.get('/:id/perfil', requireAuth, requireRole('capturista', 'analista', 'superadmin'), ctrl.getPerfilCompleto);
 router.get('/:id/pdf', requireAuth, requireRole('superadmin', 'analista', 'capturista'), ctrl.getPerfilPdf);
 
