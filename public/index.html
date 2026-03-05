@@ -45,9 +45,9 @@
         }
       })();
   </script>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
-  <div class="container-fluid">
-
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+    <div class="container-fluid">
+      <!-- Logo -->
       <div class="me-3 d-flex align-items-center">
         <img 
           src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550" 
@@ -56,25 +56,34 @@
         >
       </div>
 
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
+      <!-- Toggler móvil -->
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
 
-    <div class="collapse navbar-collapse" id="topNav">
-      <div class="ms-auto d-flex flex-column flex-lg-row align-items-lg-center gap-3 mt-3 mt-lg-0">
-        <div class="text-lg-end">
-          <div class="fw-semibold text-white" id="lblUsuario">Usuario</div>
-          <div class="small text-white-50" id="lblRol">Rol</div>
+      <!-- Contenido colapsable -->
+      <div class="collapse navbar-collapse" id="topNav">
+        <div class="ms-auto d-flex flex-column flex-lg-row align-items-lg-center gap-3 mt-3 mt-lg-0">
+          <!-- Usuario -->
+          <div class="text-lg-end">
+            <div class="fw-semibold text-white" id="lblUsuario">Usuario</div>
+            <div class="small text-white-50" id="lblRol">Rol</div>
+          </div>
+
+          <!-- Botón Volver (destacado como el anterior) -->
+          <button class="btn btn-sm btn-warning text-dark fw-semibold px-3 d-none" id="btnVolverAnalista">
+            <i class="bi bi-arrow-left me-1"></i> Volver al Dashboard
+          </button>
+
+          <!-- Botón Salir -->
+          <button type="button" class="btn btn-outline-danger btn-sm" id="btnLogout">
+            Salir
+          </button>
         </div>
-
-        <button type="button" class="btn btn-outline-danger btn-sm" id="btnLogout">
-          Salir
-        </button>
       </div>
     </div>
+  </nav>
 
-  </div>
-</nav>
 
 
 <div class="container my-4">
@@ -1323,7 +1332,7 @@
       </form>
     </div>
 
-    <!-- ================== PREVIEW ==================
+    <!-- ================== PREVIEW ================== -->
     <div class="col-lg-4">
       <div class="card">
         <div class="card-body">
@@ -1332,7 +1341,7 @@
           <pre id="payloadPreview" class="bg-light p-3 rounded" style="max-height: 75vh; overflow:auto; font-size: 12px;"></pre>
         </div>
       </div>
-    </div> -->
+    </div>
 
   </div>
 </div>
@@ -1340,6 +1349,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+
   //cargar global
   //recalcular edad_año
   function clampInt(n, min, max){
@@ -1630,6 +1640,28 @@ const ROLES_EMPRESA = [
     }
     if (!res.ok) throw new Error(await res.text());
     return res.json();
+  }
+
+  async function initNavByRole(){
+    try{
+      const r = await apiGet("/auth/me");
+      const roles = r?.user?.roles || [];
+      const scope = r?.user?.scope || "";
+
+      const isAnalista = roles.includes("analista");
+      // opcional: también permitir superadmin
+      const isSuper = roles.includes("superadmin");
+
+      const btn = document.getElementById("btnVolverAnalista");
+      if (btn && (isAnalista || isSuper)) {
+        btn.classList.remove("d-none");
+        btn.addEventListener("click", () => {
+          window.location.href = "/analista";
+        });
+      }
+    }catch(e){
+      console.warn("No pude cargar /auth/me:", e?.message || e);
+    }
   }
 
 
@@ -1937,19 +1969,22 @@ async function onDeletePersona(id_persona) {
 
     // 4) hijos
     rebuildList('hijosContainer', payload.hijos || [], hijoBlock, (b, it) => {
-      b.querySelector('select[name="sexo"]').value = it.sexo || '';
-
       const sel = b.querySelector('select[name="pareja_temp_id"]');
       fillHijoParejaSelect(sel);
-      sel.value = it.pareja_temp_id || it.id_pareja || '';
+      sel.value = it.pareja_temp_id || '';
 
-      const aniosEl = b.querySelector('input[name="anios"]');
-      if (aniosEl) aniosEl.value = (it.anios ?? '');
+      const nom = b.querySelector('input[name="nombre_completo"]');
+      if (nom) nom.value = it.nombre_completo || '';
+
+      const an = b.querySelector('input[name="anios"]');
+      if (an) an.value = (it.anios ?? '') === null ? '' : String(it.anios ?? '');
+
+      const sx = b.querySelector('select[name="sexo"]');
+      if (sx) sx.value = it.sexo || '';
     });
 
     const chkHijos = document.getElementById('chkSinHijos');
     if (chkHijos) chkHijos.checked = ((payload.hijos || []).length === 0);
-
     window.toggleHijos?.();
 
     // 5) telefonos
@@ -2893,47 +2928,51 @@ function movEventoBlock() {
 
     return div;
   }
-// hijos block (solo Edad -> anios)
-function hijoBlock() {
-  const div = document.createElement('div');
-  div.className = 'list-item';
+  // hijos block (solo Edad -> anios)
+  function hijoBlock() {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Con quién</label>
+          <select class="form-select" name="pareja_temp_id">
+            <option value="">(Sin especificar)</option>
+          </select>
+        </div>
 
-  div.innerHTML = `
-    <div class="row g-2 align-items-end">
-      <div class="col-md-5">
-        <label class="form-label">Con quién</label>
-        <select class="form-select" name="pareja_temp_id">
-          <option value="">(Sin especificar)</option>
-        </select>
+        <div class="col-md-4">
+          <label class="form-label">Nombre completo</label>
+          <input class="form-control" name="nombre_completo" autocomplete="off" placeholder="Ej. Juan Pérez">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">Años</label>
+          <input type="number" class="form-control" name="anios" min="0" max="90" placeholder="Ej. 12">
+        </div>
+
+        <div class="col-md-1">
+          <label class="form-label">Género</label>
+          <select class="form-select" name="sexo">
+            <option value="">—</option>
+            <option value="F">F</option>
+            <option value="M">M</option>
+          </select>
+        </div>
+
+        <div class="col-md-1 text-end">
+          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
+        </div>
       </div>
+    `;
 
-      <div class="col-md-3">
-        <label class="form-label">Edad (aprox.)</label>
-        <input type="number" class="form-control" name="anios" min="0" max="120" placeholder="Ej. 12">
-      </div>
+    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
 
-      <div class="col-md-2">
-        <label class="form-label">Género</label>
-        <select class="form-select" name="sexo">
-          <option value="">Seleccione</option>
-          <option value="F">F</option>
-          <option value="M">M</option>
-        </select>
-      </div>
+    const sel = div.querySelector('select[name="pareja_temp_id"]');
+    fillHijoParejaSelect(sel);
 
-      <div class="col-md-2 text-end">
-        <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-      </div>
-    </div>
-  `;
-
-  div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
-
-  const sel = div.querySelector('select[name="pareja_temp_id"]');
-  fillHijoParejaSelect(sel);
-
-  return div;
-}
+    return div;
+  }
 
 
  function getParejasForSelect() {
@@ -2961,7 +3000,7 @@ function fillHijoParejaSelect(sel) {
   parejas.forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.tempId;
-    opt.textContent = `${p.label} [${p.tempId}]`;
+    opt.textContent = p.label; // ← quitamos [tempId]
     sel.appendChild(opt);
   });
 
@@ -3882,18 +3921,27 @@ function refreshHijosParejasSelects() {
     const hijos = [];
     document.querySelectorAll('#hijosContainer .list-item').forEach(item => {
       const pareja_temp_id = item.querySelector('select[name="pareja_temp_id"]')?.value || null;
-      const aniosRaw = item.querySelector('input[name="anios"]')?.value || "";
-      const sexo = item.querySelector('select[name="sexo"]')?.value.trim() || "";
 
-      const tieneAlgo = (aniosRaw || sexo);
+      const nombre_completo = (item.querySelector('input[name="nombre_completo"]')?.value || "")
+        .toString().trim();
+
+      const aniosRaw = item.querySelector('input[name="anios"]')?.value || "";
+      const sexo = (item.querySelector('select[name="sexo"]')?.value || "").trim();
+
+      const anios = aniosRaw === "" ? null : Number(aniosRaw);
+
+      const tieneAlgo = nombre_completo || (aniosRaw !== "") || sexo;
       if (!tieneAlgo) return;
 
-      const anios = (aniosRaw === "" ? null : Number(aniosRaw));
+      // validación ligera solo si capturaron algo
+      const okAnios = (anios === null) || (Number.isFinite(anios) && anios >= 0 && anios <= 90);
+      item.querySelector('input[name="anios"]')?.classList.toggle("is-invalid", !okAnios);
+      if (!okAnios) { invalidos += 1; return; } // usa tu invalidos global si lo traes; si no, quita estas 2 líneas
 
       hijos.push({
         pareja_temp_id,
-        anio_nacimiento: null, // ya no lo capturas
-        anios: Number.isFinite(anios) ? anios : null,
+        nombre_completo: nombre_completo || null,
+        anios: (anios === null || !Number.isFinite(anios)) ? null : anios,
         sexo: sexo || null
       });
     });
@@ -4993,6 +5041,7 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
       hideAlert();
 
       try {
+        await initNavByRole();
         municipiosCache = await apiGet('/municipios');
         redesCatalog = await apiGet('/catalogos/redes');
         controversiasCatalog = await apiGet('/catalogos/controversias');
@@ -5263,7 +5312,7 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
       }
 
     async function buscarPersonas(q) {
-      const data = await apiGet(`/personas?search=${encodeURIComponent(q || '')}&limit=30`);
+      const data = await apiGet(`/personas?search=${encodeURIComponent(q || '')}&limit=500`);
       return data.items || data;
     }
     //init liderazgo e influencia
@@ -5431,7 +5480,14 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
           <div class="small text-muted">ID: ${p.id_persona}</div>
         `;
         
-        document.getElementById("btnBuscarPersona")?.addEventListener("click", recargarLista);
+        function setupBuscadorIndex(){
+          document.getElementById("btnBuscarPersona")
+            ?.addEventListener("click", recargarLista);
+
+          document.getElementById("txtBuscarPersona")
+            ?.addEventListener("input", debounce(recargarLista, 400));
+        }
+        
         a.addEventListener("click", async () => {
           try {
             const payload = await apiGet(`/personas/${p.id_persona}/payload`); // ✅ aquí
