@@ -37,19 +37,24 @@ function drawMunicipios(municipiosConPoligono){
         fillColor:"#adb5bd",
         fillOpacity:0.30
       },
-      onEachFeature: (f,l) => {
-        l.bindTooltip(m.nombre, {
-          sticky:true,
-          direction:"top",
-          className:"tooltip-mun"
-        });
+    onEachFeature: (f, l) => {
+      // ✅ INYECTA propiedades para que el highlight funcione
+      f.properties = f.properties || {};
+      f.properties.nombre = m.nombre;         // <-- clave
+      f.properties.id_municipio = m.id_municipio;
 
-        l.on("click", () => {
-          if (typeof onMunicipioSelected === 'function') {
-            onMunicipioSelected(m.id_municipio); // ✅ aquí ya mandamos ID
-          }
-        });
-      }
+      l.bindTooltip(m.nombre, {
+        sticky:true,
+        direction:"top",
+        className:"tooltip-mun"
+      });
+
+      l.on("click", () => {
+        if (typeof onMunicipioSelected === 'function') {
+          onMunicipioSelected(m.id_municipio);
+        }
+      });
+    }
     }).addTo(map);
       // Si ya hay conteos cargados, aplica colores de cobertura
     if (municipioCountById && municipioCountById.size) {
@@ -57,7 +62,15 @@ function drawMunicipios(municipiosConPoligono){
     }
     layersById[m.id_municipio] = layer;
   });
+window.mapReady = true;
+
+if (window._pendingHighlightMunicipiosById?.length) {
+  window.highlightMunicipiosByIdList?.(window._pendingHighlightMunicipiosById, { dimOthers: true });
+  window._pendingHighlightMunicipiosById = null;
 }
+
+}
+
 
 function resaltarMunicipioById(id){
   // ✅ primero: restaura cobertura para todos
@@ -80,36 +93,47 @@ let legendControl = null;
 // NUEVOS Umbrales según tu solicitud
 function coverageColor(count){
   const n = Number(count || 0);
-  if (n === 0 || n <= 10) return "#dc2626";      // Rojo 0-10
-  if (n <= 20) return "#f97316";                 // Naranja 11-20  
-  if (n <= 30) return "#facc15";                 // Amarillo 21-30
-  if (n <= 40) return "#86efac";                 // Verde claro 31-40
-  return "#16a34a";                              // Verde fuerte 41-60
+
+  // ✅ 0 = SIN REGISTROS (se queda base/neutral)
+  if (n === 0) return "#adb5bd";   // o "#e5e7eb" si lo quieres más claro
+
+  // ✅ 1-10 = ya hay cobertura
+  if (n <= 10) return "#ef4444";   // rojo vivo
+
+  if (n <= 20) return "#fb923c";   // naranja
+  if (n <= 30) return "#facc15";   // amarillo
+  if (n <= 40) return "#4ade80";   // verde claro
+  return "#16a34a";                // verde fuerte
 }
 
 function coverageLabel(count){
   const n = Number(count || 0);
-  if (n === 0 || n <= 10) return "0-10";
+  if (n === 0) return "0";
+  if (n <= 10) return "1-10";
   if (n <= 20) return "11-20";
   if (n <= 30) return "21-30";
   if (n <= 40) return "31-40";
-  return "41-60";
+  return "41+";
 }
 
 function applyCoverageStyle(){
-  Object.entries(layersById).forEach(([idStr, layer]) => {
+  Object.entries(layersById).forEach(([idStr, group]) => {
     const id = Number(idStr);
     const total = municipioCountById.get(id) ?? 0;
-    
-    // ✅ MISMO coverageColor() que tus tarjetas
-    const fillColor = coverageColor(total);  // ← YA ESTÁ BIEN
-    
-    layer.setStyle({
-      color: "#1f2937",           // Borde oscuro
+    const fillColor = coverageColor(total);
+
+    const style = {
+      color: "#1f2937",
       weight: 1.5,
-      fillColor: fillColor,       // ← EXACTAMENTE igual que tarjetas
-      fillOpacity: 0.6            // Ajusta VISIBILIDAD (0.3-0.7)
-    });
+      fillColor,
+      fillOpacity: 0.6
+    };
+
+    if (group?.setStyle) {
+      group.setStyle(style);
+    } else if (group?.getLayers) {
+      (group.getLayers() || []).forEach(sl => sl?.setStyle?.(style));
+    }
   });
 }
 
@@ -133,11 +157,12 @@ function addCoverageLegend(){
     div.style.lineHeight = "1.2";
 
     const bins = [
-      { label:"0-10",   color: coverageColor(0) },
-      { label:"11-20",  color: coverageColor(15) },
-      { label:"21-30",  color: coverageColor(25) },
-      { label:"31-40",  color: coverageColor(35) },
-      { label:"41-60",  color: coverageColor(50) }
+      { label:"0",     color: coverageColor(0) },
+      { label:"1-10",  color: coverageColor(1) },
+      { label:"11-20", color: coverageColor(15) },
+      { label:"21-30", color: coverageColor(25) },
+      { label:"31-40", color: coverageColor(35) },
+      { label:"41+",   color: coverageColor(50) },
     ];
 
     div.innerHTML = `
@@ -177,3 +202,51 @@ function resetMapCoverageView(){
   // 2) vuelve a vista inicial del EdoMex
   map.setView([19.35, -99.5], 8);
 }
+
+//filtrop por referente :
+// ============================
+// Filtro por referente (highlight municipios)
+// ============================
+
+function norm(s){
+  return String(s||"")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // quita tildes
+}
+
+function resetMunicipiosHighlight() {
+  applyCoverageStyle?.();
+}
+window.resetMunicipiosHighlight = resetMunicipiosHighlight;
+
+function highlightMunicipiosByIdList(ids, { dimOthers = true } = {}) {
+  const set = new Set((ids || []).map(x => Number(x)).filter(Boolean));
+
+  Object.entries(layersById).forEach(([idStr, group]) => {
+    if (!group) return;
+
+    const id = Number(idStr);
+    const hit = set.has(id);
+
+    // OJO: NO seteamos fillColor -> conserva los colores KPI (applyCoverageStyle)
+    if (dimOthers) {
+      group.setStyle(hit
+        ? { weight: 2.5, fillOpacity: 0.70 }
+        : { weight: 1.0, fillOpacity: 0.10 }
+      );
+    } else if (hit) {
+      group.setStyle({ weight: 2.5, fillOpacity: 0.70 });
+    }
+  });
+}
+
+window.highlightMunicipiosByIdList = highlightMunicipiosByIdList;
+
+// expón a window
+window.resetMunicipiosHighlight = resetMunicipiosHighlight;
+window.setOnMunicipioSelected = setOnMunicipioSelected;
+window.resaltarMunicipioById = resaltarMunicipioById;
+window.initMap = initMap;
+window.drawMunicipios = drawMunicipios;
