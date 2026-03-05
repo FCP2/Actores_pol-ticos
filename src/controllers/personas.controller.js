@@ -97,33 +97,18 @@ function isPeriodoValido(p) {
 // /api/personas?municipio_trabajo=34
 // /api/personas?search=juan&limit=30
 exports.listPersonas = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { municipio_trabajo, search } = req.query;
-    const limit = Math.min(Number(req.query.limit) || 30, 100);
-
-    const roles = req.user?.roles || [];
-    const isSuperadmin = roles.includes("superadmin");
-    const isAnalista   = roles.includes("analista");
-    const isCapturista = roles.includes("capturista");
+    const limit = Math.min(Math.max(parseInt(req.query.limit || "100", 10), 1), 500);
 
     const params = [];
     const where = [];
 
-    // ✅ SCOPE POR ROL
-    if (!isSuperadmin) {
-      if (isCapturista && !isAnalista) {
-        // capturista puro: solo sus registros
-        params.push(req.user.id_usuario);
-        where.push(`p.creado_por = $${params.length}`);
-      } else {
-        // analista (y cualquier no-superadmin): por oficina
-        if (!req.user?.id_oficina) {
-          return res.status(403).json({ error: "Usuario sin oficina asignada" });
-        }
-        params.push(req.user.id_oficina);
-        where.push(`p.id_oficina = $${params.length}`);
-      }
-    }
+    // ✅ NUEVO: aplicar SMART FILTERS (scope/area/oficina/self/all)
+    // (esto reemplaza la lógica manual por roles)
+    const { addFullFilter } = req.smartFilters;
+    addFullFilter(params, where);
 
     // filtro municipio trabajo (para tu dashboard/mapa)
     const idMun = Number(municipio_trabajo);
@@ -139,22 +124,22 @@ exports.listPersonas = async (req, res) => {
       const i = params.length;
       where.push(`
         (
-          p.nombre ILIKE $${i}
-          OR p.apellido_paterno ILIKE $${i}
-          OR p.apellido_materno ILIKE $${i}
-          OR p.curp ILIKE $${i}
-          OR p.rfc ILIKE $${i}
-          OR p.clave_elector ILIKE $${i}
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
         )
       `);
     }
 
+    const sqlWhere = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
     // limit al final
     params.push(limit);
 
-    const sqlWhere = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
-    const { rows } = await pool.query(
+    const { rows } = await client.query(
       `
       SELECT
         p.id_persona,
@@ -177,6 +162,8 @@ exports.listPersonas = async (req, res) => {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Error al listar personas", detail: e.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -196,6 +183,7 @@ exports.listPersonasAdminGrid = async (req, res) => {
     let oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
     const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
     const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+    const referente = (req.query.referente || "").trim();
     const q = (req.query.q || "").trim();
 
     // 👇 este filtro lo dejamos como “FINAL” (superadmin)
@@ -238,12 +226,66 @@ exports.listPersonasAdminGrid = async (req, res) => {
         OR COALESCE(p.clave_elector,'') ILIKE $${i})
       `);
     }
+    const refMode = String(req.query.refMode || "").trim(); // "exact" | ""
 
+    if (referente) {
+      const ref = referente.toLowerCase().trim();
+      params.push(ref);
+      const i = params.length;
+
+      if (refMode === "exact") {
+        // ✅ EXACTO: solo el referente seleccionado
+        where.push(`
+          EXISTS (
+            SELECT 1
+            FROM referentes_politicos rp
+            WHERE rp.id_persona = p.id_persona
+              AND rp.nombre_full = $${i}
+          )
+        `);
+      } else {
+        // ✅ FUZZY: sugerencias / escritura manual
+        where.push(`
+          EXISTS (
+            SELECT 1
+            FROM referentes_politicos rp
+            WHERE rp.id_persona = p.id_persona
+              AND (
+                (length($${i}) < 6 AND rp.nombre_full LIKE ($${i} || '%'))
+                OR word_similarity(rp.nombre_full, $${i}) > 0.15
+                OR similarity(rp.nombre_full, $${i}) > 0.15
+              )
+          )
+        `);
+      }
+    }
     // ✅ “verificado” sigue siendo el nivel 3 (final)
     if (verificado === "1") where.push(`p.verificado_at IS NOT NULL`);
     if (verificado === "0") where.push(`p.verificado_at IS NULL`);
 
     const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const mode = String(req.query.mode || "").trim();
+
+    if (mode === "ref_list") {
+
+      const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+      const sql = `
+      SELECT
+        INITCAP(rp.nombre_full) AS nombre,
+        COUNT(*)::int AS menciones
+      FROM personas p
+      JOIN referentes_politicos rp ON rp.id_persona = p.id_persona
+      ${whereSQL}
+      GROUP BY rp.nombre_full
+      ORDER BY menciones DESC, nombre ASC
+      LIMIT 500
+      `;
+
+      const { rows } = await client.query(sql, params);
+      return res.json({ data: rows });
+    }
 
     // -------- TOTAL
     const totalSql = `SELECT COUNT(*)::int AS total FROM personas p ${whereSQL}`;
@@ -252,73 +294,81 @@ exports.listPersonasAdminGrid = async (req, res) => {
     const last_page = Math.max(Math.ceil(total / size), 1);
 
     // -------- DATA
-    const dataSql = `
-      SELECT
-        p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno,
-        (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
-        p.curp, p.rfc, p.clave_elector, p.id_oficina, o.nombre AS oficina_nombre,
+const dataSql = `
+  SELECT
+    p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno,
+    (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
+    p.curp, p.rfc, p.clave_elector, p.id_oficina, o.nombre AS oficina_nombre,
 
-        -- trazabilidad creador / editor
-        p.creado_por, u_crea.nombre AS creado_por_nombre, u_crea.email AS creado_por_email,
-        u_crea.cargo AS creado_por_cargo, u_crea.area AS creado_por_area,
+    -- trazabilidad creador / editor
+    p.creado_por, u_crea.nombre AS creado_por_nombre, u_crea.email AS creado_por_email,
+    u_crea.cargo AS creado_por_cargo, u_crea.area AS creado_por_area,
 
-        p.modificado_por, u_mod.nombre AS modificado_por_nombre, u_mod.email AS modificado_por_email,
-        u_mod.cargo AS modificado_por_cargo, u_mod.area AS modificado_por_area,
+    p.modificado_por, u_mod.nombre AS modificado_por_nombre, u_mod.email AS modificado_por_email,
+    u_mod.cargo AS modificado_por_cargo, u_mod.area AS modificado_por_area,
 
-        -- ✅ NIVEL 1: AREA (director)
-        p.verif_area_por,
-        p.verif_area_at,
-        u_va.nombre AS verif_area_por_nombre,
-        u_va.email  AS verif_area_por_email,
-        u_va.cargo  AS verif_area_por_cargo,
-        u_va.area   AS verif_area_por_area,
+    -- ✅ NIVEL 1: AREA (director)
+    p.verif_area_por,
+    p.verif_area_at,
+    u_va.nombre AS verif_area_por_nombre,
+    u_va.email  AS verif_area_por_email,
+    u_va.cargo  AS verif_area_por_cargo,
+    u_va.area   AS verif_area_por_area,
 
-        -- ✅ NIVEL 2: OFFICE (coordinador)
-        p.verif_office_por,
-        p.verif_office_at,
-        u_vo.nombre AS verif_office_por_nombre,
-        u_vo.email  AS verif_office_por_email,
-        u_vo.cargo  AS verif_office_por_cargo,
-        u_vo.area   AS verif_office_por_area,
+    -- ✅ NIVEL 2: OFFICE (coordinador)
+    p.verif_office_por,
+    p.verif_office_at,
+    u_vo.nombre AS verif_office_por_nombre,
+    u_vo.email  AS verif_office_por_email,
+    u_vo.cargo  AS verif_office_por_cargo,
+    u_vo.area   AS verif_office_por_area,
 
-        -- ✅ NIVEL 3: FINAL (superadmin) -> columnas existentes
-        p.verificado_por,
-        p.verificado_at,
-        u_ver.nombre AS verificado_por_nombre,
-        u_ver.email  AS verificado_por_email,
-        u_ver.cargo  AS verificado_por_cargo,
-        u_ver.area   AS verificado_por_area,
+    -- ✅ NIVEL 3: FINAL (superadmin)
+    p.verificado_por,
+    p.verificado_at,
+    u_ver.nombre AS verificado_por_nombre,
+    u_ver.email  AS verificado_por_email,
+    u_ver.cargo  AS verificado_por_cargo,
+    u_ver.area   AS verificado_por_area,
 
-        -- otros
-        p.municipio_trabajo_politico, mt.nombre AS municipio_trabajo_nombre,
-        p.created_at, p.updated_at,
-        t.telefono AS telefono_principal
+    -- ✅ REFERENTES (para autocomplete sin endpoint nuevo)
+    COALESCE((
+      SELECT string_agg(
+        DISTINCT concat_ws(' ', rp.nombres, rp.apellido_paterno, rp.apellido_materno),
+        ' | '
+      )
+      FROM referentes_politicos rp
+      WHERE rp.id_persona = p.id_persona
+    ), '') AS referentes_nombres,
 
-      FROM personas p
-      LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
+    -- otros
+    p.municipio_trabajo_politico, mt.nombre AS municipio_trabajo_nombre,
+    p.created_at, p.updated_at,
+    t.telefono AS telefono_principal
 
-      LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
-      LEFT JOIN usuarios u_mod  ON u_mod.id_usuario  = p.modificado_por
+  FROM personas p
+  LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
 
-      -- ✅ joins nuevos
-      LEFT JOIN usuarios u_va   ON u_va.id_usuario   = p.verif_area_por
-      LEFT JOIN usuarios u_vo   ON u_vo.id_usuario   = p.verif_office_por
+  LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
+  LEFT JOIN usuarios u_mod  ON u_mod.id_usuario  = p.modificado_por
 
-      -- existente (nivel final)
-      LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
+  LEFT JOIN usuarios u_va   ON u_va.id_usuario   = p.verif_area_por
+  LEFT JOIN usuarios u_vo   ON u_vo.id_usuario   = p.verif_office_por
 
-      LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
-      LEFT JOIN LATERAL (
-        SELECT telefono FROM telefonos
-        WHERE id_persona = p.id_persona
-        ORDER BY principal DESC, id_telefono ASC
-        LIMIT 1
-      ) t ON true
+  LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
 
-      ${whereSQL}
-      ORDER BY p.${sortField} ${sortDir}, p.id_persona DESC
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-    `;
+  LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
+  LEFT JOIN LATERAL (
+    SELECT telefono FROM telefonos
+    WHERE id_persona = p.id_persona
+    ORDER BY principal DESC, id_telefono ASC
+    LIMIT 1
+  ) t ON true
+
+  ${whereSQL}
+  ORDER BY p.${sortField} ${sortDir}, p.id_persona DESC
+  LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+`;
 
     const dataParams = params.concat([size, offset]);
     const { rows } = await client.query(dataSql, dataParams);
@@ -776,21 +826,41 @@ exports.createPersonaCompleta = async (req, res) => {
       if (p.temp_id) parejaMap.set(p.temp_id, rows[0].id_pareja);
     }
 
-    for (const h of hijos) {
-      const tieneAlgo = h?.anio_nacimiento || h?.sexo || h?.pareja_temp_id;
-      if (!tieneAlgo) continue;
+    for (const h of (hijos || [])) {
+      // 1) si ya viene id_pareja REAL (por ejemplo edición), úsalo
+      const idParejaReal = Number(h?.id_pareja);
+      const tieneIdParejaReal = Number.isFinite(idParejaReal) && idParejaReal > 0;
 
-      const id_pareja = h.pareja_temp_id ? (parejaMap.get(h.pareja_temp_id) || null) : null;
+      // 2) si viene pareja_temp_id, convertir usando el mapa temp_id -> id_pareja real
+      const tempKey = (h?.pareja_temp_id ?? h?.id_pareja ?? "").toString().trim(); 
+      // ^ dejo h.id_pareja como fallback por compat (si en front mandas temp ahí)
+
+      const idParejaFromMap = tempKey ? parejaMap.get(tempKey) : null;
+
+      // ✅ id_pareja final (real > map > null)
+      const id_pareja_final = tieneIdParejaReal
+        ? idParejaReal
+        : (Number.isFinite(idParejaFromMap) ? idParejaFromMap : null);
+
+      const nombre_completo = (h?.nombre_completo || "").toString().trim() || null;
+
+      const aniosNum = (h?.anios === "" || h?.anios === null || h?.anios === undefined)
+        ? null
+        : Number(h.anios);
+
+      const anios = Number.isFinite(aniosNum) ? aniosNum : null;
 
       await client.query(
-        `INSERT INTO hijos (id_persona, id_pareja, anio_nacimiento, anios, sexo)
-            VALUES ($1,$2,$3,$4,$5)`,
+        `
+        INSERT INTO hijos (id_persona, id_pareja, nombre_completo, anios, sexo)
+        VALUES ($1,$2,$3,$4,$5)
+        `,
         [
-          id_persona, 
-          id_pareja, 
-          h.anio_nacimiento || null, 
-          h.anios ?? null,
-          h.sexo || null
+          id_persona,
+          id_pareja_final,          // ✅ aquí ya no rompe FK
+          nombre_completo,
+          anios,
+          (h?.sexo || null)
         ]
       );
     }
@@ -2261,13 +2331,103 @@ body {
 
   ${listSection("Parejas e hijos", p.parejas, (pa)=>`
     <div class="item">
-      <div class="t">${esc(pa.nombre_pareja || "—")} (${esc(pa.tipo_relacion || "—")})</div>
+      <div class="t">
+        ${esc(pa.nombre_pareja || "—")}
+        <span class="muted">(${esc(pa.tipo_relacion || "—")})</span>
+      </div>
       <div class="m">${esc(pa.periodo || "—")}</div>
-      ${Array.isArray(pa.hijos) && pa.hijos.length ? pa.hijos.map(h => 
-        `<div class="m">👶 ${esc(h.anio_nacimiento || "—")} (${esc(h.anios || "—")} años, ${esc(h.sexo || "—")})</div>`
-      ).join('') : ''}
+
+      ${
+        Array.isArray(pa.hijos) && pa.hijos.length
+          ? `<div class="kids">
+              ${pa.hijos.map(h => {
+                const nombre = (h.nombre_completo || "").toString().trim();
+
+                const edad =
+                  (h.anios === null || h.anios === undefined || h.anios === "")
+                    ? "—"
+                    : String(h.anios);
+
+                const anio =
+                  (h.anio_nacimiento === null || h.anio_nacimiento === undefined || h.anio_nacimiento === "")
+                    ? ""
+                    : String(h.anio_nacimiento);
+
+                const sexoRaw = (h.sexo || "").toString().trim().toUpperCase();
+                const etiqueta =
+                  sexoRaw === "F" ? "Hija" :
+                  sexoRaw === "M" ? "Hijo" :
+                  "Hijo(a)";
+
+                // opcional: texto legible de sexo
+                const sexoTxt =
+                  sexoRaw === "F" ? "Femenino" :
+                  sexoRaw === "M" ? "Masculino" :
+                  (sexoRaw ? sexoRaw : "—");
+
+                return `
+                  <div class="m kid-line">
+                    <span class="kid-icon">👶</span>
+                    <span class="kid-role">${esc(etiqueta)}:</span>
+                    <span class="kid-name">${esc(nombre || "Sin nombre")}</span>
+                    <span class="kid-meta">
+                      (${esc(edad)} años${anio ? `, nac. ${esc(anio)}` : ""}${sexoTxt !== "—" ? `, ${esc(sexoTxt)}` : ""})
+                    </span>
+                  </div>
+                `;
+              }).join("")}
+            </div>`
+          : ""
+      }
     </div>
   `)}
+
+  ${
+    Array.isArray(p.hijos_sin_pareja) && p.hijos_sin_pareja.length
+      ? `
+        <div class="item">
+          <div class="t">Hijos (sin especificar pareja)</div>
+          <div class="kids">
+            ${p.hijos_sin_pareja.map(h => {
+              const nombre = (h.nombre_completo || "").toString().trim();
+
+              const edad =
+                (h.anios === null || h.anios === undefined || h.anios === "")
+                  ? "—"
+                  : String(h.anios);
+
+              const anio =
+                (h.anio_nacimiento === null || h.anio_nacimiento === undefined || h.anio_nacimiento === "")
+                  ? ""
+                  : String(h.anio_nacimiento);
+
+              const sexoRaw = (h.sexo || "").toString().trim().toUpperCase();
+              const etiqueta =
+                sexoRaw === "F" ? "Hija" :
+                sexoRaw === "M" ? "Hijo" :
+                "Hijo(a)";
+
+              const sexoTxt =
+                sexoRaw === "F" ? "Femenino" :
+                sexoRaw === "M" ? "Masculino" :
+                (sexoRaw ? sexoRaw : "—");
+
+              return `
+                <div class="m kid-line">
+                  <span class="kid-icon">👶</span>
+                  <span class="kid-role">${esc(etiqueta)}:</span>
+                  <span class="kid-name">${esc(nombre || "Sin nombre")}</span>
+                  <span class="kid-meta">
+                    (${esc(edad)} años${anio ? `, nac. ${esc(anio)}` : ""}${sexoTxt !== "—" ? `, ${esc(sexoTxt)}` : ""})
+                  </span>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `
+      : ""
+  }
 
 
   ${listSection("Redes sociales", p.redes_sociales, (r)=>`
@@ -2412,7 +2572,7 @@ ${listSection("Elecciones contendidas", p.elecciones, (e)=>`
   }
 
   <section class="section">
-    <div class="h2">Trazabilidad</div>
+    <div class="h2">Control de Historial</div>
     <div class="kv">
       <div class="k">Oficina</div><div class="v">${esc(p.oficina_nombre || "—")}</div>
 
@@ -2643,17 +2803,18 @@ exports.getPerfilPdf = async (req, res) => {
       COALESCE((
         SELECT jsonb_agg(
           jsonb_build_object(
-            'id_pareja',      pa.id_pareja,
-            'nombre_pareja',  pa.nombre_pareja,
-            'tipo_relacion',  pa.tipo_relacion,
-            'periodo',        pa.periodo,
+            'id_pareja',     pa.id_pareja,
+            'nombre_pareja', pa.nombre_pareja,
+            'tipo_relacion', pa.tipo_relacion,
+            'periodo',       pa.periodo,
             'hijos', COALESCE((
               SELECT jsonb_agg(
                 jsonb_build_object(
                   'id_hijo',         h.id_hijo,
                   'anio_nacimiento', h.anio_nacimiento,
                   'anios',           h.anios,
-                  'sexo',            h.sexo
+                  'sexo',            h.sexo,
+                  'nombre_completo', h.nombre_completo
                 )
                 ORDER BY h.id_hijo ASC
               )
@@ -2667,6 +2828,22 @@ exports.getPerfilPdf = async (req, res) => {
         FROM parejas pa
         WHERE pa.id_persona = p.id_persona
       ), '[]'::jsonb) AS parejas,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_hijo',         h.id_hijo,
+            'anio_nacimiento', h.anio_nacimiento,
+            'anios',           h.anios,
+            'sexo',            h.sexo,
+            'nombre_completo', h.nombre_completo
+          )
+          ORDER BY h.id_hijo ASC
+        )
+        FROM hijos h
+        WHERE h.id_persona = p.id_persona
+          AND h.id_pareja IS NULL
+      ), '[]'::jsonb) AS hijos_sin_pareja,
 
       COALESCE((
         SELECT jsonb_agg(
@@ -3892,26 +4069,52 @@ exports.updatePersonaCompleta = async (req, res) => {
         ]
       );
 
-      if (p.temp_id) parejaMap.set(p.temp_id, rows[0].id_pareja);
+      if (p.temp_id != null) parejaMap.set(String(p.temp_id).trim(), rows[0].id_pareja);
     }
 
-    for (const h of hijos) {
-      const tieneAlgo = h?.anio_nacimiento || h?.sexo || h?.pareja_temp_id || h?.id_pareja;
-      if (!tieneAlgo) continue;
+    for (const h of (hijos || [])) {
+      // En UPDATE reconstrucción completa:
+      // NO confíes en h.id_pareja (era de una pareja que ya borraste).
+      const tempKey = (h?.pareja_temp_id ?? "").toString().trim();
 
-      const idPareja =
-        h.id_pareja ||
-        (h.pareja_temp_id ? (parejaMap.get(h.pareja_temp_id) || null) : null);
+      // si no seleccionaron pareja, será null (permitido)
+      let id_pareja_final = null;
+
+      if (tempKey) {
+        const mapped = parejaMap.get(tempKey);
+
+        // si el hijo trae pareja_temp_id pero no existe en el mapa => payload inconsistente
+        if (!Number.isFinite(mapped)) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            error: "Hijo referencia una pareja inválida (pareja_temp_id no existe en parejas enviadas).",
+            detail: { pareja_temp_id: tempKey }
+          });
+        }
+
+        id_pareja_final = mapped;
+      }
+
+      const nombre_completo = (h?.nombre_completo || "").toString().trim() || null;
+
+      const aniosNum =
+        (h?.anios === "" || h?.anios === null || h?.anios === undefined)
+          ? null
+          : Number(h.anios);
+
+      const anios = Number.isFinite(aniosNum) ? aniosNum : null;
 
       await client.query(
-        `INSERT INTO hijos (id_persona, id_pareja, anio_nacimiento, anios, sexo)
-            VALUES ($1,$2,$3,$4,$5)`,
+        `
+        INSERT INTO hijos (id_persona, id_pareja, nombre_completo, anios, sexo)
+        VALUES ($1,$2,$3,$4,$5)
+        `,
         [
-          id_persona, 
-          idPareja, 
-          h.anio_nacimiento || null, 
-          h.anios ?? null,
-          h.sexo || null
+          id_persona,
+          id_pareja_final,
+          nombre_completo,
+          anios,
+          (h?.sexo || null)
         ]
       );
     }
@@ -4460,7 +4663,7 @@ exports.getPayloadEdicion = async (req, res) => {
 
   const client = await pool.connect();
   try {
-    // 1️⃣ PERSONA (primero SIEMPRE)
+
     await assertCanMutatePersona(client, req, id_persona);
     const { rows: pRows } = await client.query(
       `SELECT
@@ -4600,7 +4803,7 @@ exports.getPayloadEdicion = async (req, res) => {
           id_hijo,
           id_pareja,
           id_pareja AS pareja_temp_id,
-          anio_nacimiento,
+          nombre_completo,
           anios,
           sexo
         FROM hijos
