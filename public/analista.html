@@ -55,24 +55,39 @@
     })();
   </script>
   <!-- NAVBAR SUPERIOR - CAMBIA bg-dark por edomex-navbar -->
-  <nav class="navbar navbar-dark edomex-navbar">
-    <div class="container-fluid">
-      <div class="me-3 d-flex align-items-center">
-        <img 
-          src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550" 
-          alt="Logo Gobierno del Estado de México"
-          class="navbar-logo"
-        >
-      </div>
-      <div class="ms-auto d-flex align-items-center gap-3">
-        <div class="text-end">
-          <div class="fw-semibold text-white" id="lblUsuario">Usuario</div>
-          <div class="small text-white" id="lblOficina">Oficina</div>
-        </div>
-        <button class="btn btn-outline-light btn-sm" id="btnLogout">Salir</button> <!-- ← btn-outline-light -->
-      </div>
+<!-- NAVBAR SUPERIOR -->
+<nav class="navbar navbar-dark edomex-navbar">
+  <div class="container-fluid">
+    <!-- Logo -->
+    <div class="me-3 d-flex align-items-center">
+      <img 
+        src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550" 
+        alt="Logo Gobierno del Estado de México"
+        class="navbar-logo"
+      >
     </div>
-  </nav>
+
+    <!-- Zona derecha -->
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <!-- Usuario -->
+      <div class="text-end">
+        <div class="fw-semibold text-white" id="lblUsuario">Usuario</div>
+        <div class="small text-white" id="lblOficina">Oficina</div>
+      </div>
+
+      <!-- Botón Ir a Captura (destacado) -->
+      <button class="btn btn-sm btn-warning text-dark fw-semibold px-3" id="btnIrCaptura">
+        <i class="bi bi-pencil-square me-1"></i> Ir a Captura
+      </button>
+
+      <!-- Botón Salir -->
+      <button class="btn btn-outline-light btn-sm" id="btnLogout">
+        Salir
+      </button>
+    </div>
+  </div>
+</nav>
+
 
 
   <main class="container-fluid my-3">
@@ -102,6 +117,40 @@
                 <label class="form-label mb-1">Capturistas</label>
                 <select class="form-select" id="fUsuario">
                   <option value="">Todos</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold text-custom-primary">
+                  Referente político
+                </label>
+
+                <div class="input-group">
+                  <span class="input-group-text">
+                    <i class="bi bi-person-badge"></i>
+                  </span>
+                    <div class="position-relative">
+                      <input
+                        type="text"
+                        id="txtReferente"
+                        class="form-control"
+                        placeholder="Buscar referente político"
+                        autocomplete="off"
+                      >
+
+                      <div id="referenteSuggestions" class="autocomplete-box d-none"></div>
+                    </div>
+                  <button class="btn btn-primary btn-sm" id="btnFiltrarReferente">
+                    <i class="bi bi-search"></i> Filtrar
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold text-custom-primary">
+                  Ver referentes registrados
+                </label>
+
+                <select id="selReferente" class="form-select">
+                  <option value="">— Seleccionar referente —</option>
                 </select>
               </div>
             </div>
@@ -272,7 +321,7 @@
           <div class="card-header bg-light border-0 py-2">
             <div class="d-flex align-items-center gap-2">
               <i class="bi bi-shield-check text-primary fs-5"></i>
-              <h6 class="mb-0 fw-semibold text-dark">Auditoría & Trazabilidad</h6>
+              <h6 class="mb-0 fw-semibold text-dark">Control de Historial</h6>
             </div>
           </div>
           
