@@ -8,6 +8,12 @@
   let municipioIdByNorm = new Map();// norm(nombreBD) -> id
   let jsonWktByNorm = new Map();    // norm(nombreJSON) -> wkt
   let nombreById = new Map(); 
+  let gridState = {
+  page: 1,
+  pageSize: 25
+};
+let currentReferente = "";     // filtro activo
+let referFilterActive = false; // modo
     //helpers
   function normalizeName(s) {
   return (s || '')
@@ -34,6 +40,26 @@ async function loadSessionUser() {
     lblRol.textContent =
       `${(r.user.roles || []).join(", ")} · ${r.user.scope || ""}`;
   }
+}
+/*referentes bloqueo map*/
+function setReferenteFilter(nombre) {
+  currentReferente = (nombre || "").trim();
+  referFilterActive = !!currentReferente;
+
+  // refresca grid
+  if (grid) grid.setPage(1);
+
+  // pinta mapa SOLO con municipios de las filas filtradas (SIN disparar carga por municipio)
+  // esto lo hacemos desde ajaxResponse (abajo)
+}
+
+function clearReferenteFilter() {
+  currentReferente = "";
+  referFilterActive = false;
+
+  // reset grid + mapa
+  if (grid) grid.setPage(1);
+  window.resetMunicipiosHighlight?.();
 }
 
   // Si ya tienes estas funciones en otro lado, reutilízalas.
@@ -211,27 +237,187 @@ function updateVerifButtons(p) {
       return;
     }
     grid.setData();  // ← RECARGA REMOTA AUTOMÁTICA
-    console.log("✅ Grid refrescado remotamente");
   }
 
   function setupFilterEvents() {
     const fEstado = document.getElementById("fEstado");
     const fSearch = document.getElementById("fSearch");
     const btnBuscar = document.getElementById("btnBuscar");
+    const btnFiltrarRef = document.getElementById("btnFiltrarReferente");
+
+    const sel = document.getElementById("selReferente");
+    const txt = document.getElementById("txtReferente");
+
+    // ✅ NO return; solo proteges cada bloque
+    if (sel && txt) {
+      sel.addEventListener("change", () => {
+        const v = String(sel.value || "").trim();
+        txt.value = v;
+
+        window._referenteMode = v ? "exact" : "";
+
+        if (grid) grid.setPage(1);
+        refreshGridSafe();
+
+        document.getElementById("referenteSuggestions")?.classList.add("d-none");
+      });
+    }
 
     if (fEstado) {
-      fEstado.addEventListener("change", refreshGridSafe);
+      fEstado.addEventListener("change", () => {
+        if (grid) grid.setPage(1);
+        refreshGridSafe();
+      });
     }
+
     if (fSearch) {
       const onSearch = debounce(() => {
+        if (grid) grid.setPage(1);
         refreshGridSafe();
       }, 500);
       fSearch.addEventListener("input", onSearch);
     }
+
     if (btnBuscar) {
-      btnBuscar.addEventListener("click", refreshGridSafe);
+      btnBuscar.addEventListener("click", () => {
+        if (grid) grid.setPage(1);
+        refreshGridSafe();
+      });
+    }
+
+    if (btnFiltrarRef) {
+      btnFiltrarRef.addEventListener("click", () => {
+        // si le dio click manual al botón, y el texto es un nombre completo,
+        // tú decides: yo lo trato como exact para que no meta “parecidos”
+        window._referenteMode = (txt?.value?.trim() ? "exact" : "");
+        if (grid) grid.setPage(1);
+        refreshGridSafe();
+      });
     }
   }
+    // ============================
+    // AUTOCOMPLETE REFERENTES
+    // ============================
+
+  function setupReferenteAutocomplete(){
+    const txt = document.getElementById("txtReferente");
+    const box = document.getElementById("referenteSuggestions");
+    if(!txt || !box) return;
+
+    txt.addEventListener("input", debounce(async () => {
+      const q = txt.value.trim();
+      if(q.length < 2){
+        box.innerHTML = "";
+        box.classList.add("d-none");
+        return;
+      }
+
+      try{
+        // usamos el grid endpoint, pero solo pedimos poquitos
+        const r = await apiGet(`/personas/admin/grid?size=15&referente=${encodeURIComponent(q)}`);
+
+        const nombres = new Set();
+
+        (r.data || []).forEach(p => {
+          const raw = (p.referentes_nombres || "").trim();
+          if(!raw) return;
+
+          raw.split("|").map(x => x.trim()).filter(Boolean).forEach(n => {
+            // opcional: solo sugerir los que se parezcan a lo que escribe
+            nombres.add(n);
+          });
+        });
+
+        const list = [...nombres].slice(0, 10);
+
+        if(!list.length){
+          box.innerHTML = "";
+          box.classList.add("d-none");
+          return;
+        }
+
+        box.innerHTML = list.map(n => `
+          <div class="autocomplete-item">${n}</div>
+        `).join("");
+        box.classList.remove("d-none");
+
+      }catch(e){
+        console.error("autocomplete referente:", e);
+      }
+    }, 300));
+
+    box.addEventListener("click", (e) => {
+      const item = e.target.closest(".autocomplete-item");
+      if(!item) return;
+
+      const nombre = item.textContent.trim();
+      txt.value = nombre;
+
+      // ✅ AQUÍ ESTÁ LA CLAVE:
+      window._referenteMode = "exact";
+
+      // opcional: sincroniza el select si existe
+      const sel = document.getElementById("selReferente");
+      if (sel) sel.value = nombre;
+
+      box.innerHTML = "";
+      box.classList.add("d-none");
+
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!box.contains(e.target) && e.target !== txt) {
+        box.innerHTML = "";
+        box.classList.add("d-none");
+      }
+    });
+
+    txt.addEventListener("input", debounce(() => {
+      const v = txt.value.trim();
+      if (!v) {
+        window._referenteMode = "";
+        const sel = document.getElementById("selReferente");
+        if (sel) sel.value = "";
+        if (grid) grid.setPage(1);
+        refreshGridSafe();
+        window.resetMunicipiosHighlight?.();
+      }
+    }, 200));
+  }
+
+function escAttr(s){
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+async function loadReferentesSelect(){
+  const sel = document.getElementById("selReferente");
+  if(!sel) return;
+
+  try{
+    const r = await apiGet(`/personas/admin/grid?mode=ref_list`);
+    const items = r.data || [];
+
+    sel.innerHTML = `<option value="">— Seleccionar referente —</option>`;
+
+    for (const x of items){
+      const nombre = String(x.nombre || "").trim();      // <- limpio
+      const menciones = Number(x.menciones || 0);
+
+      const opt = document.createElement("option");
+      opt.value = nombre;                                // <- SOLO nombre (sin contador)
+      opt.textContent = `${nombre} (${menciones})`;       // <- texto visible con contador
+      sel.appendChild(opt);
+    }
+  }catch(e){
+    console.error("Error cargando referentes", e);
+  }
+}
 
   // Debounce (si no existe)
   function debounce(func, wait) {
@@ -318,25 +504,51 @@ function updateVerifButtons(p) {
         const capturistaId = document.getElementById("fUsuario")?.value;
         if (capturistaId) qs.set("capturistaId", capturistaId);
 
-  
+        const ref = document.getElementById("txtReferente")?.value?.trim();
+        if (ref) {
+          qs.set("referente", ref);
+
+          if (window._referenteMode === "exact") {
+            qs.set("refMode", "exact");
+          }
+        }
+
         return apiGet(`/personas/admin/grid?${qs.toString()}`);
       },
 
       // ✅ RESPUESTA DEL BACKEND (igual que dashboard)
       ajaxResponse: (url, params, resp) => {
-
-        
-        // ✅ CAPTURA TOTALES DEL BACKEND
         const total = resp.total || 0;
-        const data = resp.data || [];
-        const oficiales = data.filter(x => x.verificado_at).length;
-        const pendientes = total - oficiales; // Backend total - verificados actuales
-        
-        // ✅ ACTUALIZA KPIs
+        const data  = resp.data || [];
+
+        // KPIs
+        const oficiales  = data.filter(x => x.verificado_at).length;
+        const pendientes = total - oficiales;
         updateKPIs(total, oficiales, pendientes);
-        
+
+        // ============================
+        // MAPA: highlight por referente
+        // ============================
+        const ref = document.getElementById("txtReferente")?.value?.trim();
+
+        if (!ref) {
+          // sin filtro → vuelve a cobertura normal
+          if (window.mapReady) window.resetMunicipiosHighlight?.();
+        } else {
+          // con filtro → resalta municipios del RESULTADO (ids)
+          const ids = [...new Set(
+            data.map(x => Number(x.municipio_trabajo_politico)).filter(Boolean)
+          )];
+
+          if (window.mapReady && window.highlightMunicipiosByIdList) {
+            window.highlightMunicipiosByIdList(ids, { dimOthers: true });
+          } else {
+            window._pendingHighlightMunicipiosById = ids;
+          }
+        }
+
         return {
-          data: data,
+          data,
           last_page: resp.last_page || 1,
           total_records: total,
         };
@@ -600,6 +812,9 @@ function updateVerifButtons(p) {
   // 1. initEvents() COMPLETO:
   function initEvents() {
     // 🔥 FILTRO TARJETAS
+    document.getElementById("btnIrCaptura")?.addEventListener("click", () => {
+      window.location.href = "/captura";
+    });
     document.getElementById("searchInput")?.addEventListener("input", applySearch);
     
     document.getElementById("btnVerificar").addEventListener("click", onVerificar);
@@ -614,6 +829,21 @@ function updateVerifButtons(p) {
       if (grid) grid.setPage(1);     // fuerza recarga desde página 1 con filtros nuevos
       // si no, entonces: await loadGridData();
     });
+
+        // 👇 ESTE ES EL QUE TE FALTA
+    document.getElementById("txtReferente")?.addEventListener(
+      "input",
+      debounce(() => {
+
+        // si el usuario escribe manualmente → modo fuzzy
+        window._referenteMode = "";
+
+        if (grid) grid.setPage(1);
+        refreshGridSafe();
+
+      }, 350)
+    );
+
     
       // 🔥 RESET MAPA
     document.getElementById("btnResetMap")?.addEventListener("click", () => {
@@ -645,7 +875,9 @@ function updateVerifButtons(p) {
       if (typeof window.resetMapCoverageView === 'function') {
         window.resetMapCoverageView();
       }
+
     });
+    
   }
 
   //kpi grid remoto:
@@ -723,6 +955,8 @@ function updateVerifButtons(p) {
     await loadCapturistasFiltro();
     await loadKpiCompletitud();
     await loadSessionUser();
+    setupReferenteAutocomplete();
+    loadReferentesSelect();
 
     // 2) CARGAR MUNICIPIOS PRIMERO
 
@@ -790,17 +1024,19 @@ function updateVerifButtons(p) {
     if (typeof window.setOnMunicipioSelected === 'function') {
       window.setOnMunicipioSelected(async (id_municipio) => {
         console.log("🗺️ Click mapa →", id_municipio);
-        
+
         const sel = document.getElementById("selMunicipio");
         if (sel) {
           sel.value = String(id_municipio);
           sel.dispatchEvent(new Event('change', { bubbles: true }));
         }
-        
-        // Zoom y resaltar (map.js lo hace automáticamente)
-        if (typeof window.resaltarMunicipioById === 'function') {
-          window.resaltarMunicipioById(id_municipio);
-        }
+
+        window.resaltarMunicipioById?.(id_municipio);
+
+        // ✅ SI HAY FILTRO POR REFERENTE, NO CARGUES “TODO EL MUNICIPIO”
+        if (window.referFilterActive) return;
+
+        await loadPersonasByMunicipioId(id_municipio);
       });
 
     }
@@ -1210,13 +1446,24 @@ async function openPerfilModal(idPersona){
       </div>
     `;
 
+    const TZ_MX = "America/Mexico_City";
+
     function fmtDateMX(dt) {
-      if (!dt) return '—';
+      if (!dt) return "—";
+
       const d = new Date(dt);
-      if (Number.isNaN(d.getTime())) return '—';
-      return new Intl.DateTimeFormat('es-MX', {
-        dateStyle: 'medium',
-        timeStyle: 'short'
+      if (Number.isNaN(d.getTime())) return String(dt);
+
+      return new Intl.DateTimeFormat("es-MX", {
+
+        timeZone: TZ_MX,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
       }).format(d);
     }
 
@@ -1227,6 +1474,7 @@ async function openPerfilModal(idPersona){
       (p.modificado_por_nombre ? `Modificó: <b>${esc(p.modificado_por_nombre)}</b>` : null),
       `Actualizado: <b>${fmtDateMX(p.updated_at)}</b>`
     ].filter(Boolean);
+
 
     document.getElementById('perfilMeta').innerHTML = metaParts.join(' &nbsp;•&nbsp; ');
 
@@ -1659,6 +1907,11 @@ async function openPerfilModal(idPersona){
     });
 
     showPerfilState({loading:false, error:null});
+          console.log("RAW created_at:", p.created_at);
+      console.log("RAW updated_at:", p.updated_at);
+
+      console.log("DATE created ISO:", new Date(p.created_at).toISOString());
+      console.log("DATE updated ISO:", new Date(p.updated_at).toISOString());
   } catch (err) {
     console.error(err);
     showPerfilState({loading:false, error:'No pude cargar el perfil. ' + (err.message || '')});
