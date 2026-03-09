@@ -168,8 +168,6 @@ exports.listPersonas = async (req, res) => {
 };
 
 
-
-//1.1. listar personas usuarios
 //1.1. listar personas usuarios
 exports.listPersonasAdminGrid = async (req, res) => {
   const client = await pool.connect();
@@ -183,16 +181,32 @@ exports.listPersonasAdminGrid = async (req, res) => {
     let oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
     const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
     const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+
     const referente = (req.query.referente || "").trim();
+    const referenteCargo = (req.query.referenteCargo || "").trim();
+    const refNivelRaw = (req.query.refNivel || "").trim().toLowerCase();
+    const refNivel = ["municipal", "regional", "distrital", "estatal", "nacional"].includes(refNivelRaw)
+      ? refNivelRaw
+      : "";
+
     const q = (req.query.q || "").trim();
 
     // 👇 este filtro lo dejamos como “FINAL” (superadmin)
-    const verificado = (req.query.verificado === "1" || req.query.verificado === "0") ? req.query.verificado : null;
+    const verificado = (req.query.verificado === "1" || req.query.verificado === "0")
+      ? req.query.verificado
+      : null;
 
     // -------- ordenamiento
     const sortDir = (String(req.query.sortDir || "desc").toLowerCase() === "asc") ? "ASC" : "DESC";
     const sortFieldRaw = String(req.query.sortField || "updated_at").trim();
-    const SORT_WHITELIST = new Set(["id_persona", "created_at", "updated_at", "nombre", "apellido_paterno", "apellido_materno"]);
+    const SORT_WHITELIST = new Set([
+      "id_persona",
+      "created_at",
+      "updated_at",
+      "nombre",
+      "apellido_paterno",
+      "apellido_materno"
+    ]);
     const sortField = SORT_WHITELIST.has(sortFieldRaw) ? sortFieldRaw : "updated_at";
 
     // -------- SMART FILTERS
@@ -206,59 +220,78 @@ exports.listPersonasAdminGrid = async (req, res) => {
       params.push(oficinaId);
       where.push(`p.id_oficina = $${params.length}`);
     }
+
     if (capturistaId) {
       params.push(capturistaId);
       where.push(`p.creado_por = $${params.length}`);
     }
+
     if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
       params.push(idMunTrabajo);
       where.push(`p.municipio_trabajo_politico = $${params.length}`);
     }
+
     if (q) {
       params.push(`%${q}%`);
       const i = params.length;
       where.push(`
-        (COALESCE(p.nombre,'') ILIKE $${i}
-        OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
-        OR COALESCE(p.apellido_materno,'') ILIKE $${i}
-        OR COALESCE(p.curp,'') ILIKE $${i}
-        OR COALESCE(p.rfc,'') ILIKE $${i}
-        OR COALESCE(p.clave_elector,'') ILIKE $${i})
+        (
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
       `);
     }
+
     const refMode = String(req.query.refMode || "").trim(); // "exact" | ""
 
-    if (referente) {
-      const ref = referente.toLowerCase().trim();
-      params.push(ref);
-      const i = params.length;
+    // -------- filtro referente
+    if (referente || refNivel) {
+      const refParts = [];
 
-      if (refMode === "exact") {
-        // ✅ EXACTO: solo el referente seleccionado
-        where.push(`
-          EXISTS (
-            SELECT 1
-            FROM referentes_politicos rp
-            WHERE rp.id_persona = p.id_persona
-              AND rp.nombre_full = $${i}
-          )
-        `);
-      } else {
-        // ✅ FUZZY: sugerencias / escritura manual
-        where.push(`
-          EXISTS (
-            SELECT 1
-            FROM referentes_politicos rp
-            WHERE rp.id_persona = p.id_persona
-              AND (
-                (length($${i}) < 6 AND rp.nombre_full LIKE ($${i} || '%'))
-                OR word_similarity(rp.nombre_full, $${i}) > 0.15
-                OR similarity(rp.nombre_full, $${i}) > 0.15
-              )
-          )
-        `);
+      if (referente) {
+        const ref = referente.toLowerCase().trim();
+        params.push(ref);
+        const i = params.length;
+
+        if (refMode === "exact") {
+          refParts.push(`rp.nombre_full = $${i}`);
+        } else {
+          refParts.push(`
+            (
+              (length($${i}) < 6 AND rp.nombre_full LIKE ($${i} || '%'))
+              OR word_similarity(rp.nombre_full, $${i}) > 0.15
+              OR similarity(rp.nombre_full, $${i}) > 0.15
+            )
+          `);
+        }
       }
+
+      if (referenteCargo) {
+        params.push(referenteCargo.toLowerCase().trim());
+        const j = params.length;
+        refParts.push(`COALESCE(lower(trim(rp.cargo)), '') = $${j}`);
+      }
+
+      if (refNivel) {
+        params.push(refNivel);
+        const k = params.length;
+        refParts.push(`COALESCE(lower(trim(rp.nivel)), '') = $${k}`);
+      }
+
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM referentes_politicos rp
+          WHERE rp.id_persona = p.id_persona
+            AND ${refParts.join(" AND ")}
+        )
+      `);
     }
+
     // ✅ “verificado” sigue siendo el nivel 3 (final)
     if (verificado === "1") where.push(`p.verificado_at IS NOT NULL`);
     if (verificado === "0") where.push(`p.verificado_at IS NULL`);
@@ -267,23 +300,79 @@ exports.listPersonasAdminGrid = async (req, res) => {
 
     const mode = String(req.query.mode || "").trim();
 
+    // =========================================================
+    // MODO: LISTA DE REFERENTES PARA SELECT
+    // =========================================================
     if (mode === "ref_list") {
+      const refListWhere = [...where];
 
-      const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+      // en ref_list NO queremos que el propio filtro "referente" del input
+      // afecte la lista, solo q/office/scope/etc si existen.
+      // Así que reconstruimos usando smartFilters + nivel + otros filtros ajenos al referente.
+      const refParams = [];
+      const refWhere = [];
+      addFullFilter(refParams, refWhere);
+
+      if (oficinaId) {
+        refParams.push(oficinaId);
+        refWhere.push(`p.id_oficina = $${refParams.length}`);
+      }
+
+      if (capturistaId) {
+        refParams.push(capturistaId);
+        refWhere.push(`p.creado_por = $${refParams.length}`);
+      }
+
+      if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
+        refParams.push(idMunTrabajo);
+        refWhere.push(`p.municipio_trabajo_politico = $${refParams.length}`);
+      }
+
+      if (q) {
+        refParams.push(`%${q}%`);
+        const iq = refParams.length;
+        refWhere.push(`
+          (
+            COALESCE(p.nombre,'') ILIKE $${iq}
+            OR COALESCE(p.apellido_paterno,'') ILIKE $${iq}
+            OR COALESCE(p.apellido_materno,'') ILIKE $${iq}
+            OR COALESCE(p.curp,'') ILIKE $${iq}
+            OR COALESCE(p.rfc,'') ILIKE $${iq}
+            OR COALESCE(p.clave_elector,'') ILIKE $${iq}
+          )
+        `);
+      }
+
+      if (verificado === "1") refWhere.push(`p.verificado_at IS NOT NULL`);
+      if (verificado === "0") refWhere.push(`p.verificado_at IS NULL`);
+
+      if (refNivel) {
+        refParams.push(refNivel);
+        refWhere.push(`COALESCE(lower(trim(rp.nivel)), '') = $${refParams.length}`);
+      }
+
+      const refWhereSQL = refWhere.length ? `WHERE ${refWhere.join(" AND ")}` : "";
 
       const sql = `
-      SELECT
-        INITCAP(rp.nombre_full) AS nombre,
-        COUNT(*)::int AS menciones
-      FROM personas p
-      JOIN referentes_politicos rp ON rp.id_persona = p.id_persona
-      ${whereSQL}
-      GROUP BY rp.nombre_full
-      ORDER BY menciones DESC, nombre ASC
-      LIMIT 500
+        SELECT
+          INITCAP(rp.nombre_full) AS nombre,
+          COALESCE(trim(rp.cargo), '') AS cargo,
+          COALESCE(lower(trim(rp.nivel)), '') AS nivel,
+          CASE
+            WHEN COALESCE(trim(rp.cargo), '') <> ''
+              THEN INITCAP(rp.nombre_full) || ' - ' || rp.cargo
+            ELSE INITCAP(rp.nombre_full)
+          END AS label,
+          COUNT(*)::int AS menciones
+        FROM personas p
+        JOIN referentes_politicos rp ON rp.id_persona = p.id_persona
+        ${refWhereSQL}
+        GROUP BY rp.nombre_full, rp.cargo, rp.nivel
+        ORDER BY menciones DESC, label ASC
+        LIMIT 500
       `;
 
-      const { rows } = await client.query(sql, params);
+      const { rows } = await client.query(sql, refParams);
       return res.json({ data: rows });
     }
 
@@ -294,81 +383,79 @@ exports.listPersonasAdminGrid = async (req, res) => {
     const last_page = Math.max(Math.ceil(total / size), 1);
 
     // -------- DATA
-const dataSql = `
-  SELECT
-    p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno,
-    (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
-    p.curp, p.rfc, p.clave_elector, p.id_oficina, o.nombre AS oficina_nombre,
+    const dataSql = `
+      SELECT
+        p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno,
+        (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
+        p.curp, p.rfc, p.clave_elector, p.id_oficina, o.nombre AS oficina_nombre,
 
-    -- trazabilidad creador / editor
-    p.creado_por, u_crea.nombre AS creado_por_nombre, u_crea.email AS creado_por_email,
-    u_crea.cargo AS creado_por_cargo, u_crea.area AS creado_por_area,
+        -- trazabilidad creador / editor
+        p.creado_por, u_crea.nombre AS creado_por_nombre, u_crea.email AS creado_por_email,
+        u_crea.cargo AS creado_por_cargo, u_crea.area AS creado_por_area,
 
-    p.modificado_por, u_mod.nombre AS modificado_por_nombre, u_mod.email AS modificado_por_email,
-    u_mod.cargo AS modificado_por_cargo, u_mod.area AS modificado_por_area,
+        p.modificado_por, u_mod.nombre AS modificado_por_nombre, u_mod.email AS modificado_por_email,
+        u_mod.cargo AS modificado_por_cargo, u_mod.area AS modificado_por_area,
 
-    -- ✅ NIVEL 1: AREA (director)
-    p.verif_area_por,
-    p.verif_area_at,
-    u_va.nombre AS verif_area_por_nombre,
-    u_va.email  AS verif_area_por_email,
-    u_va.cargo  AS verif_area_por_cargo,
-    u_va.area   AS verif_area_por_area,
+        -- ✅ NIVEL 1: AREA (director)
+        p.verif_area_por,
+        p.verif_area_at,
+        u_va.nombre AS verif_area_por_nombre,
+        u_va.email  AS verif_area_por_email,
+        u_va.cargo  AS verif_area_por_cargo,
+        u_va.area   AS verif_area_por_area,
 
-    -- ✅ NIVEL 2: OFFICE (coordinador)
-    p.verif_office_por,
-    p.verif_office_at,
-    u_vo.nombre AS verif_office_por_nombre,
-    u_vo.email  AS verif_office_por_email,
-    u_vo.cargo  AS verif_office_por_cargo,
-    u_vo.area   AS verif_office_por_area,
+        -- ✅ NIVEL 2: OFFICE (coordinador)
+        p.verif_office_por,
+        p.verif_office_at,
+        u_vo.nombre AS verif_office_por_nombre,
+        u_vo.email  AS verif_office_por_email,
+        u_vo.cargo  AS verif_office_por_cargo,
+        u_vo.area   AS verif_office_por_area,
 
-    -- ✅ NIVEL 3: FINAL (superadmin)
-    p.verificado_por,
-    p.verificado_at,
-    u_ver.nombre AS verificado_por_nombre,
-    u_ver.email  AS verificado_por_email,
-    u_ver.cargo  AS verificado_por_cargo,
-    u_ver.area   AS verificado_por_area,
+        -- ✅ NIVEL 3: FINAL (superadmin)
+        p.verificado_por,
+        p.verificado_at,
+        u_ver.nombre AS verificado_por_nombre,
+        u_ver.email  AS verificado_por_email,
+        u_ver.cargo  AS verificado_por_cargo,
+        u_ver.area   AS verificado_por_area,
 
-    -- ✅ REFERENTES (para autocomplete sin endpoint nuevo)
-    COALESCE((
-      SELECT string_agg(
-        DISTINCT concat_ws(' ', rp.nombres, rp.apellido_paterno, rp.apellido_materno),
-        ' | '
-      )
-      FROM referentes_politicos rp
-      WHERE rp.id_persona = p.id_persona
-    ), '') AS referentes_nombres,
+        -- ✅ REFERENTES (para autocomplete / apoyo visual)
+        COALESCE((
+          SELECT string_agg(
+            DISTINCT concat_ws(' ', rp.nombres, rp.apellido_paterno, rp.apellido_materno),
+            ' | '
+          )
+          FROM referentes_politicos rp
+          WHERE rp.id_persona = p.id_persona
+        ), '') AS referentes_nombres,
 
-    -- otros
-    p.municipio_trabajo_politico, mt.nombre AS municipio_trabajo_nombre,
-    p.created_at, p.updated_at,
-    t.telefono AS telefono_principal
+        p.municipio_trabajo_politico,
+        mt.nombre AS municipio_trabajo_nombre,
+        p.created_at,
+        p.updated_at,
+        t.telefono AS telefono_principal
 
-  FROM personas p
-  LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
+      FROM personas p
+      LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
+      LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
+      LEFT JOIN usuarios u_mod  ON u_mod.id_usuario  = p.modificado_por
+      LEFT JOIN usuarios u_va   ON u_va.id_usuario   = p.verif_area_por
+      LEFT JOIN usuarios u_vo   ON u_vo.id_usuario   = p.verif_office_por
+      LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
+      LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
+      LEFT JOIN LATERAL (
+        SELECT telefono
+        FROM telefonos
+        WHERE id_persona = p.id_persona
+        ORDER BY principal DESC, id_telefono ASC
+        LIMIT 1
+      ) t ON true
 
-  LEFT JOIN usuarios u_crea ON u_crea.id_usuario = p.creado_por
-  LEFT JOIN usuarios u_mod  ON u_mod.id_usuario  = p.modificado_por
-
-  LEFT JOIN usuarios u_va   ON u_va.id_usuario   = p.verif_area_por
-  LEFT JOIN usuarios u_vo   ON u_vo.id_usuario   = p.verif_office_por
-
-  LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
-
-  LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
-  LEFT JOIN LATERAL (
-    SELECT telefono FROM telefonos
-    WHERE id_persona = p.id_persona
-    ORDER BY principal DESC, id_telefono ASC
-    LIMIT 1
-  ) t ON true
-
-  ${whereSQL}
-  ORDER BY p.${sortField} ${sortDir}, p.id_persona DESC
-  LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-`;
+      ${whereSQL}
+      ORDER BY p.${sortField} ${sortDir}, p.id_persona DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
 
     const dataParams = params.concat([size, offset]);
     const { rows } = await client.query(dataSql, dataParams);
@@ -2064,11 +2151,10 @@ function buildPerfilHtml(p) {
 
   const flags = [
     p.sin_servicio_publico === true ? badge("Sin servicio público", "sec") : "",
-    p.ha_contendido_eleccion === true ? badge("Ha contendió elección", "prim") : "",
+    p.ha_contendido_eleccion === true ? badge("Ha contendido elección", "prim") : "",
     p.sin_controversias_publicas === true ? badge("Sin controversias", "ok") : "",
   ].filter(Boolean).join("");
 
-  // Liderazgo (1:1)
   const li = p.liderazgo_influencia || null;
   const liNivel = li?.nivel ? titleCaseEs(li.nivel) : "";
   const liTipos = parseLiderazgoTipos(li?.tipos);
@@ -2077,29 +2163,106 @@ function buildPerfilHtml(p) {
     li?.cuenta_con_estructura === true ? "Sí" :
     li?.cuenta_con_estructura === false ? "No" : "";
 
-function parseResultado(raw) 
- { 
-    if (!raw) return "—"; 
-    const map = { "no_ganada": "No ganada",
-      "ganada": "Ganada", 
-      "pendiente": "Pendiente", 
-      "impugnada": "Impugnada", 
-      "cancelada": "Cancelada" }; 
-      return map[raw] || raw.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()); 
+  function parseResultado(raw) {
+    if (!raw) return "—";
+    const map = {
+      "no_ganada": "No ganada",
+      "ganada": "Ganada",
+      "pendiente": "Pendiente",
+      "impugnada": "Impugnada",
+      "cancelada": "Cancelada"
+    };
+    return map[raw] || raw.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   }
-  // Municipios de trabajo (lista)
+
   const municipiosTrabajo = asArray(p.municipios_trabajo);
 
-  const partidoColors = { "MORENA": 
-    "morena", 
-    "PAN": "pan", 
-    "PRI": "pri", 
-    "PVEM": "pvem", 
-    "PT": "pt", 
-    "MC": "mc", 
-    "PRD": "prd", 
-    "OTRO": "otro", 
-    "IND": "ind" };
+  const partidoColors = {
+    "MORENA": "morena",
+    "PAN": "pan",
+    "PRI": "pri",
+    "PVEM": "pvem",
+    "PT": "pt",
+    "MC": "mc",
+    "PRD": "prd",
+    "OTRO": "otro",
+    "IND": "ind"
+  };
+
+  const bannerDecorativo = ""; // aquí puedes insertar un dataURL generado con canvas si luego quieres
+
+  function renderSection(title, content, extraClass = "") {
+    if (!content || !String(content).trim()) return "";
+    return `
+      <section class="section ${extraClass}">
+        <div class="section-title">${esc(title)}</div>
+        <div class="section-body">
+          ${content}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderListSection(title, items, renderItem, opts = {}) {
+    const arr = Array.isArray(items) ? items : [];
+    if (!arr.length) return "";
+
+    const body = arr.map(it => `
+      <div class="item avoid-break">
+        ${renderItem(it)}
+      </div>
+    `).join("");
+
+    return renderSection(title, body, opts.long ? "section-long" : "");
+  }
+
+  const htmlDatosGenerales = `
+    <div class="kv">
+      <div class="k">CURP</div><div class="v mono">${esc(p.curp || "—")}</div>
+      <div class="k">RFC</div><div class="v mono">${esc(p.rfc || "—")}</div>
+      <div class="k">Clave elector</div><div class="v mono">${esc(p.clave_elector || "—")}</div>
+      <div class="k">Estado civil</div><div class="v">${esc(p.estado_civil || "—")}</div>
+      <div class="k">Residencia legal</div><div class="v">${esc(munLegal)}</div>
+      <div class="k">Residencia real</div><div class="v">${esc(munReal)}</div>
+      <div class="k">Municipio trabajo</div><div class="v">${esc(munTrab)}</div>
+    </div>
+  `;
+
+  const htmlINE = `
+    <div class="kv">
+      <div class="k">Sección</div><div class="v">${esc(p?.datos_ine?.seccion_electoral || "—")}</div>
+      <div class="k">Distrito federal</div><div class="v">${esc(p?.datos_ine?.distrito_federal || "—")}</div>
+      <div class="k">Distrito local</div><div class="v">${esc(p?.datos_ine?.distrito_local || "—")}</div>
+    </div>
+  `;
+
+  const htmlLiderazgo = li ? `
+    <div class="kv">
+      <div class="k">Nivel</div><div class="v">${esc(liNivel || "—")}</div>
+      <div class="k">Tipos</div><div class="v">${esc(liTipos.length ? liTipos.join(", ") : "—")}</div>
+      <div class="k">Presencia territorial</div><div class="v">${esc(liPres || "—")}</div>
+      <div class="k">Estructura</div><div class="v">${esc(liEstructura || "—")}</div>
+      ${li?.tipo_otro_texto ? `<div class="k">Otro</div><div class="v">${esc(li.tipo_otro_texto)}</div>` : ``}
+    </div>
+  ` : "";
+
+  const htmlControversias = p.sin_controversias_publicas === true
+    ? `
+      <div class="item avoid-break">
+        <div class="t">Sin controversias públicas</div>
+        <div class="m">El registro fue marcado explícitamente como libre de controversias públicas.</div>
+      </div>
+    `
+    : (Array.isArray(p.controversias) && p.controversias.length
+      ? p.controversias.map(c => `
+          <div class="item avoid-break">
+            <div class="t">${esc(c.tipo || ("Tipo #" + (c.id_tipo ?? "—")))}</div>
+            <div class="m">${esc([c.estatus, c.fecha_registro].filter(Boolean).join(" • ") || "")}</div>
+            ${c.fuente ? `<div class="m">Fuente: ${esc(c.fuente)}</div>` : ``}
+            ${c.descripcion ? `<div class="m">${esc(c.descripcion)}</div>` : ``}
+          </div>
+        `).join("")
+      : "");
 
   return `<!doctype html>
 <html lang="es">
@@ -2108,229 +2271,407 @@ function parseResultado(raw)
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Perfil - ${esc(nombreCompleto)}</title>
   <style>
-:root {
-  --prim:#8b2136;
-  --sec:#b89056;
-  --mut:#6b7280;
-  --bg:#f9fafb;
-  --line:#e5e7eb;
-  --ok:#16a34a;
-  --warn:#f59e0b;
-  --bad:#dc2626;
-}
+    @page {
+      size: A4;
+      margin: 12mm;
+    }
 
-* { box-sizing: border-box; }
+    :root {
+      --prim:#8b2136;
+      --prim-2:#6f1b2b;
+      --sec:#b89056;
+      --mut:#6b7280;
+      --bg:#f8fafc;
+      --line:#e5e7eb;
+      --soft:#f3f4f6;
+      --ok:#16a34a;
+      --warn:#f59e0b;
+      --bad:#dc2626;
+      --text:#1f2937;
+      --title:#111827;
+    }
 
-body {
-  font-family: 'Inter', 'Roboto', Arial, sans-serif;
-  background: var(--bg);
-  margin: 0;
-  padding: 24px;
-  color: #1f2937;
-}
+    * { box-sizing: border-box; }
 
-.top {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      line-height: 1.38;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
 
-.photo {
-  width: 110px; height: 140px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: #f3f4f6;
-  overflow: hidden;
-  flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--mut);
-  font-size: 12px;
-}
-.photo img { width: 100%; height: 100%; object-fit: cover; }
+    body {
+      padding: 0;
+      background: #fff;
+    }
 
-.title { flex: 1 1 auto; min-width: 0; }
-.h1 { font-size: 22px; margin: 0; color: var(--prim); font-weight: 800; }
-.sub { margin-top: 6px; color: var(--mut); font-size: 13px; }
+    .sheet {
+      width: 100%;
+    }
 
-.badges {
-  margin-top: 10px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-}
+    .hero-banner {
+      width: 100%;
+      margin-bottom: 10px;
+      border-radius: 14px;
+      overflow: hidden;
+    }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  border: 1px solid var(--line);
-}
+    .hero-banner img {
+      display: block;
+      width: 100%;
+      height: 56px;
+      object-fit: cover;
+    }
 
-.badge.ok { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
-.badge.warn { background: #fef9c3; color: #92400e; border-color: #fde68a; }
-.badge.bad { background: #fee2e2; color: #7f1d1d; border-color: #fecaca; }
-.badge.prim { background: #fce7f3; color: #9d174d; border-color: #fbcfe8; }
-.badge.sec { background: #fef3c7; color: #78350f; border-color: #fde68a; }
+    .top {
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      gap: 16px;
+      align-items: stretch;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.05);
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
 
-.badge.morena { background:#fef2f2; color:#7f1d1d; border-color:#fecaca; }
-.badge.pan    { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
-.badge.pri    { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
-.badge.pvem   { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
-.badge.pt     { background:#fee2e2; color:#7f1d1d; border-color:#fecaca; }
-.badge.mc     { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
-.badge.prd    { background:#fef9c3; color:#78350f; border-color:#fde68a; }
-.badge.otro   { background:#f3f4f6; color:#374151; border-color:#e5e7eb; }
-.badge.ind    { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
+    .top-side {
+      background: linear-gradient(180deg, var(--prim) 0%, var(--prim-2) 100%);
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 150px;
+    }
 
+    .photo {
+      width: 92px;
+      height: 118px;
+      border-radius: 12px;
+      border: 3px solid rgba(255,255,255,.88);
+      background: #f3f4f6;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,.9);
+      font-size: 11px;
+      text-align: center;
+    }
 
-.section {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-top: 18px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
+    .photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
-.h2 {
-  font-size: 13px;
-  font-weight: 700;
-  color: #374151;
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 6px;
-}
+    .title {
+      padding: 14px 16px;
+      min-width: 0;
+    }
 
-.kv {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 10px 14px;
-  font-size: 12px;
-}
-.k { font-weight: 600; color: var(--mut); }
-.v { color: #111827; }
+    .eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .7px;
+      color: var(--prim);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
 
-.item {
-  background: #f9fafb;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 10px;
-}
-.item .t { font-weight: 700; margin-bottom: 4px; color: #111827; }
-.item .m { font-size: 11px; color: var(--mut); }
+    .h1 {
+      font-size: 22px;
+      margin: 0;
+      color: var(--prim);
+      font-weight: 800;
+      line-height: 1.15;
+    }
 
-.photos {
-  margin-top: 8px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.photos img {
-  height: 48px;
-  width: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
+    .sub {
+      margin-top: 6px;
+      color: var(--mut);
+      font-size: 13px;
+    }
 
-.foot {
-  margin-top: 10px;
-  color: var(--mut);
-  font-size: 10px;
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-}
+    .badges {
+      margin-top: 10px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
 
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-}
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #f3f4f6;
+      border: 1px solid var(--line);
+      vertical-align: middle;
+      white-space: nowrap;
+    }
 
+    .badge.ok   { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+    .badge.warn { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+    .badge.bad  { background: #fee2e2; color: #7f1d1d; border-color: #fecaca; }
+    .badge.prim { background: #fce7f3; color: #9d174d; border-color: #fbcfe8; }
+    .badge.sec  { background: #fef3c7; color: #78350f; border-color: #fde68a; }
+    .badge.mut  { background: #f3f4f6; color: #374151; border-color: #e5e7eb; }
+
+    .badge.morena { background:#fef2f2; color:#7f1d1d; border-color:#fecaca; }
+    .badge.pan    { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
+    .badge.pri    { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
+    .badge.pvem   { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
+    .badge.pt     { background:#fee2e2; color:#7f1d1d; border-color:#fecaca; }
+    .badge.mc     { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
+    .badge.prd    { background:#fef9c3; color:#78350f; border-color:#fde68a; }
+    .badge.otro   { background:#f3f4f6; color:#374151; border-color:#e5e7eb; }
+    .badge.ind    { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
+
+    .section {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.04);
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .section-long {
+      break-inside: auto;
+      page-break-inside: auto;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--prim);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      padding: 8px 12px;
+      background: #f3f4f6;
+      border-bottom: 1px solid var(--line);
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    .section-body {
+      padding: 12px;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 9px 14px;
+      font-size: 11px;
+    }
+
+    .k {
+      font-weight: 700;
+      color: var(--mut);
+    }
+
+    .v {
+      color: var(--title);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+    }
+
+    .item {
+      background: #f9fafb;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 11px;
+      margin-bottom: 8px;
+    }
+
+    .item:last-child {
+      margin-bottom: 0;
+    }
+
+    .t {
+      font-weight: 800;
+      margin-bottom: 4px;
+      color: #111827;
+    }
+
+    .m {
+      font-size: 10.5px;
+      color: var(--mut);
+      line-height: 1.35;
+      margin-top: 2px;
+    }
+
+    .muted {
+      color: var(--mut);
+      font-weight: 500;
+    }
+
+    .photos {
+      margin-top: 8px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .photos img {
+      height: 48px;
+      width: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      object-fit: cover;
+    }
+
+    .kids {
+      margin-top: 8px;
+      border-top: 1px dashed var(--line);
+      padding-top: 6px;
+    }
+
+    .kid-line {
+      margin: 4px 0;
+    }
+
+    .kid-icon {
+      margin-right: 4px;
+    }
+
+    .kid-role {
+      font-weight: 700;
+      color: #374151;
+    }
+
+    .kid-name {
+      font-weight: 600;
+      color: #111827;
+    }
+
+    .kid-meta {
+      color: var(--mut);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px 12px;
+      min-height: 100%;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .mini-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--mut);
+      font-weight: 800;
+      margin-bottom: 7px;
+    }
+
+    .avoid-break {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .page-break {
+      break-before: page;
+      page-break-before: always;
+    }
+
+    .foot {
+      margin-top: 12px;
+      color: var(--mut);
+      font-size: 9.5px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
   </style>
 </head>
 <body>
+  <div class="sheet">
 
-  <div class="top">
-    <div class="photo">
-      ${foto ? `<img src="${escAttr(foto)}" alt="foto"/>` : `Sin foto`}
-    </div>
+    ${bannerDecorativo ? `
+      <div class="hero-banner avoid-break">
+        <img src="${escAttr(bannerDecorativo)}" alt="Encabezado decorativo"/>
+      </div>
+    ` : ""}
 
-    <div class="title">
-      <h1 class="h1">${esc(nombreCompleto)}</h1>
-      <div class="sub">• ${esc(municipioTop)}</div>
+    <div class="top">
+      <div class="top-side">
+        <div class="photo">
+          ${foto ? `<img src="${escAttr(foto)}" alt="foto"/>` : `Sin foto`}
+        </div>
+      </div>
 
-      <div class="badges">
-        ${confi ? badge(confi.label, confi.cls) : ""}
-        ${escalaInfl ? badge(`Influencia: ${escalaInfl}`, "mut") : ""}
-        ${badge(p.grupo_postulacion, "mut")}
-        ${partido ? badge(partido, partidoColors[partido] || "mut") : ""}
-        ${badge(p.ideologia_politica, "mut")}
-        ${badge(p.tema_interes_central, "sec")}
-        ${flags}
+      <div class="title">
+        <div class="eyebrow">Ficha de actor político</div>
+        <h1 class="h1">${esc(nombreCompleto)}</h1>
+        <div class="sub">• ${esc(municipioTop)}</div>
+
+        <div class="badges">
+          ${confi ? badge(confi.label, confi.cls) : ""}
+          ${escalaInfl ? badge(`Influencia: ${escalaInfl}`, "mut") : ""}
+          ${badge(p.grupo_postulacion, "mut")}
+          ${partido ? badge(partido, partidoColors[partido] || "mut") : ""}
+          ${badge(p.ideologia_politica, "mut")}
+          ${badge(p.tema_interes_central, "sec")}
+          ${flags}
+        </div>
       </div>
     </div>
-  </div>
+    ${renderSection("Datos generales", htmlDatosGenerales)}
+    ${renderSection("INE", htmlINE)}
 
-  <section class="section">
-    <div class="h2">Datos generales</div>
-    <div class="kv">
-      <div class="k">CURP</div><div class="v mono">${esc(p.curp || "—")}</div>
-      <div class="k">RFC</div><div class="v mono">${esc(p.rfc || "—")}</div>
-      <div class="k">Clave elector</div><div class="v mono">${esc(p.clave_elector || "—")}</div>
-      <div class="k">Estado civil</div><div class="v">${esc(p.estado_civil || "—")}</div>
-
-      <div class="k">Residencia legal</div><div class="v">${esc(munLegal)}</div>
-      <div class="k">Residencia real</div><div class="v">${esc(munReal)}</div>
-      <div class="k">Municipio trabajo</div><div class="v">${esc(munTrab)}</div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="h2">INE</div>
-    <div class="kv">
-      <div class="k">Sección</div><div class="v">${esc(p?.datos_ine?.seccion_electoral || "—")}</div>
-      <div class="k">Distrito federal</div><div class="v">${esc(p?.datos_ine?.distrito_federal || "—")}</div>
-      <div class="k">Distrito local</div><div class="v">${esc(p?.datos_ine?.distrito_local || "—")}</div>
-    </div>
-  </section>
-
-  ${municipiosTrabajo.length ? listSection("Municipios de trabajo", municipiosTrabajo, (m)=>`
-    <div class="item">
-      <div class="t">${esc(m.municipio || "—")} ${m.es_principal ? badge("Principal", "ok") : ""}</div>
+    ${municipiosTrabajo.length ? renderListSection("Municipios de trabajo", municipiosTrabajo, (m)=>`
+      <div class="t">
+        ${esc(m.municipio || "—")}
+        ${m.es_principal ? badge("Principal", "ok") : ""}
+      </div>
       ${m.notas ? `<div class="m">${esc(m.notas)}</div>` : `<div class="m"></div>`}
-    </div>
-  `) : ""}
+    `) : ""}
 
-  ${listSection("Teléfonos", p.telefonos, (t)=>`
-    <div class="item">
+    ${renderListSection("Teléfonos", p.telefonos, (t)=>`
       <div class="t">${esc(t.telefono || "—")} ${t.principal ? badge("Principal", "ok") : ""}</div>
       <div class="m">${esc(t.tipo || "—")}</div>
-    </div>
-  `)}
+    `)}
 
-  ${listSection("Formación académica", p.formacion_academica, (x)=>`
-    <div class="item">
+    ${renderListSection("Formación académica", p.formacion_academica, (x)=>`
       <div class="t">${esc([x.nivel, x.grado_obtenido || x.grado].filter(Boolean).join(" • ") || "—")}</div>
       <div class="m">${esc(x.institucion || "")}</div>
       <div class="m">${esc((x.anio_inicio || "—") + " - " + (x.anio_fin || "—"))} ${x.titulado === true ? "• Titulado" : ""}</div>
       ${x.cedula_profesional ? `<div class="m">Cédula: ${esc(x.cedula_profesional)}</div>` : ``}
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${listSection("Parejas e hijos", p.parejas, (pa)=>`
-    <div class="item">
+    ${renderListSection("Parejas e hijos", p.parejas, (pa)=>`
       <div class="t">
         ${esc(pa.nombre_pareja || "—")}
         <span class="muted">(${esc(pa.tipo_relacion || "—")})</span>
@@ -2342,31 +2683,26 @@ body {
           ? `<div class="kids">
               ${pa.hijos.map(h => {
                 const nombre = (h.nombre_completo || "").toString().trim();
-
                 const edad =
                   (h.anios === null || h.anios === undefined || h.anios === "")
                     ? "—"
                     : String(h.anios);
-
                 const anio =
                   (h.anio_nacimiento === null || h.anio_nacimiento === undefined || h.anio_nacimiento === "")
                     ? ""
                     : String(h.anio_nacimiento);
-
                 const sexoRaw = (h.sexo || "").toString().trim().toUpperCase();
                 const etiqueta =
                   sexoRaw === "F" ? "Hija" :
                   sexoRaw === "M" ? "Hijo" :
                   "Hijo(a)";
-
-                // opcional: texto legible de sexo
                 const sexoTxt =
                   sexoRaw === "F" ? "Femenino" :
                   sexoRaw === "M" ? "Masculino" :
                   (sexoRaw ? sexoRaw : "—");
 
                 return `
-                  <div class="m kid-line">
+                  <div class="m kid-line avoid-break">
                     <span class="kid-icon">👶</span>
                     <span class="kid-role">${esc(etiqueta)}:</span>
                     <span class="kid-name">${esc(nombre || "Sin nombre")}</span>
@@ -2379,237 +2715,176 @@ body {
             </div>`
           : ""
       }
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${
-    Array.isArray(p.hijos_sin_pareja) && p.hijos_sin_pareja.length
-      ? `
-        <div class="item">
-          <div class="t">Hijos (sin especificar pareja)</div>
-          <div class="kids">
-            ${p.hijos_sin_pareja.map(h => {
-              const nombre = (h.nombre_completo || "").toString().trim();
+    ${
+      Array.isArray(p.hijos_sin_pareja) && p.hijos_sin_pareja.length
+        ? renderSection("Hijos sin especificar pareja", `
+            <div class="item avoid-break">
+              <div class="kids">
+                ${p.hijos_sin_pareja.map(h => {
+                  const nombre = (h.nombre_completo || "").toString().trim();
+                  const edad =
+                    (h.anios === null || h.anios === undefined || h.anios === "")
+                      ? "—"
+                      : String(h.anios);
+                  const anio =
+                    (h.anio_nacimiento === null || h.anio_nacimiento === undefined || h.anio_nacimiento === "")
+                      ? ""
+                      : String(h.anio_nacimiento);
+                  const sexoRaw = (h.sexo || "").toString().trim().toUpperCase();
+                  const etiqueta =
+                    sexoRaw === "F" ? "Hija" :
+                    sexoRaw === "M" ? "Hijo" :
+                    "Hijo(a)";
+                  const sexoTxt =
+                    sexoRaw === "F" ? "Femenino" :
+                    sexoRaw === "M" ? "Masculino" :
+                    (sexoRaw ? sexoRaw : "—");
 
-              const edad =
-                (h.anios === null || h.anios === undefined || h.anios === "")
-                  ? "—"
-                  : String(h.anios);
+                  return `
+                    <div class="m kid-line avoid-break">
+                      <span class="kid-icon">👶</span>
+                      <span class="kid-role">${esc(etiqueta)}:</span>
+                      <span class="kid-name">${esc(nombre || "Sin nombre")}</span>
+                      <span class="kid-meta">
+                        (${esc(edad)} años${anio ? `, nac. ${esc(anio)}` : ""}${sexoTxt !== "—" ? `, ${esc(sexoTxt)}` : ""})
+                      </span>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          `)
+        : ""
+    }
 
-              const anio =
-                (h.anio_nacimiento === null || h.anio_nacimiento === undefined || h.anio_nacimiento === "")
-                  ? ""
-                  : String(h.anio_nacimiento);
-
-              const sexoRaw = (h.sexo || "").toString().trim().toUpperCase();
-              const etiqueta =
-                sexoRaw === "F" ? "Hija" :
-                sexoRaw === "M" ? "Hijo" :
-                "Hijo(a)";
-
-              const sexoTxt =
-                sexoRaw === "F" ? "Femenino" :
-                sexoRaw === "M" ? "Masculino" :
-                (sexoRaw ? sexoRaw : "—");
-
-              return `
-                <div class="m kid-line">
-                  <span class="kid-icon">👶</span>
-                  <span class="kid-role">${esc(etiqueta)}:</span>
-                  <span class="kid-name">${esc(nombre || "Sin nombre")}</span>
-                  <span class="kid-meta">
-                    (${esc(edad)} años${anio ? `, nac. ${esc(anio)}` : ""}${sexoTxt !== "—" ? `, ${esc(sexoTxt)}` : ""})
-                  </span>
-                </div>
-              `;
-            }).join("")}
-          </div>
-        </div>
-      `
-      : ""
-  }
-
-
-  ${listSection("Redes sociales", p.redes_sociales, (r)=>`
-    <div class="item">
+    ${renderListSection("Redes sociales", p.redes_sociales, (r)=>`
       <div class="t">${esc(r.red || "—")}</div>
       <div class="m">${r.url ? esc(r.url) : "—"}</div>
-    </div>
-  `)}
+    `)}
 
-  ${listSection("Empresas", p.empresas, (e)=>`
-    <div class="item">
+    ${renderListSection("Empresas", p.empresas, (e)=>`
       <div class="t">${esc(e.nombre_empresa || "—")}</div>
       <div class="m">${esc(e.rol || e.rol_otro || "—")}</div>
       ${e.nombre_relacionado ? `<div class="m">Relacionado: ${esc(e.nombre_relacionado)} (${esc(e.relacion || "—")})</div>` : ''}
       ${e.periodo ? `<div class="m">Período: ${esc(e.periodo)}</div>` : ''}
       ${e.notas ? `<div class="m">${esc(e.notas)}</div>` : ''}
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${listSection("Temas de interés", p.temas_interes, (t)=>`
-    <div class="item">
+    ${renderListSection("Temas de interés", p.temas_interes, (t)=>`
       <div class="t">${esc(t.tema || (t.id_tema ? ("Tema #" + t.id_tema) : "—"))}</div>
       ${t.otro_texto ? `<div class="m">${esc(t.otro_texto)}</div>` : `<div class="m">—</div>`}
-    </div>
-  `)}
+    `)}
 
-  ${listSection("Cargos de elección popular", p.cargos_eleccion_popular, (c)=>`
-    <div class="item">
+    ${renderListSection("Cargos de elección popular", p.cargos_eleccion_popular, (c)=>`
       <div class="t">${esc(c.cargo_display || c.cargo || "—")}</div>
       <div class="m">${esc([c.periodo, c.modalidad, (c.partido_display || c.partido_postulante)].filter(Boolean).join(" • ") || "")}</div>
       ${(c.orden_gobierno || c.cargo_catalogo) ? `<div class="m">${esc([c.orden_gobierno, c.cargo_catalogo].filter(Boolean).join(" • "))}</div>` : ``}
       ${c.es_suplente ? `<div class="m">Suplente de: ${esc(c.titular_candidatura || "—")}</div>` : ``}
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${listSection("Servicio público", p.servicio_publico, (s)=>`
-    <div class="item">
+    ${renderListSection("Servicio público", p.servicio_publico, (s)=>`
       <div class="t">${esc(s.cargo || "—")}</div>
       <div class="m">${esc(s.dependencia || "")}</div>
       <div class="m">${esc(s.periodo || "")}</div>
-    </div>
-  `)}
+    `, { long: true })}
 
-${listSection("Elecciones contendidas", p.elecciones, (e)=>`
-  <div class="item">
-    <div class="t">${esc([e.anio_eleccion, e.candidatura].filter(Boolean).join(" • ") || "—")}</div>
-    <div class="m">${esc([e.partido_postulacion, parseResultado(e.resultado)].filter(Boolean).join(" • ") || "")}</div>
-    ${(e.diferencia_votos || e.diferencia_porcentaje) 
-      ? `<div class="m">Diferencia: ${esc(e.diferencia_votos ?? "—")} votos • ${esc(e.diferencia_porcentaje ?? "—")}%</div>` 
-      : `<div class="m"></div>`}
-  </div>
-`)}
+    ${renderListSection("Elecciones contendidas", p.elecciones, (e)=>`
+      <div class="t">${esc([e.anio_eleccion, e.candidatura].filter(Boolean).join(" • ") || "—")}</div>
+      <div class="m">${esc([e.partido_postulacion, parseResultado(e.resultado)].filter(Boolean).join(" • ") || "")}</div>
+      ${(e.diferencia_votos || e.diferencia_porcentaje)
+        ? `<div class="m">Diferencia: ${esc(e.diferencia_votos ?? "—")} votos • ${esc(e.diferencia_porcentaje ?? "—")}%</div>`
+        : `<div class="m"></div>`}
+    `, { long: true })}
 
-
-  ${listSection("Eventos de movilización", p.capacidad_movilizacion_eventos, (e)=>`
-    <div class="item">
+    ${renderListSection("Eventos de movilización", p.capacidad_movilizacion_eventos, (e)=>`
       <div class="t">${esc(e.nombre_evento || "—")}</div>
       <div class="m">${esc([e.fecha_evento, (e.asistencia != null ? ("Asistencia: " + e.asistencia) : null), e.lugar_evento].filter(Boolean).join(" • ") || "")}</div>
       ${
         Array.isArray(e.fotos) && e.fotos.length
           ? `<div class="photos">
-              ${e.fotos.slice(0,6).map(u => `<img src="${escAttr(u)}" />`).join("")}
+              ${e.fotos.slice(0,6).map(u => `<img src="${escAttr(u)}" alt="foto evento"/>`).join("")}
             </div>`
           : ``
       }
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${listSection("Equipos políticos", p.equipos, (eq)=>`
-    <div class="item">
+    ${renderListSection("Equipos políticos", p.equipos, (eq)=>`
       <div class="t">${esc(eq.nombre_equipo || "—")}</div>
       <div class="m">${eq.activo === true ? "Activo" : "Inactivo"}</div>
-    </div>
-  `)}
+    `)}
 
-  ${listSection("Referentes políticos", p.referentes, (r)=>`
-    <div class="item">
+    ${renderListSection("Referentes políticos", p.referentes, (r)=>`
       <div class="t">${esc([r.nombres, r.apellido_paterno, r.apellido_materno].filter(Boolean).join(" ") || "—")}</div>
       <div class="m">${esc([r.nivel ? titleCaseEs(r.nivel) : "", r.cargo ? r.cargo : ""].filter(Boolean).join(" • "))}</div>
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${listSection("Familiares en política", p.familiares, (f)=>`
-    <div class="item">
+    ${renderListSection("Familiares en política", p.familiares, (f)=>`
       <div class="t">${esc([f.nombre, f.parentesco].filter(Boolean).join(" • ") || "—")}</div>
       <div class="m">${esc([f.cargo, f.institucion].filter(Boolean).join(" • ") || "")}</div>
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${listSection("Participación en organizaciones", p.participacion_organizaciones, (o)=>`
-    <div class="item">
+    ${renderListSection("Participación en organizaciones", p.participacion_organizaciones, (o)=>`
       <div class="t">${esc((normalizeTipoEnum(o.tipo) ? (normalizeTipoEnum(o.tipo) + ": ") : "") + (o.nombre || "—"))}</div>
       <div class="m">${esc([o.rol, o.periodo].filter(Boolean).join(" • ") || "")}</div>
       ${o.notas ? `<div class="m">${esc(o.notas)}</div>` : ``}
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${listSection("Experiencia laboral", p.experiencia_laboral, (x)=>`
-    <div class="item">
+    ${renderListSection("Experiencia laboral", p.experiencia_laboral, (x)=>`
       <div class="t">${esc(x.cargo || "—")}</div>
       <div class="m">${esc(x.organizacion || "")}</div>
       <div class="m">${esc(x.periodo || "")}</div>
-    </div>
-  `)}
+    `, { long: true })}
 
-  ${listSection("Fuentes de consulta", p.fuentes_consulta, (f)=>`
-    <div class="item">
+    ${renderListSection("Fuentes de consulta", p.fuentes_consulta, (f)=>`
       <div class="t">${esc(f.fuente || "—")}</div>
       <div class="m">${esc([f.fecha_consulta, f.detalle].filter(Boolean).join(" • ") || "")}</div>
+    `, { long: true })}
+
+    ${htmlLiderazgo ? renderSection("Liderazgo e influencia", htmlLiderazgo) : ""}
+
+    ${htmlControversias ? renderSection("Controversias", htmlControversias, "section-long") : ""}
+
+    ${renderSection("Control de historial", `
+      <div class="kv">
+        <div class="k">Oficina</div><div class="v">${esc(p.oficina_nombre || "—")}</div>
+
+        <div class="k">Capturó</div><div class="v">${esc(p.creado_por_nombre || "—")}</div>
+        <div class="k">Creado</div><div class="v">${esc(fmtDate(p.created_at))}</div>
+
+        <div class="k">Modificó</div><div class="v">${esc(p.modificado_por_nombre || "—")}</div>
+        <div class="k">Actualizado</div><div class="v">${esc(fmtDate(p.updated_at))}</div>
+
+        <div class="k">Verificación AREA</div>
+        <div class="v">
+          ${esc(p.verif_area_por_nombre || "—")}
+          ${p.verif_area_por_email ? `<span class="m"> • ${esc(p.verif_area_por_email)}</span>` : ""}
+          ${p.verif_area_at ? `<div class="m">${esc(fmtDate(p.verif_area_at))}</div>` : `<div class="m">—</div>`}
+        </div>
+
+        <div class="k">Verificación OFFICE</div>
+        <div class="v">
+          ${esc(p.verif_office_por_nombre || "—")}
+          ${p.verif_office_por_email ? `<span class="m"> • ${esc(p.verif_office_por_email)}</span>` : ""}
+          ${p.verif_office_at ? `<div class="m">${esc(fmtDate(p.verif_office_at))}</div>` : `<div class="m">—</div>`}
+        </div>
+
+        <div class="k">Verificación FINAL</div>
+        <div class="v">
+          ${esc(p.verificado_por_nombre || "—")}
+          ${p.verificado_por_email ? `<span class="m"> • ${esc(p.verificado_por_email)}</span>` : ""}
+          ${p.verificado_at ? `<div class="m">${esc(fmtDate(p.verificado_at))}</div>` : `<div class="m">—</div>`}
+        </div>
+      </div>
+    `)}
+
+    <div class="foot">
+      <div>Generado: ${esc(fmtDate(new Date()))}</div>
+      <div>ID persona: ${esc(p.id_persona)}</div>
     </div>
-  `)}
 
-  ${
-    li
-      ? `<section class="section">
-          <div class="h2">Liderazgo e influencia</div>
-          <div class="kv">
-            <div class="k">Nivel</div><div class="v">${esc(liNivel || "—")}</div>
-            <div class="k">Tipos</div><div class="v">${esc(liTipos.length ? liTipos.join(", ") : "—")}</div>
-            <div class="k">Presencia territorial</div><div class="v">${esc(liPres || "—")}</div>
-            <div class="k">Estructura</div><div class="v">${esc(liEstructura || "—")}</div>
-            ${li?.tipo_otro_texto ? `<div class="k">Otro</div><div class="v">${esc(li.tipo_otro_texto)}</div>` : ``}
-          </div>
-        </section>`
-      : ""
-  }
-
-  ${
-    p.sin_controversias_publicas === true
-      ? `<section class="section">
-           <div class="h2">Controversias</div>
-           <div class="item">Marcado como <strong>Sin controversias públicas</strong>.</div>
-         </section>`
-      : listSection("Controversias", p.controversias, (c)=>`
-          <div class="item">
-            <div class="t">${esc(c.tipo || ("Tipo #" + (c.id_tipo ?? "—")))}</div>
-            <div class="m">${esc([c.estatus, c.fecha_registro].filter(Boolean).join(" • ") || "")}</div>
-            ${c.fuente ? `<div class="m">Fuente: ${esc(c.fuente)}</div>` : ``}
-            ${c.descripcion ? `<div class="m">${esc(c.descripcion)}</div>` : ``}
-          </div>
-        `)
-  }
-
-  <section class="section">
-    <div class="h2">Control de Historial</div>
-    <div class="kv">
-      <div class="k">Oficina</div><div class="v">${esc(p.oficina_nombre || "—")}</div>
-
-      <div class="k">Capturó</div><div class="v">${esc(p.creado_por_nombre || "—")}</div>
-      <div class="k">Creado</div><div class="v">${esc(fmtDate(p.created_at))}</div>
-
-      <div class="k">Modificó</div><div class="v">${esc(p.modificado_por_nombre || "—")}</div>
-      <div class="k">Actualizado</div><div class="v">${esc(fmtDate(p.updated_at))}</div>
-
-      <div class="k">Verificación AREA</div>
-      <div class="v">
-        ${esc(p.verif_area_por_nombre || "—")}
-        ${p.verif_area_por_email ? `<span class="m"> • ${esc(p.verif_area_por_email)}</span>` : ""}
-        ${p.verif_area_at ? `<div class="m">${esc(fmtDate(p.verif_area_at))}</div>` : `<div class="m">—</div>`}
-      </div>
-
-      <div class="k">Verificación OFFICE</div>
-      <div class="v">
-        ${esc(p.verif_office_por_nombre || "—")}
-        ${p.verif_office_por_email ? `<span class="m"> • ${esc(p.verif_office_por_email)}</span>` : ""}
-        ${p.verif_office_at ? `<div class="m">${esc(fmtDate(p.verif_office_at))}</div>` : `<div class="m">—</div>`}
-      </div>
-
-      <div class="k">Verificación FINAL</div>
-      <div class="v">
-        ${esc(p.verificado_por_nombre || "—")}
-        ${p.verificado_por_email ? `<span class="m"> • ${esc(p.verificado_por_email)}</span>` : ""}
-        ${p.verificado_at ? `<div class="m">${esc(fmtDate(p.verificado_at))}</div>` : `<div class="m">—</div>`}
-      </div>
-    </div>
-  </section>
-
-  <div class="foot">
-    <div>Generado: ${esc(fmtDate(new Date()))}</div>
-    <div>ID persona: ${esc(p.id_persona)}</div>
   </div>
-
 </body>
 </html>`;
 }
@@ -3200,24 +3475,41 @@ exports.getPerfilPdf = async (req, res) => {
 // KPI COMPLETUD PRO - BASADO EN getPerfilCompleto
 exports.kpiCompletitud = async (req, res) => {
   try {
-    const roles = req.user?.roles || [];
-    const isSuperadmin = roles.includes("superadmin");
-    const officeId = req.user?.id_oficina ?? null;
+        const roles = req.user?.roles || [];
+        const isSuperadmin = roles.includes("superadmin");
+        const officeId = req.user?.id_oficina ?? null;
+
+        // ✅ Params base FIJOS para rol/oficina
+        const params = [officeId, isSuperadmin];
+        const whereExtra = [];
+
+        // ✅ Smart filters SOLO extras (no sobrescribe base)
+        if (req.smartFilters?.addFullFilter) {
+          req.smartFilters.addFullFilter(params, whereExtra);
+        }
+
+        // ✅ WHERE base + extras
+        let whereBase = "($2::boolean = true OR p.id_oficina = $1::int)";
+        // ✅ DESPUÉS (asegura paréntesis)
+        if (whereExtra.length > 0) {
+          whereBase += ' AND (' + whereExtra.join(' AND ') + ')';
+        }
+
 
     const SQL = `
       WITH personas_filtradas AS (
         SELECT p.id_persona, p.id_oficina, p.creado_por
         FROM personas p
-        WHERE ($2::boolean = true OR p.id_oficina = $1::int)
+        WHERE ${whereBase}
       ),
       
-      -- 1. DATOS BASE (campos principales)
+       -- 1. DATOS BASE (campos principales)
       datos_base AS (
-        SELECT 
+        SELECT
           pf.id_persona,
           pf.id_oficina,
           pf.creado_por,
-          
+         
           -- IDENTIDAD (25%)
           (NULLIF(TRIM(COALESCE(p.nombre,'')), '') IS NOT NULL)::int * 5 +
           (NULLIF(TRIM(COALESCE(p.apellido_paterno,'')), '') IS NOT NULL)::int * 5 +
@@ -3225,18 +3517,20 @@ exports.kpiCompletitud = async (req, res) => {
           (NULLIF(TRIM(COALESCE(p.curp,'')), '') IS NOT NULL)::int * 5 +
           (NULLIF(TRIM(COALESCE(p.rfc,'')), '') IS NOT NULL)::int * 5 AS score_identidad,
 
+
           -- TERRITORIO (20%)
           (p.municipio_trabajo_politico IS NOT NULL)::int * 8 +
-          (CASE 
-            WHEN p.res_legal_fuera_edomex THEN 
+          (CASE
+            WHEN p.res_legal_fuera_edomex THEN
               NULLIF(TRIM(p.res_legal_municipio_texto), '') IS NOT NULL
-            ELSE p.municipio_residencia_legal IS NOT NULL 
+            ELSE p.municipio_residencia_legal IS NOT NULL
           END)::int * 6 +
-          (CASE 
-            WHEN p.res_real_fuera_edomex THEN 
-              NULLIF(TRIM(p.res_real_municipio_texto), '') IS NOT NULL 
-            ELSE p.municipio_residencia_real IS NOT NULL 
+          (CASE
+            WHEN p.res_real_fuera_edomex THEN
+              NULLIF(TRIM(p.res_real_municipio_texto), '') IS NOT NULL
+            ELSE p.municipio_residencia_real IS NOT NULL
           END)::int * 6 AS score_territorio,
+
 
           -- POLÍTICA (20%)
           (p.id_partido_actual IS NOT NULL)::int * 6 +
@@ -3244,24 +3538,27 @@ exports.kpiCompletitud = async (req, res) => {
           (p.id_grupo_postulacion IS NOT NULL)::int * 4 +
           (p.id_ideologia_politica IS NOT NULL)::int * 4 AS score_politica,
 
+
           -- CONTACTO (15%)
           (EXISTS(SELECT 1 FROM telefonos t WHERE t.id_persona = pf.id_persona))::int * 8 +
           (EXISTS(SELECT 1 FROM datos_ine di WHERE di.id_persona = pf.id_persona))::int * 4 +
           (EXISTS(SELECT 1 FROM redes_sociales_persona rsp WHERE rsp.id_persona = pf.id_persona))::int * 3 AS score_contacto,
+
 
           -- TRAYECTORIA (20%)
           (EXISTS(SELECT 1 FROM servicio_publico sp WHERE sp.id_persona = pf.id_persona))::int * 5 +
           (EXISTS(SELECT 1 FROM elecciones_contendidas ec WHERE ec.id_persona = pf.id_persona))::int * 5 +
           (EXISTS(SELECT 1 FROM cargos_eleccion_popular cep WHERE cep.id_persona = pf.id_persona))::int * 5 +
           (EXISTS(SELECT 1 FROM experiencia_laboral el WHERE el.id_persona = pf.id_persona))::int * 5 AS score_trayectoria
-          
+         
         FROM personas_filtradas pf
         JOIN personas p ON p.id_persona = pf.id_persona
       ),
 
+
       -- 2. SCORES FINALES POR PERSONA
       scored AS (
-        SELECT 
+        SELECT
           *,
           (score_identidad + score_territorio + score_politica + score_contacto + score_trayectoria)::numeric(5,2) AS score_total,
           score_identidad::numeric(5,2) AS pct_identidad,
@@ -3272,9 +3569,10 @@ exports.kpiCompletitud = async (req, res) => {
         FROM datos_base
       ),
 
+
       -- 3. GLOBAL
       global_stats AS (
-        SELECT 
+        SELECT
           COUNT(*)::int AS total_personas,
           ROUND(AVG(score_total), 2) AS score_promedio,
           ROUND(AVG(pct_identidad), 2) AS pct_identidad_prom,
@@ -3282,18 +3580,19 @@ exports.kpiCompletitud = async (req, res) => {
           ROUND(AVG(pct_politica), 2) AS pct_politica_prom,
           ROUND(AVG(pct_contacto), 2) AS pct_contacto_prom,
           ROUND(AVG(pct_trayectoria), 2) AS pct_trayectoria_prom,
-          
+         
           SUM(CASE WHEN score_total >= 80 THEN 1 ELSE 0 END)::int AS completos_80,
           ROUND(100.0 * SUM(CASE WHEN score_total >= 80 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_completos_80,
-          
+         
           SUM(CASE WHEN score_total < 50 THEN 1 ELSE 0 END)::int AS criticos_lt50,
           ROUND(100.0 * SUM(CASE WHEN score_total < 50 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_criticos_lt50
         FROM scored
       ),
 
+
       -- 4. POR USUARIO
       por_usuario AS (
-        SELECT 
+        SELECT
           u.id_usuario, u.nombre, u.email, u.area,
           COUNT(s.id_persona)::int AS total,
           ROUND(AVG(s.score_total), 2) AS score_promedio,
@@ -3305,9 +3604,10 @@ exports.kpiCompletitud = async (req, res) => {
         ORDER BY score_promedio DESC, total DESC
       ),
 
+
       -- 5. POR OFICINA
       por_oficina AS (
-        SELECT 
+        SELECT
           o.id_oficina, o.nombre AS oficina,
           COUNT(s.id_persona)::int AS total,
           ROUND(AVG(s.score_total), 2) AS score_promedio,
@@ -3319,26 +3619,27 @@ exports.kpiCompletitud = async (req, res) => {
         ORDER BY score_promedio DESC
       ),
 
+
       -- 6. TOP PROBLEMAS (faltan datos críticos)
       problemas AS (
-        SELECT 
+        SELECT
           'CURP'::text AS campo,
           COUNT(*)::int AS faltantes
         FROM personas_filtradas pf
         JOIN personas p ON p.id_persona = pf.id_persona
         WHERE NULLIF(TRIM(p.curp), '') IS NULL
-        
+       
         UNION ALL
-        
-        SELECT 
+       
+        SELECT
           'Teléfonos'::text AS campo,
           COUNT(*)::int AS faltantes
         FROM personas_filtradas pf
         WHERE NOT EXISTS(SELECT 1 FROM telefonos t WHERE t.id_persona = pf.id_persona)
-        
+       
         UNION ALL
-        
-        SELECT 
+       
+        SELECT
           'Trabajo Político'::text AS campo,
           COUNT(*)::int AS faltantes
         FROM personas_filtradas pf
@@ -3346,12 +3647,13 @@ exports.kpiCompletitud = async (req, res) => {
         WHERE p.municipio_trabajo_politico IS NULL
       )
 
-      SELECT 
+
+      SELECT
         (SELECT row_to_json(global_stats) FROM global_stats) AS global,
         (SELECT COALESCE(json_agg(por_usuario), '[]') FROM por_usuario) AS por_usuario,
         (SELECT COALESCE(json_agg(por_oficina), '[]') FROM por_oficina) AS por_oficina,
         (SELECT COALESCE(json_agg(problemas ORDER BY faltantes DESC), '[]') FROM problemas) AS problemas_criticos,
-        
+       
         -- SECCIONES PROMEDIO
         jsonb_build_object(
           'identidad', (SELECT ROUND(AVG(pct_identidad), 1) FROM scored),
@@ -3362,16 +3664,14 @@ exports.kpiCompletitud = async (req, res) => {
         ) AS secciones_promedio
     `;
 
-    const params = [officeId, isSuperadmin];
     const { rows } = await pool.query(SQL, params);
     return res.json(rows[0]);
 
   } catch (e) {
-    console.error(e);
+    console.error('ERROR COMPLETO:', e);  // ← Más detalle
     return res.status(500).json({ error: "Error KPI Completitud PRO", detail: e.message });
   }
 };
-
 
 
 // KPI MUNICIPIOS - CON FILTRO OFICINA (igual que kpiCompletitud)
@@ -3381,18 +3681,32 @@ exports.kpiMunicipios = async (req, res) => {
     const isSuperadmin = roles.includes("superadmin");
     const officeId = req.user?.id_oficina ?? null;
 
+    // ✅ SMART FILTERS - Igual que kpiCompletitud
+    const params = [officeId, isSuperadmin];
+    const whereExtra = [];
+
+    if (req.smartFilters?.addFullFilter) {
+      req.smartFilters.addFullFilter(params, whereExtra);
+    }
+
+    // ✅ WHERE base + extras
+    let whereBase = "($2::boolean = true OR p.id_oficina = $1::int)";
+    if (whereExtra.length > 0) {
+      const condicionesLimpias = whereExtra.map(cond => cond.trim().replace(/;\s*$/, ''));
+      whereBase += ' AND (' + condicionesLimpias.join(' AND ') + ')';
+    }
+
     const SQL = `
       WITH conteo AS (
         SELECT
           m.id_municipio,
           m.nombre AS municipio,
-          COUNT(p.id_persona)::int AS total  -- ← FIXED: COUNT real de personas
+          COUNT(p.id_persona)::int AS total
         FROM municipios m
         LEFT JOIN personas p ON p.municipio_trabajo_politico = m.id_municipio
-          AND ($2::boolean = true OR p.id_oficina = $1::int)  -- ← FILTRO AQUÍ
+          AND ${whereBase}  -- ✅ FILTRO INTEGRADO AQUÍ
         GROUP BY m.id_municipio, m.nombre
       ),
-      -- ... resto igual
       resumen AS (
         SELECT
           COUNT(*)::int AS total_municipios,
@@ -3422,17 +3736,22 @@ exports.kpiMunicipios = async (req, res) => {
         (SELECT COALESCE(json_agg(top10), '[]'::json) FROM top10) AS top10,
         (SELECT COALESCE(json_agg(bottom10), '[]'::json) FROM bottom10) AS bottom10,
         (SELECT COALESCE(json_agg(cero), '[]'::json) FROM cero) AS cero,
-        (SELECT COALESCE(json_agg(conteo ORDER BY municipio), '[]'::json) FROM conteo) AS conteo;
+        (SELECT COALESCE(json_agg(conteo ORDER BY municipio), '[]'::json) FROM conteo) AS conteo
     `;
 
-    const params = [officeId, isSuperadmin];
+    // DEBUG temporal (quítalo después)
+    console.log('DEBUG kpiMunicipios SQL:', SQL);
+    console.log('DEBUG kpiMunicipios params:', params);
+
     const { rows } = await pool.query(SQL, params);
     return res.json(rows[0]);
+
   } catch (e) {
-    console.error(e);
+    console.error('ERROR kpiMunicipios:', e);
     return res.status(500).json({ error: "Error KPI municipios", detail: e.message });
   }
 };
+
 
 
 
