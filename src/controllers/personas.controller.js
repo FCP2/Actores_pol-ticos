@@ -3739,9 +3739,6 @@ exports.kpiMunicipios = async (req, res) => {
         (SELECT COALESCE(json_agg(conteo ORDER BY municipio), '[]'::json) FROM conteo) AS conteo
     `;
 
-    // DEBUG temporal (quítalo después)
-    console.log('DEBUG kpiMunicipios SQL:', SQL);
-    console.log('DEBUG kpiMunicipios params:', params);
 
     const { rows } = await pool.query(SQL, params);
     return res.json(rows[0]);
