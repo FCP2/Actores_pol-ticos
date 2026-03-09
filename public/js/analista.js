@@ -166,7 +166,7 @@ function renderTrazabilidad(p) {
 
         <div class="timeline">
           ${verifItem({
-            title: "Director",
+            title: "Titular de la Dirección",
             at: p.verif_area_at,
             byName: p.verif_area_por_nombre,
             byId: p.verif_area_por,
@@ -174,7 +174,7 @@ function renderTrazabilidad(p) {
           })}
 
           ${verifItem({
-            title: "Coordinador",
+            title: "Titular de la Coordinación",
             at: p.verif_office_at,
             byName: p.verif_office_por_nombre,
             byId: p.verif_office_por,
@@ -182,7 +182,7 @@ function renderTrazabilidad(p) {
           })}
 
           ${verifItem({
-            title: "Subsecretario",
+            title: "Oficina Subsecretario",
             at: p.verificado_at,
             byName: p.verificado_por_nombre,
             byId: p.verificado_por,
@@ -239,62 +239,80 @@ function updateVerifButtons(p) {
     grid.setData();  // ← RECARGA REMOTA AUTOMÁTICA
   }
 
-  function setupFilterEvents() {
-    const fEstado = document.getElementById("fEstado");
-    const fSearch = document.getElementById("fSearch");
-    const btnBuscar = document.getElementById("btnBuscar");
-    const btnFiltrarRef = document.getElementById("btnFiltrarReferente");
+function setupFilterEvents() {
+  const fEstado = document.getElementById("fEstado");
+  const fSearch = document.getElementById("fSearch");
+  const btnBuscar = document.getElementById("btnBuscar");
+  const btnFiltrarRef = document.getElementById("btnFiltrarReferente");
 
-    const sel = document.getElementById("selReferente");
-    const txt = document.getElementById("txtReferente");
+  const sel = document.getElementById("selReferente");
+  const txt = document.getElementById("txtReferente");
+  const selNivel = document.getElementById("selRefNivel");
 
-    // ✅ NO return; solo proteges cada bloque
-    if (sel && txt) {
-      sel.addEventListener("change", () => {
-        const v = String(sel.value || "").trim();
-        txt.value = v;
+  if (selNivel) {
+    selNivel.addEventListener("change", async () => {
+      // limpia referente seleccionado
+      window._referenteMode = "";
+      window._referenteCargo = "";
+      if (txt) txt.value = "";
+      if (sel) sel.value = "";
 
-        window._referenteMode = v ? "exact" : "";
+      await loadReferentesSelect();
 
-        if (grid) grid.setPage(1);
-        refreshGridSafe();
-
-        document.getElementById("referenteSuggestions")?.classList.add("d-none");
-      });
-    }
-
-    if (fEstado) {
-      fEstado.addEventListener("change", () => {
-        if (grid) grid.setPage(1);
-        refreshGridSafe();
-      });
-    }
-
-    if (fSearch) {
-      const onSearch = debounce(() => {
-        if (grid) grid.setPage(1);
-        refreshGridSafe();
-      }, 500);
-      fSearch.addEventListener("input", onSearch);
-    }
-
-    if (btnBuscar) {
-      btnBuscar.addEventListener("click", () => {
-        if (grid) grid.setPage(1);
-        refreshGridSafe();
-      });
-    }
-
-    if (btnFiltrarRef) {
-      btnFiltrarRef.addEventListener("click", () => {
-        // si le dio click manual al botón, y el texto es un nombre completo,
-        // tú decides: yo lo trato como exact para que no meta “parecidos”
-        window._referenteMode = (txt?.value?.trim() ? "exact" : "");
-        if (grid) grid.setPage(1);
-        refreshGridSafe();
-      });
-    }
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+    });
   }
+
+  if (sel && txt) {
+    sel.addEventListener("change", () => {
+      const v = String(sel.value || "").trim();
+      const selectedOption = sel.options[sel.selectedIndex];
+
+      txt.value = v;
+
+      // exacto desde select
+      window._referenteMode = v ? "exact" : "";
+      window._referenteCargo = selectedOption?.dataset?.cargo || "";
+
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+
+      document.getElementById("referenteSuggestions")?.classList.add("d-none");
+    });
+  }
+
+  if (fEstado) {
+    fEstado.addEventListener("change", () => {
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+    });
+  }
+
+  if (fSearch) {
+    const onSearch = debounce(() => {
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+    }, 500);
+    fSearch.addEventListener("input", onSearch);
+  }
+
+  if (btnBuscar) {
+    btnBuscar.addEventListener("click", () => {
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+    });
+  }
+
+  if (btnFiltrarRef) {
+    btnFiltrarRef.addEventListener("click", () => {
+      // si filtra manualmente desde txt, dejamos fuzzy
+      if (!window._referenteMode) window._referenteCargo = "";
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+    });
+  }
+}
     // ============================
     // AUTOCOMPLETE REFERENTES
     // ============================
@@ -397,24 +415,30 @@ function escAttr(s){
 
 async function loadReferentesSelect(){
   const sel = document.getElementById("selReferente");
+  const selNivel = document.getElementById("selRefNivel");
   if(!sel) return;
 
   try{
-    const r = await apiGet(`/personas/admin/grid?mode=ref_list`);
+    const qs = new URLSearchParams();
+    qs.set("mode", "ref_list");
+
+    const nivel = String(selNivel?.value || "").trim();
+    if (nivel) qs.set("refNivel", nivel);
+
+    const r = await apiGet(`/personas/admin/grid?${qs.toString()}`);
     const items = r.data || [];
 
     sel.innerHTML = `<option value="">— Seleccionar referente —</option>`;
 
-    for (const x of items){
-      const nombre = String(x.nombre || "").trim();      // <- limpio
-      const menciones = Number(x.menciones || 0);
-
+    for (const x of items) {
       const opt = document.createElement("option");
-      opt.value = nombre;                                // <- SOLO nombre (sin contador)
-      opt.textContent = `${nombre} (${menciones})`;       // <- texto visible con contador
+      opt.value = String(x.nombre || "").trim(); // exact name
+      opt.textContent = `${x.label} (${x.menciones})`;
+      opt.dataset.cargo = String(x.cargo || "").trim();
+      opt.dataset.nivel = String(x.nivel || "").trim();
       sel.appendChild(opt);
     }
-  }catch(e){
+  } catch(e){
     console.error("Error cargando referentes", e);
   }
 }
@@ -504,13 +528,22 @@ async function loadReferentesSelect(){
         const capturistaId = document.getElementById("fUsuario")?.value;
         if (capturistaId) qs.set("capturistaId", capturistaId);
 
-        const ref = document.getElementById("txtReferente")?.value?.trim();
-        if (ref) {
-          qs.set("referente", ref);
+        const referente = document.getElementById("txtReferente")?.value?.trim();
+        if (referente) {
+          qs.set("referente", referente);
 
           if (window._referenteMode === "exact") {
             qs.set("refMode", "exact");
           }
+
+          if (window._referenteCargo) {
+            qs.set("referenteCargo", window._referenteCargo);
+          }
+        }
+
+        const refNivel = document.getElementById("selRefNivel")?.value?.trim();
+        if (refNivel) {
+          qs.set("refNivel", refNivel);
         }
 
         return apiGet(`/personas/admin/grid?${qs.toString()}`);
@@ -2080,7 +2113,7 @@ async function loadKpiCompletitud() {
               <i class="bi bi-exclamation-triangle"></i>
             </div>
             <div class="futurista-kpi-content">
-              <div class="futurista-kpi-label">Críticos &lt; 50%</div>
+              <div class="futurista-kpi-label">Formularios incompletos &lt; 50%</div>
               <div class="futurista-kpi-value">${g.criticos_lt50 ?? 0}</div>
               <div class="futurista-kpi-trend futurista-kpi-trend-down">
                 <i class="bi bi-arrow-down"></i> ${g.criticos_lt50 ?? 0} registros
