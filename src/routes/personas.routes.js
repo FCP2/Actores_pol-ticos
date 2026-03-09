@@ -41,8 +41,8 @@ router.get(
   ctrl.listCapturistasByOficina
 );
 
-router.get('/admin/kpis/completitud', requireAuth, requireRole('superadmin','analista'), ctrl.kpiCompletitud);
-router.get('/admin/kpis/municipios', requireAuth, requireRole('superadmin','analista'), ctrl.kpiMunicipios);
+router.get('/admin/kpis/completitud', requireAuth, requireRole('superadmin','analista'), applySmartFilters, ctrl.kpiCompletitud);
+router.get('/admin/kpis/municipios', requireAuth, requireRole('superadmin','analista'), applySmartFilters,  ctrl.kpiMunicipios);
 
 router.post(
   '/',
