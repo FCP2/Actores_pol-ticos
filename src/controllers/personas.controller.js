@@ -188,8 +188,13 @@ exports.listPersonasAdminGrid = async (req, res) => {
     const refNivel = ["municipal", "regional", "distrital", "estatal", "nacional"].includes(refNivelRaw)
       ? refNivelRaw
       : "";
-
+      
+    //filtro un municipio de trabajpo político y mas de un municipio de trabajo politico
     const q = (req.query.q || "").trim();
+    const multiplesMunicipios =
+      (req.query.multiples_municipios === "1" || req.query.multiples_municipios === "0")
+        ? req.query.multiples_municipios
+        : null;
 
     // 👇 este filtro lo dejamos como “FINAL” (superadmin)
     const verificado = (req.query.verificado === "1" || req.query.verificado === "0")
@@ -242,6 +247,30 @@ exports.listPersonasAdminGrid = async (req, res) => {
           OR COALESCE(p.curp,'') ILIKE $${i}
           OR COALESCE(p.rfc,'') ILIKE $${i}
           OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
+      `);
+    }
+//filtro mas de un municipio de trabajo politico
+    if (multiplesMunicipios === "1") {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM personas_municipios_trabajo pmt
+          WHERE pmt.id_persona = p.id_persona
+          GROUP BY pmt.id_persona
+          HAVING COUNT(*) > 1
+        )
+      `);
+    }
+
+    if (multiplesMunicipios === "0") {
+      where.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM personas_municipios_trabajo pmt
+          WHERE pmt.id_persona = p.id_persona
+          GROUP BY pmt.id_persona
+          HAVING COUNT(*) > 1
         )
       `);
     }
@@ -430,6 +459,12 @@ exports.listPersonasAdminGrid = async (req, res) => {
           WHERE rp.id_persona = p.id_persona
         ), '') AS referentes_nombres,
 
+        COALESCE((
+          SELECT COUNT(*)::int
+          FROM personas_municipios_trabajo pmt
+          WHERE pmt.id_persona = p.id_persona
+        ), 0) AS total_municipios_trabajo,
+
         p.municipio_trabajo_politico,
         mt.nombre AS municipio_trabajo_nombre,
         p.created_at,
@@ -465,6 +500,292 @@ exports.listPersonasAdminGrid = async (req, res) => {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Error al obtener grid", detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+
+//endppint para personas con varios municipios de trabajo politico
+exports.listPersonasAdminGridMapaMunicipios = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    // -------- filtros base
+    let oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
+    const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+
+    const referente = (req.query.referente || "").trim();
+    const referenteCargo = (req.query.referenteCargo || "").trim();
+
+    const refNivelRaw = (req.query.refNivel || "").trim().toLowerCase();
+    const refNivel = ["municipal", "regional", "distrital", "estatal", "nacional"].includes(refNivelRaw)
+      ? refNivelRaw
+      : "";
+
+    const q = (req.query.q || "").trim();
+
+    const verificado = (req.query.verificado === "1" || req.query.verificado === "0")
+      ? req.query.verificado
+      : null;
+
+    const multiplesMunicipios =
+      (req.query.multiples_municipios === "1" || req.query.multiples_municipios === "0")
+        ? req.query.multiples_municipios
+        : null;
+
+    const refMode = String(req.query.refMode || "").trim(); // "exact" | ""
+
+    // -------- SMART FILTERS
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+    addFullFilter(params, where);
+
+    // -------- filtros manuales
+    if (oficinaId) {
+      params.push(oficinaId);
+      where.push(`p.id_oficina = $${params.length}`);
+    }
+
+    if (capturistaId) {
+      params.push(capturistaId);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
+      params.push(idMunTrabajo);
+      where.push(`p.municipio_trabajo_politico = $${params.length}`);
+    }
+
+    if (q) {
+      params.push(`%${q}%`);
+      const i = params.length;
+      where.push(`
+        (
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
+      `);
+    }
+
+    // -------- filtro referente
+    if (referente || refNivel) {
+      const refParts = [];
+
+      if (referente) {
+        const ref = referente.toLowerCase().trim();
+        params.push(ref);
+        const i = params.length;
+
+        if (refMode === "exact") {
+          refParts.push(`rp.nombre_full = $${i}`);
+        } else {
+          refParts.push(`
+            (
+              (length($${i}) < 6 AND rp.nombre_full LIKE ($${i} || '%'))
+              OR word_similarity(rp.nombre_full, $${i}) > 0.15
+              OR similarity(rp.nombre_full, $${i}) > 0.15
+            )
+          `);
+        }
+      }
+
+      if (referenteCargo) {
+        params.push(referenteCargo.toLowerCase().trim());
+        const j = params.length;
+        refParts.push(`COALESCE(lower(trim(rp.cargo)), '') = $${j}`);
+      }
+
+      if (refNivel) {
+        params.push(refNivel);
+        const k = params.length;
+        refParts.push(`COALESCE(lower(trim(rp.nivel)), '') = $${k}`);
+      }
+
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM referentes_politicos rp
+          WHERE rp.id_persona = p.id_persona
+            AND ${refParts.join(" AND ")}
+        )
+      `);
+    }
+
+    // -------- verificado final
+    if (verificado === "1") where.push(`p.verificado_at IS NOT NULL`);
+    if (verificado === "0") where.push(`p.verificado_at IS NULL`);
+
+    // -------- filtro por múltiples municipios
+    if (multiplesMunicipios === "1") {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM personas_municipios_trabajo pmt
+          WHERE pmt.id_persona = p.id_persona
+          GROUP BY pmt.id_persona
+          HAVING COUNT(*) > 1
+        )
+      `);
+    }
+
+    if (multiplesMunicipios === "0") {
+      where.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM personas_municipios_trabajo pmt
+          WHERE pmt.id_persona = p.id_persona
+          GROUP BY pmt.id_persona
+          HAVING COUNT(*) > 1
+        )
+      `);
+    }
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sql = `
+      WITH personas_filtradas AS (
+        SELECT
+          p.id_persona,
+          p.municipio_trabajo_politico
+        FROM personas p
+        ${whereSQL}
+      ),
+      municipios_union AS (
+        -- municipio principal
+        SELECT DISTINCT
+          pf.id_persona,
+          pf.municipio_trabajo_politico AS id_municipio
+        FROM personas_filtradas pf
+        WHERE pf.municipio_trabajo_politico IS NOT NULL
+
+        UNION
+
+        -- municipios adicionales
+        SELECT DISTINCT
+          pmt.id_persona,
+          pmt.id_municipio
+        FROM personas_municipios_trabajo pmt
+        INNER JOIN personas_filtradas pf ON pf.id_persona = pmt.id_persona
+      )
+      SELECT
+        mu.id_municipio,
+        m.nombre AS municipio,
+        COUNT(*)::int AS total
+      FROM municipios_union mu
+      LEFT JOIN municipios m ON m.id_municipio = mu.id_municipio
+      GROUP BY mu.id_municipio, m.nombre
+      ORDER BY m.nombre ASC
+    `;
+
+    const { rows } = await client.query(sql, params);
+
+    return res.json({ ok: true, data: rows });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al obtener municipios del mapa",
+      detail: e.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+//filtro clic solo persona para ver sus municipios de trabajo politico
+
+exports.getPersonaMunicipiosTrabajo = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id_persona = Number(req.params.id);
+    if (!Number.isFinite(id_persona) || id_persona <= 0) {
+      return res.status(400).json({ error: "id inválido" });
+    }
+
+    // ✅ gate de seguridad con smartFilters
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+    addFullFilter(params, where);
+
+    params.push(id_persona);
+    where.push(`p.id_persona = $${params.length}`);
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sql = `
+      WITH persona_filtrada AS (
+        SELECT
+          p.id_persona,
+          p.nombre,
+          p.apellido_paterno,
+          p.apellido_materno,
+          p.municipio_trabajo_politico
+        FROM personas p
+        ${whereSQL}
+        LIMIT 1
+      ),
+      municipios_union AS (
+        -- principal
+        SELECT DISTINCT
+          pf.id_persona,
+          pf.municipio_trabajo_politico AS id_municipio,
+          true AS es_principal,
+          NULL::varchar AS notas
+        FROM persona_filtrada pf
+        WHERE pf.municipio_trabajo_politico IS NOT NULL
+
+        UNION
+
+        -- adicionales
+        SELECT DISTINCT
+          pmt.id_persona,
+          pmt.id_municipio,
+          COALESCE(pmt.es_principal, false) AS es_principal,
+          pmt.notas
+        FROM personas_municipios_trabajo pmt
+        INNER JOIN persona_filtrada pf ON pf.id_persona = pmt.id_persona
+      )
+      SELECT
+        pf.id_persona,
+        (pf.nombre || ' ' || COALESCE(pf.apellido_paterno,'') || ' ' || COALESCE(pf.apellido_materno,'')) AS nombre_completo,
+        mu.id_municipio,
+        m.nombre AS municipio,
+        mu.es_principal,
+        mu.notas
+      FROM persona_filtrada pf
+      JOIN municipios_union mu ON mu.id_persona = pf.id_persona
+      LEFT JOIN municipios m ON m.id_municipio = mu.id_municipio
+      ORDER BY mu.es_principal DESC, m.nombre ASC
+    `;
+
+    const { rows } = await client.query(sql, params);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: "Persona no encontrada o sin acceso" });
+    }
+
+    return res.json({
+      ok: true,
+      persona: {
+        id_persona: rows[0].id_persona,
+        nombre_completo: rows[0].nombre_completo
+      },
+      data: rows.map(r => ({
+        id_municipio: r.id_municipio,
+        municipio: r.municipio,
+        es_principal: r.es_principal,
+        notas: r.notas
+      }))
+    });
+
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Error al obtener municipios de la persona", detail: e.message });
   } finally {
     client.release();
   }
@@ -3739,7 +4060,7 @@ exports.kpiMunicipios = async (req, res) => {
         (SELECT COALESCE(json_agg(conteo ORDER BY municipio), '[]'::json) FROM conteo) AS conteo
     `;
 
-
+    // DEBUG temporal (quítalo después)
     const { rows } = await pool.query(SQL, params);
     return res.json(rows[0]);
 
