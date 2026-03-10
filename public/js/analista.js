@@ -249,6 +249,8 @@ function setupFilterEvents() {
   const txt = document.getElementById("txtReferente");
   const selNivel = document.getElementById("selRefNivel");
 
+  const fMultiMunicipio = document.getElementById("fMultiMunicipio");
+
   if (selNivel) {
     selNivel.addEventListener("change", async () => {
       // limpia referente seleccionado
@@ -308,6 +310,13 @@ function setupFilterEvents() {
     btnFiltrarRef.addEventListener("click", () => {
       // si filtra manualmente desde txt, dejamos fuzzy
       if (!window._referenteMode) window._referenteCargo = "";
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+    });
+  }
+
+  if (fMultiMunicipio) {
+    fMultiMunicipio.addEventListener("change", () => {
       if (grid) grid.setPage(1);
       refreshGridSafe();
     });
@@ -546,6 +555,12 @@ async function loadReferentesSelect(){
           qs.set("refNivel", refNivel);
         }
 
+        //filtro por municipios de trabajo politico
+        const multiplesMunicipios = document.getElementById("fMultiMunicipio")?.value;
+        if (multiplesMunicipios !== "") {
+          qs.set("multiples_municipios", multiplesMunicipios);
+        }
+
         return apiGet(`/personas/admin/grid?${qs.toString()}`);
       },
 
@@ -560,23 +575,29 @@ async function loadReferentesSelect(){
         updateKPIs(total, oficiales, pendientes);
 
         // ============================
-        // MAPA: highlight por referente
+        // MAPA
         // ============================
         const ref = document.getElementById("txtReferente")?.value?.trim();
+        const multiplesMunicipios = document.getElementById("fMultiMunicipio")?.value;
 
-        if (!ref) {
-          // sin filtro → vuelve a cobertura normal
-          if (window.mapReady) window.resetMunicipiosHighlight?.();
+        // ✅ si está activo el filtro de múltiples municipios,
+        // usa el endpoint nuevo que pinta principal + adicionales
+        if (multiplesMunicipios === "1") {
+          loadAndPaintFilteredMunicipios();
         } else {
-          // con filtro → resalta municipios del RESULTADO (ids)
-          const ids = [...new Set(
-            data.map(x => Number(x.municipio_trabajo_politico)).filter(Boolean)
-          )];
-
-          if (window.mapReady && window.highlightMunicipiosByIdList) {
-            window.highlightMunicipiosByIdList(ids, { dimOthers: true });
+          // ✅ comportamiento normal actual
+          if (!ref) {
+            if (window.mapReady) window.resetMunicipiosHighlight?.();
           } else {
-            window._pendingHighlightMunicipiosById = ids;
+            const ids = [...new Set(
+              data.map(x => Number(x.municipio_trabajo_politico)).filter(Boolean)
+            )];
+
+            if (window.mapReady && window.highlightMunicipiosByIdList) {
+              window.highlightMunicipiosByIdList(ids, { dimOthers: true });
+            } else {
+              window._pendingHighlightMunicipiosById = ids;
+            }
           }
         }
 
@@ -681,6 +702,18 @@ async function loadReferentesSelect(){
         { title: "Nombre", field: "nombre_completo", sorter: "string", minWidth: 220 },
         { title: "Municipio", field: "municipio_trabajo_nombre", sorter: "string", width: 160 },
         {
+          title: "Total Mun. trabajo político",
+          field: "total_municipios_trabajo",
+          hozAlign: "center",
+          width: 110,
+          formatter: (cell) => {
+            const n = Number(cell.getValue() || 0);
+            if (n > 1) return `<span class="badge bg-warning text-dark">${n}</span>`;
+            if (n === 1) return `<span class="badge bg-secondary">1</span>`;
+            return `<span class="text-muted">0</span>`;
+          }
+        },
+        {
           title: "Capturó",
           field: "creado_por_nombre",
           minWidth: 220,
@@ -712,10 +745,11 @@ async function loadReferentesSelect(){
 
       
       // ✅ AQUÍ SÍ puedes hacer cualquier acción
-      grid.on("rowClick", (e, row) => {
+      grid.on("rowClick", async (e, row) => {
         const data = row.getData();
         selectedRow = row;
         selectedData = data;
+
         renderTrazabilidad(selectedData);
         updateVerifButtons(selectedData);
 
@@ -724,6 +758,14 @@ async function loadReferentesSelect(){
         if (btnV) btnV.disabled = !!data.verificado_at;
         if (btnDV) btnDV.disabled = !data.verificado_at;
 
+        // ✅ modo pro: si está activo filtro de múltiples municipios, enfocar persona
+        const multi = document.getElementById("fMultiMunicipio")?.value;
+        if (multi === "1" && data.id_persona) {
+          await loadPersonaMunicipiosTrabajo(data.id_persona);
+          return;
+        }
+
+        // comportamiento normal anterior
         const mun = data.municipio_trabajo_nombre;
         if (window.selectMunicipioByName && mun) {
           window.selectMunicipioByName(mun);
@@ -733,6 +775,18 @@ async function loadReferentesSelect(){
  
 
   }
+
+  //salir modo filtro
+  document.getElementById("btnResetMapaFiltroMulti")?.addEventListener("click", async () => {
+    const multi = document.getElementById("fMultiMunicipio")?.value;
+    if (multi === "1") {
+      await loadAndPaintFilteredMunicipios();
+    } else {
+      window.resetMunicipiosHighlight?.();
+    }
+
+    renderPersonaMunicipiosPanel(null, []);
+  });
 
 
 
@@ -842,7 +896,7 @@ async function loadReferentesSelect(){
   });
 
 
-  // 1. initEvents() COMPLETO:
+  // 1. initEvents()
   function initEvents() {
     // 🔥 FILTRO TARJETAS
     document.getElementById("btnIrCaptura")?.addEventListener("click", () => {
@@ -977,7 +1031,130 @@ async function loadReferentesSelect(){
         window.setMunicipioCoverageCounts?.(countsMap);
       }
   }
+//funcion para filtrar y pintar mapa muchos municipios
+  async function loadAndPaintFilteredMunicipios() {
+    try {
+      const qs = new URLSearchParams();
 
+      // filtros iguales al grid
+      const estado = document.getElementById("fEstado")?.value;
+      if (estado && estado !== "all") {
+        qs.set("verificado", estado);
+      }
+
+      const search = document.getElementById("fSearch")?.value?.trim();
+      if (search) {
+        qs.set("q", search);
+      }
+
+      const capturistaId = document.getElementById("fUsuario")?.value;
+      if (capturistaId) {
+        qs.set("capturistaId", capturistaId);
+      }
+
+      const referente = document.getElementById("txtReferente")?.value?.trim();
+      if (referente) {
+        qs.set("referente", referente);
+
+        if (window._referenteMode === "exact") {
+          qs.set("refMode", "exact");
+        }
+
+        if (window._referenteCargo) {
+          qs.set("referenteCargo", window._referenteCargo);
+        }
+      }
+
+      const refNivel = document.getElementById("selRefNivel")?.value?.trim();
+      if (refNivel) {
+        qs.set("refNivel", refNivel);
+      }
+
+      const multiplesMunicipios = document.getElementById("fMultiMunicipio")?.value;
+      if (multiplesMunicipios !== "") {
+        qs.set("multiples_municipios", multiplesMunicipios);
+      }
+
+      const resp = await apiGet(`/personas/admin/grid/mapa-municipios?${qs.toString()}`);
+      const rows = resp.data || [];
+
+      const ids = rows.map(x => Number(x.id_municipio)).filter(Boolean);
+
+      if (!ids.length) {
+        window.resetMunicipiosHighlight?.();
+        return;
+      }
+
+      if (window.mapReady && window.highlightMunicipiosByIdList) {
+        window.highlightMunicipiosByIdList(ids, { dimOthers: true });
+      } else {
+        window._pendingHighlightMunicipiosById = ids;
+      }
+
+    } catch (e) {
+      console.error("Error cargando municipios filtrados para mapa:", e);
+    }
+  }
+
+  async function loadPersonaMunicipiosTrabajo(idPersona) {
+    try {
+      const resp = await apiGet(`/personas/${idPersona}/municipios-trabajo`);
+      const rows = resp.data || [];
+
+      const ids = rows.map(x => Number(x.id_municipio)).filter(Boolean);
+
+      // ✅ pinta mapa solo con esos municipios
+      if (ids.length) {
+        if (window.mapReady && window.highlightMunicipiosByIdList) {
+          window.highlightMunicipiosByIdList(ids, { dimOthers: true });
+        } else {
+          window._pendingHighlightMunicipiosById = ids;
+        }
+      } else {
+        window.resetMunicipiosHighlight?.();
+      }
+
+      // ✅ panel lateral
+      renderPersonaMunicipiosPanel(resp.persona, rows);
+
+    } catch (e) {
+      console.error("Error cargando municipios de persona:", e);
+      renderPersonaMunicipiosPanel(null, []);
+    }
+  }
+  //render panel pequeño que muestra los municipios
+  function renderPersonaMunicipiosPanel(persona, rows) {
+      const el = document.getElementById("panelMunicipiosPersona");
+      if (!el) return;
+
+      if (!persona || !Array.isArray(rows) || !rows.length) {
+        el.innerHTML = `
+          <div class="text-muted">
+            Sin municipios de trabajo disponibles para esta persona.
+          </div>
+        `;
+        return;
+      }
+
+      el.innerHTML = `
+        <div class="mb-2">
+          <div class="fw-semibold text-dark">${persona.nombre_completo || "—"}</div>
+          <div class="small text-muted">Municipios asociados: ${rows.length}</div>
+        </div>
+
+        <div class="d-flex flex-column gap-2">
+          ${rows.map(r => `
+            <div class="border rounded px-2 py-2 bg-light-subtle">
+              <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="fw-semibold text-dark">${r.municipio || "—"}</div>
+                ${r.es_principal ? `<span class="badge bg-success">Principal</span>` : `<span class="badge bg-secondary">Secundario</span>`}
+              </div>
+              ${r.notas ? `<div class="small text-muted mt-1">${r.notas}</div>` : ``}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
 
   async function init() {
     try { await initUserHeader(); } catch (e) { console.warn(e); }
