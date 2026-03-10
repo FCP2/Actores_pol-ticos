@@ -26,6 +26,24 @@ router.get("/admin/grid", [
   ctrl.listPersonasAdminGrid
 ]);
 
+router.get(
+  '/admin/grid/mapa-municipios',
+  requireAuth,
+  requireRole('analista', 'superadmin'),
+  requireOffice,
+  applySmartFilters,
+  ctrl.listPersonasAdminGridMapaMunicipios
+);
+
+router.get(
+  '/:id/municipios-trabajo',
+  requireAuth,
+  requireRole('analista', 'superadmin'),
+  requireOffice,
+  applySmartFilters,
+  ctrl.getPersonaMunicipiosTrabajo
+);
+
 router.get("/admin/cards", requireAuth, requireRole('superadmin','analista'), applySmartFilters, ctrl.getAdminCards);
 router.get(
   '/admin/oficinas',
