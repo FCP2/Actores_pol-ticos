@@ -54,7 +54,6 @@
       }
     })();
   </script>
-  <!-- NAVBAR SUPERIOR - CAMBIA bg-dark por edomex-navbar -->
 <!-- NAVBAR SUPERIOR -->
 <nav class="navbar navbar-dark edomex-navbar">
   <div class="container-fluid">
@@ -166,6 +165,16 @@
                   <option value="">— Seleccionar referente —</option>
                 </select>
               </div>
+              <div class="col-md-3">
+                <label class="form-label fw-semibold text-custom-primary">
+                  Municipios con trabajo político
+                </label>
+                <select id="fMultiMunicipio" class="form-select">
+                  <option value="">— Todos —</option>
+                  <option value="1">Más de un municipio</option>
+                  <option value="0">Uno o ninguno</option>
+                </select>
+              </div>
             </div>
 
             <hr class="my-3">
@@ -250,6 +259,21 @@
               </button>
             </div>
             <div id="map"></div>
+            <div class="card border-0 shadow-sm mt-3" id="panelMunicipiosPersonaWrap">
+              <button class="btn btn-outline-secondary btn-sm mt-2" id="btnResetMapaFiltroMulti">
+                Volver a vista general
+              </button>
+              <div class="card-body p-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <i class="bi bi-geo-alt-fill text-danger"></i>
+                  <span class="fw-semibold text-custom-primary">Municipios de trabajo político del actor(a)</span>
+                </div>
+
+                <div id="panelMunicipiosPersona" class="small text-muted">
+                  Selecciona una persona en la tabla para ver sus municipios de trabajo.
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <!-- ===================== TARJETAS ===================== -->
