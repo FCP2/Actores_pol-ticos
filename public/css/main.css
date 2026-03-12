@@ -31,6 +31,10 @@
     --institucional-gold: #b89056;
     --institucional-light: rgba(139,33,54,0.04);
     --shadow-soft: 0 2px 8px rgba(0,0,0,0.06);
+    --inst-maroon: #8b2136;
+    --inst-gold: #b89056;
+    --inst-gold-light: #f4eee1;
+    --inst-gray: #6c757d;
     }
     body{
       min-height: 100dvh;
@@ -774,7 +778,7 @@ hr.border-institucional {
 }
 
 
-/* COLOR INSTITUCIONAL - AZUL GOBIERNO MÉXICO */
+
 /* 🎨 EDO MÉXICO GUINDA - SUPERIOR E INFERIOR IGUAL */
 .edomex-navbar {
   background: linear-gradient(135deg, #8B1538 0%, #A61C3E 50%, #8B1538 100%) !important;
@@ -1507,12 +1511,84 @@ canvas {
   font-weight: 700;
 }
 
-/* Auditoría card */
-#panelTrazabilidad{
-  padding: 12px 12px;
-  border: 1px dashed rgba(15,23,42,.18);
-  border-radius: 12px;
-  background: rgba(248,250,252,.8);
+/* Auditoría card*/ 
+
+.timeline-container {
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  padding: 1rem;
+}
+
+.timeline {
+  position: relative;
+  padding-left: 1.5rem;
+  border-left: 2px solid #e9ecef;
+  margin-left: 0.75rem;
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -2.05rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--inst-gold);
+  border: 2px solid white;
+  box-shadow: 0 0 0 2px var(--inst-gold-light);
+}
+
+.timeline-content {
+  background: #ffffff;
+  border-radius: 4px;
+}
+
+/* Colores de fondo personalizados para los puntos (dots) */
+.bg-inst-maroon { background-color: var(--inst-maroon) !important; }
+.bg-light-gold { 
+    background-color: #fff !important; 
+    border: 2px solid var(--inst-gold) !important; 
+}
+
+/* Etiquetas de estado debajo del título */
+.status-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 1.4rem; /* Alinea con el texto después del icono */
+  font-weight: 600;
+}
+
+/* Efecto de desvanecimiento para items pendientes */
+.item-pending .timeline-content {
+  opacity: 0.7;
+}
+
+.item-validated .timeline-content {
+  border-left: 3px solid var(--inst-maroon);
+  padding-left: 10px;
+  margin-left: -13px; /* Ajuste para que la línea de acento luzca elegante */
+}
+
+/* Colores de texto personalizados */
+.text-inst-maroon { color: var(--inst-maroon) !important; }
+.text-inst-gold { color: var(--inst-gold) !important; }
+
+/* Ajuste de badges para que luzcan más "premium" */
+.badge-id {
+  background-color: var(--inst-maroon);
+  color: white;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.header-section {
+  border-bottom: 2px solid var(--inst-gold-light);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
 }
 
 /* Modal perfil: header gradiente */
@@ -1639,4 +1715,246 @@ canvas {
 #btnIrCaptura:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0,0,0,.2);
+}
+/*estilos bloque panel ejeutivo para mas d eun municipio en trabajo politico*/
+/* ================================
+   PANEL TERRITORIAL EJECUTIVO
+================================ */
+
+#panelMunicipiosPersonaWrap {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+#panelMunicipiosPersonaWrap .card-header {
+  background: linear-gradient(90deg,#8b2136,#a7374f);
+  color: white;
+  padding: 14px 18px;
+}
+
+#panelMunicipiosPersonaWrap .card-header .text-muted {
+  color: rgba(255,255,255,0.75) !important;
+  letter-spacing: .04em;
+}
+
+#panelMunicipiosPersonaWrap .card-header .fw-bold {
+  color: white;
+}
+
+#panelMunicipiosPersonaWrap .card-body {
+  background: #fafafa;
+}
+
+
+/* Tarjeta persona seleccionada */
+
+.panel-persona-header {
+  border-radius: 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  padding: 14px 16px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.05);
+}
+
+.panel-persona-header .persona-nombre {
+  font-weight: 700;
+  font-size: 14px;
+  color: #111827;
+}
+
+.panel-persona-header .persona-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+
+/* Contadores */
+
+.panel-kpis {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.panel-kpis .badge {
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 8px;
+}
+
+
+/* Lista municipios */
+
+.panel-municipios {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-municipio {
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  padding: 10px 12px;
+  transition: all .15s ease;
+}
+
+.panel-municipio:hover {
+  background: #f3f4f6;
+  transform: translateY(-1px);
+}
+
+.panel-municipio-nombre {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
+}
+
+.panel-municipio-notas {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 3px;
+}
+
+.panel-municipio .badge {
+  font-size: 10px;
+  padding: 4px 8px;
+}
+
+
+/* Botón reset */
+
+#btnResetMapaFiltroMulti {
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/*mini grafico render municipios por persona*/
+/* ================================
+   MINI GRÁFICO TERRITORIAL
+================================ */
+.panel-mini-chart {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.04);
+}
+
+.panel-mini-chart-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.panel-mini-chart-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.territorial-bar-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 58px;
+  gap: 10px;
+  align-items: center;
+}
+
+.territorial-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.territorial-bar-track {
+  position: relative;
+  height: 10px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.territorial-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width .25s ease;
+}
+
+.territorial-bar-fill.principal {
+  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+}
+
+.territorial-bar-fill.secundario {
+  background: linear-gradient(90deg, #60a5fa, #93c5fd);
+}
+
+.territorial-bar-value {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-align: right;
+}
+/*multiseleccion accion aplicable. grupos de postulacion:*/
+.multi-panel {
+  border: 1px solid #d9dee7;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.multi-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.multi-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #eceff4;
+  border-radius: 10px;
+  background: #fafbfc;
+  transition: all .15s ease;
+  cursor: pointer;
+}
+
+.multi-option:hover {
+  background: #f3f6f9;
+  border-color: #cfd8e3;
+}
+
+.multi-option input[type="checkbox"] {
+  margin-top: 2px;
+  transform: scale(1.05);
+  cursor: pointer;
+}
+
+.multi-option-text {
+  flex: 1 1 auto;
+  line-height: 1.25;
+}
+
+.multi-option-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.multi-option-sub {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
 }
