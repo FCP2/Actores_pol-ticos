@@ -953,9 +953,33 @@
                   <label class="form-label text-institucional mb-2">
                     <i class="bi bi-check2-square me-1"></i>Acción afirmativa aplicable
                   </label>
-                  <select class="form-select form-control-institucional" id="selGrupoPostulacion" name="id_grupo_postulacion">
-                    <option value="">Seleccione</option>
-                  </select>
+
+                  <!-- Resumen / botón -->
+                  <button type="button" class="form-select text-start form-control-institucional" id="btnGrupoPostulacionToggle">
+                    <span id="txtGrupoPostulacionResumen">Seleccione uno o varios grupos</span>
+                  </button>
+
+                  <!-- Panel -->
+                  <div class="multi-panel shadow-sm d-none mt-2" id="panelGrupoPostulacion">
+                    <div class="multi-actions d-flex justify-content-between align-items-center mb-2">
+                      <small class="text-muted">Selecciona uno o varios</small>
+                      <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-link btn-sm p-0" id="btnGrupoSelectAll">Todos</button>
+                        <button type="button" class="btn btn-link btn-sm p-0" id="btnGrupoClear">Limpiar</button>
+                      </div>
+                    </div>
+
+                    <div id="grupoPostulacionChecklist" class="multi-checklist">
+                      <!-- se llena por JS -->
+                    </div>
+                  </div>
+
+                  <!-- hidden para compatibilidad si quieres -->
+                  <input type="hidden" id="grupoPostulacionPrincipal" name="id_grupo_postulacion">
+
+                  <div class="form-text">
+                    Puedes seleccionar uno o varios grupos.
+                  </div>
                 </div>
               </div>
 
@@ -1218,6 +1242,18 @@
                   </div>
                 </div>
               </div>
+
+              <div class="col-md-6">
+                <div class="form-check d-flex align-items-center p-2 rounded hover-shadow">
+                  <i class="bi bi-globe text-institucional me-3 fs-3"></i>
+                  <div class="flex-grow-1">
+                    <input class="form-check-input fuenteChk me-2" type="checkbox" value="4" id="fuente_4">
+                    <label class="form-check-label mb-0 fw-medium" for="fuente_4">
+                      Internet
+                    </label>
+                  </div>
+                </div>
+              </div>
               
               <div class="col-12">
                 <div class="form-check d-flex align-items-center p-2 rounded hover-shadow">
@@ -1231,6 +1267,7 @@
                 </div>
               </div>
             </div>
+
 
             <!-- Detalle -->
             <div class="mb-3">
@@ -1305,7 +1342,7 @@
             </div>
 
             <div class="form-text mt-3" id="helpConfiabilidad">
-              Consejo: si la mayoría proviene de <b>documentos oficiales</b> o <b>entrevista directa</b>, suele ser <b>Alto</b>.
+              Consejo: si la mayoría proviene de <b>documentos oficiales</b>, suele ser <b>Alto</b>.
             </div>
 
             <!-- Mensaje de validación (si lo haces obligatorio) -->
@@ -1734,9 +1771,11 @@ async function onDeletePersona(id_persona) {
     if (editingId === Number(id_persona)) cancelEditing();
 
     if (typeof reloadPanelPersonas === "function") await reloadPanelPersonas();
+    return true;
   } catch (e) {
     console.error(e);
     showAlert("danger", "No pude eliminar: " + e.message);
+    return false;
   }
 }
 
@@ -2318,11 +2357,13 @@ async function onDeletePersona(id_persona) {
       inpOtro.classList.remove('is-invalid');
     }
 
-    // 4) Grupo postulación (single)
-    const selGrupo = document.getElementById('selGrupoPostulacion');
-    if (selGrupo) {
-      selGrupo.value = payload?.persona?.id_grupo_postulacion ?? '';
-    }
+    // 4) Grupo postulación (multi)
+    const gruposPayload =
+      Array.isArray(payload?.grupos_postulacion) && payload.grupos_postulacion.length
+        ? payload.grupos_postulacion
+        : (payload?.persona?.id_grupo_postulacion ? [payload.persona.id_grupo_postulacion] : []);
+
+    setGrupoPostulacionSeleccionados(gruposPayload);
 
     // 5) Aplicar toggle de UI para “Otro”
     // (importante hacerlo después de setear el select)
@@ -3735,6 +3776,9 @@ function refreshHijosParejasSelects() {
     const fa_grado_obtenido = (fd.get('fa_grado_obtenido') || '').toString().trim();
     const fa_institucion = (fd.get('fa_institucion') || '').toString().trim();
     let controversias = [];
+    //grupos d epostulacion varios
+    const gruposPostulacion = getGrupoPostulacionSeleccionados();
+    const grupoPrincipal = gruposPostulacion.length ? gruposPostulacion[0] : null;
 
     const persona = {
       nombre: (fd.get('nombre') || '').toString().trim(),
@@ -3766,7 +3810,7 @@ function refreshHijosParejasSelects() {
 
       sin_controversias_publicas: document.getElementById('chkSinControversias')?.checked ?? false,
       id_partido_actual: toIntOrNull(fd.get('id_partido_actual')),
-      id_grupo_postulacion: toIntOrNull(fd.get('id_grupo_postulacion')),
+      id_grupo_postulacion: grupoPrincipal,
       id_ideologia_politica: toIntOrNull(fd.get('id_ideologia_politica')),
       nivel_confiabilidad: (fd.get("nivel_confiabilidad") || "").toString().trim().toLowerCase() || null,
     };
@@ -4441,6 +4485,7 @@ function refreshHijosParejasSelects() {
 
     return {
       persona,
+      grupos_postulacion: gruposPostulacion, // ✅ nuevo
       datos_ine: datosINEFinal,
       telefonos,
       parejas: parejasFinal,          // ✅ CORREGIDO
@@ -4517,6 +4562,17 @@ function refreshPreview() {
     append('equiposContainer', equipoBlock());
     append('referentesContainer', referenteBlock());
     append('movEventosContainer', movEventoBlock());
+
+    //limpiar grupos
+      // ... tu limpieza actual del formulario
+
+      setGrupoPostulacionSeleccionados([]);
+      document.getElementById("panelGrupoPostulacion")?.classList.add("d-none");
+
+      // si quieres resetear el hidden principal explícitamente
+      const hiddenPrincipal = document.getElementById("grupoPostulacionPrincipal");
+      if (hiddenPrincipal) hiddenPrincipal.value = "";
+    
 
     // ✅ controversias: si NO está activado "sin controversias", seed 1 fila
     const sinCont = el('chkSinControversias')?.checked === true;
@@ -5031,6 +5087,144 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
         // Si tienes más popovers, inicialízalos así:
         // var popover2 = new bootstrap.Popover(document.getElementById('otro-popover'));
       });
+      //grupos de postulacon varios
+      let gruposPostulacionCatalogo = [];
+let gruposPostulacionSeleccionados = [];
+
+function getGrupoPostulacionSeleccionados() {
+  return [...gruposPostulacionSeleccionados];
+}
+
+function setGrupoPostulacionSeleccionados(ids = []) {
+  gruposPostulacionSeleccionados = [...new Set(
+    (ids || []).map(x => Number(x)).filter(Boolean)
+  )];
+
+  const container = document.getElementById("grupoPostulacionChecklist");
+  if (container) {
+    container.querySelectorAll('input[type="checkbox"][data-id]').forEach(chk => {
+      chk.checked = gruposPostulacionSeleccionados.includes(Number(chk.dataset.id));
+    });
+  }
+
+  syncGrupoPostulacionResumen();
+}
+
+function syncGrupoPostulacionResumen() {
+  const txt = document.getElementById("txtGrupoPostulacionResumen");
+  const hiddenPrincipal = document.getElementById("grupoPostulacionPrincipal");
+  if (!txt) return;
+
+  const seleccionados = gruposPostulacionCatalogo.filter(x =>
+    gruposPostulacionSeleccionados.includes(Number(x.id_grupo))
+  );
+
+  if (!seleccionados.length) {
+    txt.textContent = "Seleccione uno o varios grupos";
+    if (hiddenPrincipal) hiddenPrincipal.value = "";
+    return;
+  }
+
+  if (seleccionados.length === 1) {
+    txt.textContent = seleccionados[0].nombre;
+  } else {
+    txt.textContent = `${seleccionados.length} grupos seleccionados`;
+  }
+
+  // compatibilidad: el primero como principal
+  if (hiddenPrincipal) {
+    hiddenPrincipal.value = String(seleccionados[0].id_grupo);
+  }
+}
+
+function renderGrupoPostulacionChecklist(items = []) {
+  const container = document.getElementById("grupoPostulacionChecklist");
+  if (!container) return;
+
+  if (!items.length) {
+    container.innerHTML = `<div class="text-muted small">Sin grupos disponibles.</div>`;
+    return;
+  }
+
+  container.innerHTML = items.map(item => `
+    <label class="multi-option">
+      <input
+        type="checkbox"
+        data-id="${item.id_grupo}"
+        ${gruposPostulacionSeleccionados.includes(Number(item.id_grupo)) ? "checked" : ""}
+      >
+      <div class="multi-option-text">
+        <div class="multi-option-title">${item.nombre}</div>
+        ${item.descripcion ? `<div class="multi-option-sub">${item.descripcion}</div>` : ``}
+      </div>
+    </label>
+  `).join("");
+
+  container.querySelectorAll('input[type="checkbox"][data-id]').forEach(chk => {
+    chk.addEventListener("change", () => {
+      const id = Number(chk.dataset.id);
+
+      if (chk.checked) {
+        if (!gruposPostulacionSeleccionados.includes(id)) {
+          gruposPostulacionSeleccionados.push(id);
+        }
+      } else {
+        gruposPostulacionSeleccionados = gruposPostulacionSeleccionados.filter(x => x !== id);
+      }
+
+      syncGrupoPostulacionResumen();
+    });
+  });
+}
+
+async function loadGruposPostulacionMulti() {
+  try {
+    const data = await apiGet("/catalogos/grupos-postulacion");
+    gruposPostulacionCatalogo = Array.isArray(data) ? data : (data.data || []);
+    renderGrupoPostulacionChecklist(gruposPostulacionCatalogo);
+    syncGrupoPostulacionResumen();
+  } catch (e) {
+    console.error("Error cargando grupos de postulación:", e);
+  }
+}
+
+function initGrupoPostulacionMulti() {
+  const btnToggle = document.getElementById("btnGrupoPostulacionToggle");
+  const panel = document.getElementById("panelGrupoPostulacion");
+  const btnAll = document.getElementById("btnGrupoSelectAll");
+  const btnClear = document.getElementById("btnGrupoClear");
+
+  if (btnToggle && panel) {
+    btnToggle.addEventListener("click", () => {
+      panel.classList.toggle("d-none");
+    });
+  }
+
+  if (btnAll) {
+    btnAll.addEventListener("click", () => {
+      gruposPostulacionSeleccionados = gruposPostulacionCatalogo
+        .map(x => Number(x.id_grupo))
+        .filter(Boolean);
+      renderGrupoPostulacionChecklist(gruposPostulacionCatalogo);
+      syncGrupoPostulacionResumen();
+    });
+  }
+
+  if (btnClear) {
+    btnClear.addEventListener("click", () => {
+      gruposPostulacionSeleccionados = [];
+      renderGrupoPostulacionChecklist(gruposPostulacionCatalogo);
+      syncGrupoPostulacionResumen();
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!panel || !btnToggle) return;
+    if (!panel.contains(e.target) && !btnToggle.contains(e.target)) {
+      panel.classList.add("d-none");
+    }
+  });
+}
 
     // ---------- init ----------
     (async function init() {
@@ -5047,7 +5241,6 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
         controversiasCatalog = await apiGet('/catalogos/controversias');
         partidosCatalog = await apiGet('/catalogos/partidos');
         temasCatalog = await apiGet('/catalogos/temas-interes');
-        gruposCatalog = await apiGet('/catalogos/grupos-postulacion');
         ideologiasCatalog = await apiGet('/catalogos/ideologias');
         relacionesSentCatalog = await apiGet('/catalogos/relacion-sentimental');
 
@@ -5066,7 +5259,6 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
 
         // Fill selects catálogos
         fillSelect($('#selPartidoActual'), partidosCatalog, 'id_partido', 'nombre');
-        fillSelect($('#selGrupoPostulacion'), gruposCatalog, 'id_grupo', 'nombre');
         fillSelect($('#selIdeologia'), ideologiasCatalog, 'id_ideologia', 'nombre');
 
         // --- refs ---
@@ -5079,6 +5271,9 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
 
         const chkLegalFuera = document.getElementById("chkLegalFueraEdomex");
         const chkRealFuera  = document.getElementById("chkRealFueraEdomex");
+
+        initGrupoPostulacionMulti();
+        await loadGruposPostulacionMulti();
 
         // ✅ Cobertura municipios (TRABAJO POLÍTICO)
         // (la función debe existir afuera del init)
@@ -5461,53 +5656,64 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
     // llama esto en tu init()
     initConfiabilidadUI();
     //renderlistpersonas
-    function renderListaPersonas(items) {
-      const cont = document.getElementById("listaPersonas");
-      if (!cont) return;
-      cont.innerHTML = "";
+  function renderListaPersonas(items) {
+    const cont = document.getElementById("listaPersonas");
+    const badge = document.getElementById("badgeCount");
 
-      if (!items.length) {
-        cont.innerHTML = `<div class="text-muted">Sin resultados</div>`;
-        return;
-      }
-
-      items.forEach(p => {
-        const a = document.createElement("button");
-        a.type = "button";
-        a.className = "list-group-item list-group-item-action";
-        a.innerHTML = `
-          <div class="fw-semibold">${p.nombre} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}</div>
-          <div class="small text-muted">ID: ${p.id_persona}</div>
-        `;
-        
-        function setupBuscadorIndex(){
-          document.getElementById("btnBuscarPersona")
-            ?.addEventListener("click", recargarLista);
-
-          document.getElementById("txtBuscarPersona")
-            ?.addEventListener("input", debounce(recargarLista, 400));
-        }
-        
-        a.addEventListener("click", async () => {
-          try {
-            const payload = await apiGet(`/personas/${p.id_persona}/payload`); // ✅ aquí
-            applyPayloadToForm(payload);
-            setEditing(p.id_persona);
-            showAlert("info", `Modo edición: #${p.id_persona}`);
-          } catch (e) {
-            console.error(e);
-            showAlert("danger", "No pude cargar para edición: " + e.message);
-          }
-        });
-
-        cont.appendChild(a);
-      });
+    if (badge) {
+      badge.textContent = Array.isArray(items) ? items.length : 0;
     }
 
+    if (!cont) return;
+    cont.innerHTML = "";
+
+    if (!items.length) {
+      cont.innerHTML = `<div class="text-muted">Sin resultados</div>`;
+      return;
+    }
+
+    items.forEach(p => {
+      const a = document.createElement("button");
+      a.type = "button";
+      a.className = "list-group-item list-group-item-action";
+      a.innerHTML = `
+        <div class="fw-semibold">${p.nombre} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}</div>
+        <div class="small text-muted">ID: ${p.id_persona}</div>
+      `;
+
+      a.addEventListener("click", async () => {
+        try {
+          const payload = await apiGet(`/personas/${p.id_persona}/payload`);
+          applyPayloadToForm(payload);
+          setEditing(p.id_persona);
+          showAlert("info", `Modo edición: #${p.id_persona}`);
+        } catch (e) {
+          console.error(e);
+          showAlert("danger", "No pude cargar para edición: " + e.message);
+        }
+      });
+
+      cont.appendChild(a);
+    });
+  }
+
+      function setupBuscadorIndex(){
+        document.getElementById("btnBuscarPersona")
+          ?.addEventListener("click", recargarLista);
+
+        document.getElementById("txtBuscarPersona")
+          ?.addEventListener("input", debounce(recargarLista, 400));
+      }
+
       async function recargarLista() {
-        const q = document.getElementById("txtBuscarPersona").value.trim();
-        const items = await buscarPersonas(q);
-        renderListaPersonas(items);
+        try {
+          const q = (document.getElementById("txtBuscarPersona")?.value || "").trim();
+          const items = await buscarPersonas(q);
+          renderListaPersonas(items || []);
+        } catch (e) {
+          console.error(e);
+          showAlert("danger", "No se pudo recargar la lista.");
+        }
       }
 
       document.getElementById("btnBuscarPersona").addEventListener("click", recargarLista);
@@ -5698,7 +5904,16 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
 
       document.getElementById('btnEliminarPersona')?.addEventListener('click', async () => {
         if (!editingId) return;
-        await onDeletePersona(editingId);
+
+        const ok = await onDeletePersona(editingId);
+        if (!ok) return;
+
+        // limpia formulario / modo edición
+        clearAll?.();
+        setEditing?.(null);
+
+        // refresca listado
+        await recargarLista();
       });
 
       // submit
