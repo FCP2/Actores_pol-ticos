@@ -69,6 +69,11 @@ if (window._pendingHighlightMunicipiosById?.length) {
   window._pendingHighlightMunicipiosById = null;
 }
 
+if (window._pendingPersonaMunicipiosDetalle?.length) {
+  window.highlightPersonaMunicipiosDetalle?.(window._pendingPersonaMunicipiosDetalle);
+  window._pendingPersonaMunicipiosDetalle = null;
+}
+
 }
 
 
@@ -222,27 +227,105 @@ function resetMunicipiosHighlight() {
 window.resetMunicipiosHighlight = resetMunicipiosHighlight;
 
 function highlightMunicipiosByIdList(ids, { dimOthers = true } = {}) {
-  const set = new Set((ids || []).map(x => Number(x)).filter(Boolean));
+    const set = new Set((ids || []).map(n => Number(n)).filter(Boolean));
+
+    Object.entries(layersById).forEach(([idStr, group]) => {
+      const id = Number(idStr);
+      const total = municipioCountById.get(id) ?? 0;
+      const baseFill = coverageColor(total); // ✅ color original KPI
+      const hit = set.has(id);
+
+      if (!group) return;
+
+      if (dimOthers) {
+        group.setStyle(
+          hit
+            ? {
+                color: "#1f2937",
+                weight: 2.2,
+                fillColor: baseFill,   // ✅ restaura color KPI
+                fillOpacity: 0.72
+              }
+            : {
+                color: "#9ca3af",
+                weight: 1,
+                fillColor: baseFill,   // ✅ también aquí
+                fillOpacity: 0.10
+              }
+        );
+      } else if (hit) {
+        group.setStyle({
+          color: "#1f2937",
+          weight: 2.2,
+          fillColor: baseFill,
+          fillOpacity: 0.72
+        });
+      }
+    });
+  }
+//funcion para poder pintar mapa con filtro de actores, varios municipios de trabajo :
+function highlightPersonaMunicipiosDetalle(rows = []) {
+  if (!Array.isArray(rows) || !rows.length) {
+    resetMunicipiosHighlight();
+    return;
+  }
+
+  const ids = new Set(rows.map(r => Number(r.id_municipio)).filter(Boolean));
 
   Object.entries(layersById).forEach(([idStr, group]) => {
+    const id = Number(idStr);
     if (!group) return;
 
-    const id = Number(idStr);
-    const hit = set.has(id);
+    const hit = ids.has(id);
+    const item = rows.find(r => Number(r.id_municipio) === id);
+    const esPrincipal = !!item?.es_principal;
 
-    // OJO: NO seteamos fillColor -> conserva los colores KPI (applyCoverageStyle)
-    if (dimOthers) {
-      group.setStyle(hit
-        ? { weight: 2.5, fillOpacity: 0.70 }
-        : { weight: 1.0, fillOpacity: 0.10 }
-      );
-    } else if (hit) {
-      group.setStyle({ weight: 2.5, fillOpacity: 0.70 });
+    if (!hit) {
+      group.setStyle({
+        weight: 1,
+        color: "#9ca3af",
+        fillOpacity: 0.06
+      });
+      return;
     }
+
+    // ✅ estilo especial para detalle persona
+    group.setStyle(
+      esPrincipal
+        ? {
+            color: "#1d4ed8",
+            weight: 3,
+            fillColor: "#2563eb",
+            fillOpacity: 0.72
+          }
+        : {
+            color: "#2563eb",
+            weight: 2,
+            fillColor: "#60a5fa",
+            fillOpacity: 0.55
+          }
+    );
   });
+
+  // zoom al conjunto de municipios
+  const selectedLayers = Object.entries(layersById)
+    .filter(([idStr]) => ids.has(Number(idStr)))
+    .map(([, group]) => group)
+    .filter(Boolean);
+
+  if (selectedLayers.length && map) {
+    const fg = L.featureGroup(selectedLayers);
+    try {
+      map.fitBounds(fg.getBounds(), { padding: [30, 30] });
+    } catch (e) {
+      console.warn("No pude ajustar bounds del detalle:", e);
+    }
+  }
 }
 
 window.highlightMunicipiosByIdList = highlightMunicipiosByIdList;
+
+window.highlightPersonaMunicipiosDetalle = highlightPersonaMunicipiosDetalle;
 
 // expón a window
 window.resetMunicipiosHighlight = resetMunicipiosHighlight;
