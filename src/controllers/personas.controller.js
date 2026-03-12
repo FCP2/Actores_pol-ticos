@@ -1015,6 +1015,10 @@ exports.createPersonaCompleta = async (req, res) => {
       }
     }
 
+    const gruposPostulacion = Array.isArray(req.body?.grupos_postulacion)
+    ? [...new Set(req.body.grupos_postulacion.map(Number).filter(Boolean))]
+    : [];
+
     // -------------------------
     // INSERT PERSONA
     // -------------------------
@@ -1091,6 +1095,22 @@ exports.createPersonaCompleta = async (req, res) => {
     );
 
     const id_persona = insertPersona.rows[0].id_persona;
+
+        // ✅ grupos de postulación (multi)
+    const gruposFinales = gruposPostulacion.length
+      ? gruposPostulacion
+      : (persona.id_grupo_postulacion ? [Number(persona.id_grupo_postulacion)] : []);
+
+    for (const idGrupo of gruposFinales) {
+      await client.query(
+        `
+        INSERT INTO personas_grupos_postulacion (id_persona, id_grupo)
+        VALUES ($1, $2)
+        ON CONFLICT (id_persona, id_grupo) DO NOTHING
+        `,
+        [id_persona, idGrupo]
+      );
+    }
 
     // -------------------------
     // TEMAS DE INTERÉS 1:N
@@ -2495,6 +2515,15 @@ function buildPerfilHtml(p) {
     };
     return map[raw] || raw.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   }
+  //grupos de postulacion
+  const gruposPostulacion = Array.isArray(p.grupos_postulacion) ? p.grupos_postulacion : [];
+  const gruposPostulacionNombres = gruposPostulacion
+    .map(x => (x?.nombre || "").toString().trim())
+    .filter(Boolean);
+
+  const grupoPostulacionTexto = gruposPostulacionNombres.length
+    ? gruposPostulacionNombres.join(", ")
+    : (p.grupo_postulacion || "");
 
   const municipiosTrabajo = asArray(p.municipios_trabajo);
 
@@ -2546,6 +2575,7 @@ function buildPerfilHtml(p) {
       <div class="k">Residencia legal</div><div class="v">${esc(munLegal)}</div>
       <div class="k">Residencia real</div><div class="v">${esc(munReal)}</div>
       <div class="k">Municipio trabajo</div><div class="v">${esc(munTrab)}</div>
+      <div class="k">Acción afirmativa aplicable</div><div class="v">${esc(grupoPostulacionTexto || "—")}</div>
     </div>
   `;
 
@@ -2935,6 +2965,84 @@ function buildPerfilHtml(p) {
       border-top: 1px solid var(--line);
       padding-top: 8px;
     }
+
+
+    .municipios-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.municipio-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f9fafb;
+  padding: 9px 10px;
+  min-height: 54px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.municipio-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.municipio-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.25;
+}
+
+.municipio-badge {
+  flex: 0 0 auto;
+}
+
+.municipio-notas {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--mut);
+  line-height: 1.3;
+}
+
+@media print {
+  .municipios-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+
+.temas-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tema-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f9fafb;
+  padding: 8px 10px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.tema-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.25;
+}
+
+.tema-nota {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--mut);
+  line-height: 1.3;
+}
   </style>
 </head>
 <body>
@@ -2961,7 +3069,6 @@ function buildPerfilHtml(p) {
         <div class="badges">
           ${confi ? badge(confi.label, confi.cls) : ""}
           ${escalaInfl ? badge(`Influencia: ${escalaInfl}`, "mut") : ""}
-          ${badge(p.grupo_postulacion, "mut")}
           ${partido ? badge(partido, partidoColors[partido] || "mut") : ""}
           ${badge(p.ideologia_politica, "mut")}
           ${badge(p.tema_interes_central, "sec")}
@@ -2972,13 +3079,21 @@ function buildPerfilHtml(p) {
     ${renderSection("Datos generales", htmlDatosGenerales)}
     ${renderSection("INE", htmlINE)}
 
-    ${municipiosTrabajo.length ? renderListSection("Municipios de trabajo", municipiosTrabajo, (m)=>`
-      <div class="t">
-        ${esc(m.municipio || "—")}
-        ${m.es_principal ? badge("Principal", "ok") : ""}
+    ${municipiosTrabajo.length ? renderSection("Municipios de trabajo", `
+      <div class="municipios-grid">
+        ${municipiosTrabajo.map(m => `
+          <div class="municipio-card avoid-break">
+            <div class="municipio-head">
+              <div class="municipio-name">${esc(m.municipio || "—")}</div>
+              <div class="municipio-badge">
+                ${m.es_principal ? badge("Principal", "ok") : ""}
+              </div>
+            </div>
+            ${m.notas ? `<div class="municipio-notas">${esc(m.notas)}</div>` : ``}
+          </div>
+        `).join("")}
       </div>
-      ${m.notas ? `<div class="m">${esc(m.notas)}</div>` : `<div class="m"></div>`}
-    `) : ""}
+    `, "section-long") : ""}
 
     ${renderListSection("Teléfonos", p.telefonos, (t)=>`
       <div class="t">${esc(t.telefono || "—")} ${t.principal ? badge("Principal", "ok") : ""}</div>
@@ -3093,10 +3208,23 @@ function buildPerfilHtml(p) {
       ${e.notas ? `<div class="m">${esc(e.notas)}</div>` : ''}
     `, { long: true })}
 
-    ${renderListSection("Temas de interés", p.temas_interes, (t)=>`
-      <div class="t">${esc(t.tema || (t.id_tema ? ("Tema #" + t.id_tema) : "—"))}</div>
-      ${t.otro_texto ? `<div class="m">${esc(t.otro_texto)}</div>` : `<div class="m">—</div>`}
-    `)}
+    ${p.temas_interes?.length ? renderSection("Temas de interés", `
+      <div class="temas-grid">
+        ${p.temas_interes.map(t => `
+          <div class="tema-card avoid-break">
+            <div class="tema-title">
+              ${esc(t.tema || (t.id_tema ? ("Tema #" + t.id_tema) : "—"))}
+            </div>
+
+            ${
+              t.otro_texto
+                ? `<div class="tema-nota">${esc(t.otro_texto)}</div>`
+                : ""
+            }
+          </div>
+        `).join("")}
+      </div>
+    `, "section-long") : ""}
 
     ${renderListSection("Cargos de elección popular", p.cargos_eleccion_popular, (c)=>`
       <div class="t">${esc(c.cargo_display || c.cargo || "—")}</div>
@@ -3177,21 +3305,21 @@ function buildPerfilHtml(p) {
         <div class="k">Modificó</div><div class="v">${esc(p.modificado_por_nombre || "—")}</div>
         <div class="k">Actualizado</div><div class="v">${esc(fmtDate(p.updated_at))}</div>
 
-        <div class="k">Verificación AREA</div>
+        <div class="k">Verificación por Dirección</div>
         <div class="v">
           ${esc(p.verif_area_por_nombre || "—")}
           ${p.verif_area_por_email ? `<span class="m"> • ${esc(p.verif_area_por_email)}</span>` : ""}
           ${p.verif_area_at ? `<div class="m">${esc(fmtDate(p.verif_area_at))}</div>` : `<div class="m">—</div>`}
         </div>
 
-        <div class="k">Verificación OFFICE</div>
+        <div class="k">Verificación por Coordinación</div>
         <div class="v">
           ${esc(p.verif_office_por_nombre || "—")}
           ${p.verif_office_por_email ? `<span class="m"> • ${esc(p.verif_office_por_email)}</span>` : ""}
           ${p.verif_office_at ? `<div class="m">${esc(fmtDate(p.verif_office_at))}</div>` : `<div class="m">—</div>`}
         </div>
 
-        <div class="k">Verificación FINAL</div>
+        <div class="k">Verificación Ofi. del Subsecretario</div>
         <div class="v">
           ${esc(p.verificado_por_nombre || "—")}
           ${p.verificado_por_email ? `<span class="m"> • ${esc(p.verificado_por_email)}</span>` : ""}
@@ -3293,6 +3421,20 @@ exports.getPerfilPdf = async (req, res) => {
       cti.nombre AS tema_interes_central,
       cgp.nombre AS grupo_postulacion,
       cip.nombre AS ideologia_politica,
+
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id_grupo', gp.id_grupo,
+            'nombre', cgp2.nombre
+          )
+          ORDER BY cgp2.nombre ASC
+        )
+        FROM personas_grupos_postulacion gp
+        JOIN catalogo_grupos_postulacion cgp2
+          ON cgp2.id_grupo = gp.id_grupo
+        WHERE gp.id_persona = p.id_persona
+      ), '[]'::jsonb) AS grupos_postulacion,
 
       p.municipio_residencia_legal  AS municipio_residencia_legal_id,
       p.municipio_residencia_real   AS municipio_residencia_real_id,
@@ -4312,6 +4454,7 @@ exports.updatePersonaCompleta = async (req, res) => {
     
     const {
       persona,
+      grupos_postulacion=[],
       datos_ine = null,
       telefonos = [],
       parejas = [],
@@ -4344,6 +4487,10 @@ exports.updatePersonaCompleta = async (req, res) => {
     if (!persona?.nombre) {
       return res.status(400).json({ error: "Nombre es obligatorio" });
     }
+    //validacion grupos de posutlacion
+    const gruposPostulacion = Array.isArray(grupos_postulacion)
+    ? [...new Set(grupos_postulacion.map(Number).filter(Boolean))]
+    : [];
 
 
 
@@ -4558,11 +4705,31 @@ exports.updatePersonaCompleta = async (req, res) => {
       ]
     );
 
+    // 1 grupos de postulacion
+    await client.query(
+      `DELETE FROM personas_grupos_postulacion WHERE id_persona = $1`,
+      [id_persona]
+    );
+
+    const gruposFinales = gruposPostulacion.length
+      ? gruposPostulacion
+      : (persona.id_grupo_postulacion ? [Number(persona.id_grupo_postulacion)] : []);
+
+    for (const idGrupo of gruposFinales) {
+      await client.query(
+        `
+        INSERT INTO personas_grupos_postulacion (id_persona, id_grupo)
+        VALUES ($1, $2)
+        ON CONFLICT (id_persona, id_grupo) DO NOTHING
+        `,
+        [id_persona, idGrupo]
+      );
+    }
+
     // Helper: borra por persona
     async function del(table) {
       await client.query(`DELETE FROM ${table} WHERE id_persona = $1`, [id_persona]);
     }
-
     // 2) Temas interés (1:N) con validación "Otro"
     await del("personas_temas_interes");
     for (const t of temas_interes) {
@@ -5409,6 +5576,7 @@ exports.getPayloadEdicion = async (req, res) => {
       fuentes_consulta,
       municipios_trabajo,
       liderazgoRow,
+      grupos_postulacion,
     ] = await Promise.all([
       // telefonos (PK: id_telefono)
       client.query(
@@ -5617,7 +5785,22 @@ exports.getPayloadEdicion = async (req, res) => {
       [id_persona]
     ).then(r => r.rows[0] || null),
 
+        // grupos de postulación (multi)
+    client.query(
+      `SELECT id_grupo
+       FROM personas_grupos_postulacion
+       WHERE id_persona = $1
+       ORDER BY id_grupo ASC`,
+      [id_persona]
+    ).then(r => r.rows.map(x => Number(x.id_grupo))),
+
     ]);
+//) Agrega fallback por compatibilidad.Como todavía conservas personas.id_grupo_postulacion, 
+// conviene dejar fallback por si algún registro viejo no quedó en la tabla puente.
+    const gruposPostulacionFinal =
+    Array.isArray(grupos_postulacion) && grupos_postulacion.length
+      ? grupos_postulacion
+      : (persona.id_grupo_postulacion ? [Number(persona.id_grupo_postulacion)] : []);
     
         // ✅ cargar fotos de eventos
     const eventIds = (capacidad_movilizacion_eventos || []).map(e => e.id_evento).filter(Boolean);
@@ -5648,6 +5831,7 @@ exports.getPayloadEdicion = async (req, res) => {
   
     return res.json({
       persona,
+      grupos_postulacion: gruposPostulacionFinal,
       datos_ine,
       telefonos,
       parejas,
