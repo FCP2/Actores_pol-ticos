@@ -90,18 +90,33 @@ function clearReferenteFilter() {
 
 function verifItem({ title, at, byName, byId, dotClass }) {
   const ok = !!at;
+  // Usamos el granate para lo validado y un dorado tenue para lo pendiente
+  const icon = ok 
+    ? `<i class="bi bi-patch-check-fill" style="color: var(--inst-maroon)"></i>` 
+    : `<i class="bi bi-clock-history" style="color: var(--inst-gold)"></i>`;
+
   return `
-    <div class="timeline-item ${ok ? '' : 'pending'}">
-      <div class="timeline-dot ${ok ? dotClass : 'bg-secondary'}"></div>
+    <div class="timeline-item ${ok ? 'item-validated' : 'item-pending'}">
+      <div class="timeline-dot ${ok ? 'bg-inst-maroon' : 'bg-light-gold'}"></div>
       <div class="timeline-content">
         <div class="d-flex justify-content-between align-items-start">
-          <span class="fw-semibold small">
-            ${ok ? '<i class="bi bi-shield-check text-info"></i>' : '<i class="bi bi-clock text-warning"></i>'}
-            ${title}: ${ok ? 'Validado' : 'Pendiente'}
-          </span>
-          <small class="text-muted">${fmtDT(at)}</small>
+          <div class="d-flex flex-column">
+            <span class="fw-bold small mb-0" style="color: ${ok ? '#333' : '#666'}">
+              ${icon} ${title}
+            </span>
+            <span class="status-label ${ok ? 'text-inst-maroon' : 'text-muted'}">
+              ${ok ? 'Validación Completada' : 'Pendiente de Revisión'}
+            </span>
+          </div>
+          <small class="fw-bold text-end" style="color: var(--inst-maroon); font-size: 0.7rem;">
+            ${ok ? fmtDT(at) : '-- / -- / --'}
+          </small>
         </div>
-        <small class="text-muted">Por: ${byName ?? byId ?? "—"}</small>
+        <div class="mt-1 ps-4" style="border-left: 1px solid #eee; margin-left: 6px;">
+             <small class="text-muted" style="font-size: 0.75rem;">
+                Responsable: <span class="fw-medium text-dark">${byName ?? byId ?? "—"}</span>
+             </small>
+        </div>
       </div>
     </div>
   `;
@@ -109,92 +124,97 @@ function verifItem({ title, at, byName, byId, dotClass }) {
 
 function renderTrazabilidad(p) {
   const el = document.getElementById("panelTrazabilidad");
+  
+  // Iconos con color institucional
   const icons = {
-    audit: '<i class="bi bi-journal-text text-primary"></i>',
-    created: '<i class="bi bi-person-plus text-success"></i>',
-    updated: '<i class="bi bi-pencil-square text-warning"></i>',
+    audit: `<i class="bi bi-shield-shaded" style="color: var(--inst-maroon)"></i>`,
+    created: `<i class="bi bi-plus-circle-fill" style="color: var(--inst-gold)"></i>`,
+    updated: `<i class="bi bi-pencil-fill" style="color: var(--inst-gold)"></i>`,
+    check: `<i class="bi bi-check-circle-fill text-inst-maroon"></i>`
   };
 
   el.innerHTML = `
     <div class="timeline-container">
-      <div class="mb-3 p-2 bg-light rounded-2">
-        <div class="d-flex align-items-center gap-2">
-          <span class="badge bg-dark rounded-pill px-2 py-1 fs-6">${p.id_persona ?? "—"}</span>
-          <span class="fw-bold text-dark">Registro #${p.id_persona ?? 'N/A'}</span>
-        </div>
+      <div class="header-section d-flex align-items-center gap-3">
+        <span class="badge badge-id px-3 py-2 rounded-1 small">ID: ${p.id_persona ?? "—"}</span>
+        <h6 class="mb-0 fw-bold text-uppercase" style="letter-spacing: 1px; color: #444;">
+          Trazabilidad de Registro
+        </h6>
       </div>
 
-      <!-- AUDITORÍA -->
-      <div class="mb-4">
-        <div class="d-flex align-items-center gap-2 mb-2">
+      <div class="mb-4 mt-3">
+        <div class="d-flex align-items-center gap-2 mb-3">
           ${icons.audit}
-          <span class="fw-semibold text-primary h6 mb-0">Auditoría</span>
+          <span class="fw-bold small text-uppercase text-muted">Historial de Auditoría</span>
         </div>
 
         <div class="timeline">
           <div class="timeline-item">
-            <div class="timeline-dot bg-success"></div>
+            <div class="timeline-dot"></div>
             <div class="timeline-content">
               <div class="d-flex justify-content-between align-items-start">
-                <span class="fw-semibold small">${icons.created} Creado</span>
-                <small class="text-muted">${fmtDT(p.created_at)}</small>
+                <span class="fw-semibold small">${icons.created} Creación</span>
+                <small class="fw-bold text-inst-maroon">${fmtDT(p.created_at)}</small>
               </div>
-              <small class="text-muted">Por: ${p.creado_por_nombre ?? p.creado_por ?? "—"}</small>
+              <div class="text-muted" style="font-size: 0.85rem;">
+                Usuario: ${p.creado_por_nombre ?? p.creado_por ?? "Sistema"}
+              </div>
             </div>
           </div>
 
           ${p.updated_at ? `
           <div class="timeline-item">
-            <div class="timeline-dot bg-warning"></div>
+            <div class="timeline-dot"></div>
             <div class="timeline-content">
               <div class="d-flex justify-content-between align-items-start">
-                <span class="fw-semibold small">${icons.updated} Modificado</span>
-                <small class="text-muted">${fmtDT(p.updated_at)}</small>
+                <span class="fw-semibold small">${icons.updated} Última Modificación</span>
+                <small class="fw-bold text-inst-maroon">${fmtDT(p.updated_at)}</small>
               </div>
-              <small class="text-muted">Por: ${p.modificado_por_nombre ?? p.modificado_por ?? "—"}</small>
+              <div class="text-muted" style="font-size: 0.85rem;">
+                Responsable: ${p.modificado_por_nombre ?? p.modificado_por ?? "—"}
+              </div>
             </div>
           </div>` : ''}
         </div>
       </div>
 
-      <!-- VALIDACIÓN 3 NIVELES -->
       <div class="mb-0">
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <i class="bi bi-shield-check text-info"></i>
-          <span class="fw-semibold text-info h6 mb-0">Validación</span>
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <i class="bi bi-patch-check-fill text-inst-gold"></i>
+          <span class="fw-bold small text-uppercase text-muted">Niveles de Validación</span>
         </div>
 
         <div class="timeline">
           ${verifItem({
-            title: "Titular de la Dirección",
+            title: "Dirección",
             at: p.verif_area_at,
             byName: p.verif_area_por_nombre,
-            byId: p.verif_area_por,
-            dotClass: "bg-info"
+            dotClass: "bg-inst-gold"
           })}
 
           ${verifItem({
-            title: "Titular de la Coordinación",
+            title: "Coordinación",
             at: p.verif_office_at,
             byName: p.verif_office_por_nombre,
-            byId: p.verif_office_por,
-            dotClass: "bg-primary"
+            dotClass: "bg-inst-gold"
           })}
 
           ${verifItem({
-            title: "Oficina Subsecretario",
+            title: "Of. del Subsecretario",
             at: p.verificado_at,
             byName: p.verificado_por_nombre,
-            byId: p.verificado_por,
-            dotClass: "bg-success"
+            dotClass: "bg-inst-maroon"
           })}
         </div>
       </div>
     </div>
   `;
 
-  document.getElementById("badgeEstado").innerHTML = estadoBadge(p);
+  if(document.getElementById("badgeEstado")) {
+    document.getElementById("badgeEstado").innerHTML = estadoBadge(p);
+  }
 }
+
 
 function updateVerifButtons(p) {
   const scope = window.sessionUser?.scope || null;
@@ -779,6 +799,11 @@ async function loadReferentesSelect(){
   //salir modo filtro
   document.getElementById("btnResetMapaFiltroMulti")?.addEventListener("click", async () => {
     const multi = document.getElementById("fMultiMunicipio")?.value;
+
+    // ✅ primero restaura colores KPI/base
+    window.resetMunicipiosHighlight?.();
+
+    // ✅ luego vuelve a la vista general filtrada
     if (multi === "1") {
       await loadAndPaintFilteredMunicipios();
     } else {
@@ -790,37 +815,48 @@ async function loadReferentesSelect(){
 
 
 
-  async function onVerificar() {
-    if (!selectedData?.id_persona) {
-      showAlert("warning", "Selecciona un registro primero");
-      return;
-    }
+async function onVerificar() {
+    if (!selectedData?.id_persona) return;
 
     try {
       const id = selectedData.id_persona;
-      console.log("🔄 Verificando ID:", id);
-
-      await apiPost(`/personas/analista/personas/${id}/verificar`, {});
+      // 1. Enviar a la base de datos
+      const res = await apiPost(`/personas/analista/personas/${id}/verificar`, {});
       showAlert("success", "Registro verificado.");
 
-      // ✅ CAMBIO: refreshGridSafe() en vez de loadGridData()
+      // 2. Refrescar Grid en segundo plano
       refreshGridSafe();
 
-      // ✅ Re-selecciona fila DESPUÉS del refresh
-      setTimeout(() => {
-        const row = grid.getRow(id);
-        if (row) {
-          selectedRow = row;
-          selectedData = row.getData();
-          renderTrazabilidad(selectedData);
-          document.getElementById("btnVerificar").disabled = true;
-          document.getElementById("btnDesverificar").disabled = false;
+      // 3. ¡ESTA ES LA CLAVE! 
+      // Si tu API 'res' trae el objeto actualizado, úsalo:
+      if (res?.data) {
+        selectedData = res.data;
+      } else {
+        // Si la API no devuelve el objeto, "emulamos" el cambio para la UI
+        // Esto engaña al ojo y hace que el panel se vea actualizado al instante
+        const scope = window.sessionUser?.scope;
+        const ahora = new Date().toISOString();
+        const nombreUsuario = window.sessionUser?.nombre || "Usuario Actual";
+
+        if (scope === "AREA") {
+          selectedData.verif_area_at = ahora;
+          selectedData.verif_area_por_nombre = nombreUsuario;
+        } else if (scope === "OFFICE") {
+          selectedData.verif_office_at = ahora;
+          selectedData.verif_office_por_nombre = nombreUsuario;
+        } else if (scope === "ALL") {
+          selectedData.verificado_at = ahora;
+          selectedData.verificado_por_nombre = nombreUsuario;
         }
-      }, 500);
+      }
+
+      // 4. Renderizar inmediatamente (Sin esperar clics ni tiempos)
+      renderTrazabilidad(selectedData);
+      updateVerifButtons(selectedData);
 
     } catch (err) {
       console.error(err);
-      showAlert("danger", err?.message || "No se pudo verificar.");
+      showAlert("danger", "No se pudo verificar.");
     }
   }
 
@@ -1100,21 +1136,17 @@ async function loadReferentesSelect(){
     try {
       const resp = await apiGet(`/personas/${idPersona}/municipios-trabajo`);
       const rows = resp.data || [];
-
-      const ids = rows.map(x => Number(x.id_municipio)).filter(Boolean);
-
-      // ✅ pinta mapa solo con esos municipios
-      if (ids.length) {
-        if (window.mapReady && window.highlightMunicipiosByIdList) {
-          window.highlightMunicipiosByIdList(ids, { dimOthers: true });
+        // ✅ pinta mapa solo con esos municipios
+      if (rows.length) {
+        if (window.mapReady && window.highlightPersonaMunicipiosDetalle) {
+          window.highlightPersonaMunicipiosDetalle(rows);
         } else {
-          window._pendingHighlightMunicipiosById = ids;
+          window._pendingPersonaMunicipiosDetalle = rows;
         }
       } else {
         window.resetMunicipiosHighlight?.();
       }
 
-      // ✅ panel lateral
       renderPersonaMunicipiosPanel(resp.persona, rows);
 
     } catch (e) {
@@ -1122,39 +1154,62 @@ async function loadReferentesSelect(){
       renderPersonaMunicipiosPanel(null, []);
     }
   }
+
   //render panel pequeño que muestra los municipios
   function renderPersonaMunicipiosPanel(persona, rows) {
-      const el = document.getElementById("panelMunicipiosPersona");
-      if (!el) return;
+    const el = document.getElementById("panelMunicipiosPersona");
+    const btn = document.getElementById("btnResetMapaFiltroMulti");
+    if (!el) return;
 
-      if (!persona || !Array.isArray(rows) || !rows.length) {
-        el.innerHTML = `
-          <div class="text-muted">
-            Sin municipios de trabajo disponibles para esta persona.
-          </div>
-        `;
-        return;
-      }
-
+    if (!persona || !Array.isArray(rows) || !rows.length) {
       el.innerHTML = `
-        <div class="mb-2">
-          <div class="fw-semibold text-dark">${persona.nombre_completo || "—"}</div>
-          <div class="small text-muted">Municipios asociados: ${rows.length}</div>
-        </div>
-
-        <div class="d-flex flex-column gap-2">
-          ${rows.map(r => `
-            <div class="border rounded px-2 py-2 bg-light-subtle">
-              <div class="d-flex justify-content-between align-items-start gap-2">
-                <div class="fw-semibold text-dark">${r.municipio || "—"}</div>
-                ${r.es_principal ? `<span class="badge bg-success">Principal</span>` : `<span class="badge bg-secondary">Secundario</span>`}
-              </div>
-              ${r.notas ? `<div class="small text-muted mt-1">${r.notas}</div>` : ``}
-            </div>
-          `).join("")}
+        <div class="text-muted">
+          Selecciona una persona en la tabla para ver su distribución territorial.
         </div>
       `;
+      if (btn) btn.classList.add("d-none");
+      return;
     }
+
+    const total = rows.length;
+    const principales = rows.filter(r => !!r.es_principal).length;
+    const secundarios = total - principales;
+
+    el.innerHTML = `
+
+      <div class="panel-persona-header mb-3">
+        <div class="persona-nombre">${persona.nombre_completo || "—"}</div>
+        <div class="persona-sub">Distribución territorial del registro seleccionado</div>
+
+        <div class="panel-kpis">
+          <span class="badge bg-primary">${principales} principal</span>
+          <span class="badge bg-info text-dark">${secundarios} secundarios</span>
+          <span class="badge bg-dark">${total} municipios</span>
+        </div>
+      </div>
+
+      <div class="panel-mini-chart mb-3">
+        <div class="panel-mini-chart-title">Distribución territorial</div>
+        <div class="panel-mini-chart-body">
+          ${rows.map(r => {
+            const width = r.es_principal ? 100 : 70;
+            const cls = r.es_principal ? "principal" : "secundario";
+            return `
+              <div class="territorial-bar-row">
+                <div class="territorial-label">${r.municipio || "—"}</div>
+                <div class="territorial-bar-track">
+                  <div class="territorial-bar-fill ${cls}" style="width:${width}%"></div>
+                </div>
+                <div class="territorial-bar-value">${r.es_principal ? "Principal" : "Sec."}</div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+
+    if (btn) btn.classList.remove("d-none");
+  }
 
   async function init() {
     try { await initUserHeader(); } catch (e) { console.warn(e); }
@@ -1637,9 +1692,17 @@ async function openPerfilModal(idPersona){
     // Badges principales
     const partido = p.partido_actual_siglas || p.partido_actual || null;
 
+    // ✅ grupos de postulación (multi) con fallback al viejo campo
+    const gruposPostulacion = Array.isArray(p.grupos_postulacion) && p.grupos_postulacion.length
+      ? p.grupos_postulacion
+      : (p.grupo_postulacion ? [{ nombre: p.grupo_postulacion }] : []);
+
+    const gruposPostulacionBadges = gruposPostulacion.map(g =>
+      badgeHtml(g?.nombre || '—', 'text-bg-light border')
+    ).join(' ');
+
     const badgesPerfil = [
-      badgeEscalaInfluencia(p.escala_influencia),   // 👈 NUEVO
-      badgeHtml(p.grupo_postulacion, 'text-bg-info'),
+      badgeEscalaInfluencia(p.escala_influencia),
       badgeHtml(partido, 'text-bg-dark'),
       badgeHtml(p.ideologia_politica, 'text-bg-secondary'),
       badgeHtml(p.tema_interes_central, 'text-bg-warning'),
@@ -1651,8 +1714,15 @@ async function openPerfilModal(idPersona){
 
     // Render final
     document.getElementById('perfilBadges').innerHTML = `
-      <div class="d-flex flex-wrap gap-1">
-        ${badgesPerfil || `<span class="text-muted small">—</span>`}
+      <div class="d-flex flex-column gap-2">
+        <div class="d-flex flex-wrap gap-1">
+          ${badgesPerfil || `<span class="text-muted small">—</span>`}
+        </div>
+
+        <div class="d-flex flex-wrap gap-1 align-items-center">
+          <span class="small text-muted fw-semibold me-1">Grupos de postulación:</span>
+          ${gruposPostulacionBadges || `<span class="text-muted small">—</span>`}
+        </div>
       </div>
     `;
 
