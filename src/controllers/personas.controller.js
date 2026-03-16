@@ -200,6 +200,8 @@ exports.listPersonasAdminGrid = async (req, res) => {
     const verificado = (req.query.verificado === "1" || req.query.verificado === "0")
       ? req.query.verificado
       : null;
+    //filtro verificado, por area, office o all
+    const verifLevel = String(req.query.verifLevel || "").trim().toLowerCase();
 
     // -------- ordenamiento
     const sortDir = (String(req.query.sortDir || "desc").toLowerCase() === "asc") ? "ASC" : "DESC";
@@ -317,6 +319,51 @@ exports.listPersonasAdminGrid = async (req, res) => {
           FROM referentes_politicos rp
           WHERE rp.id_persona = p.id_persona
             AND ${refParts.join(" AND ")}
+        )
+      `);
+    }
+    //filtro por area ,office o all
+    // ✅ compatibilidad anterior: FINAL únicamente
+    if (verificado === "1") where.push(`p.verificado_at IS NOT NULL`);
+    if (verificado === "0") where.push(`p.verificado_at IS NULL`);
+
+    // ✅ nuevo filtro por nivel de verificación
+    if (verifLevel === "final") {
+      where.push(`p.verificado_at IS NOT NULL`);
+    }
+
+    if (verifLevel === "office") {
+      where.push(`p.verif_office_at IS NOT NULL`);
+    }
+
+    if (verifLevel === "area") {
+      where.push(`p.verif_area_at IS NOT NULL`);
+    }
+
+    if (verifLevel === "sin_verificar") {
+      where.push(`
+        p.verif_area_at IS NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "parcial") {
+      where.push(`
+        (
+          p.verif_area_at IS NOT NULL
+          OR p.verif_office_at IS NOT NULL
+        )
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "cualquiera_verificado") {
+      where.push(`
+        (
+          p.verif_area_at IS NOT NULL
+          OR p.verif_office_at IS NOT NULL
+          OR p.verificado_at IS NOT NULL
         )
       `);
     }
@@ -459,6 +506,7 @@ exports.listPersonasAdminGrid = async (req, res) => {
           WHERE rp.id_persona = p.id_persona
         ), '') AS referentes_nombres,
 
+
         COALESCE((
           SELECT COUNT(*)::int
           FROM personas_municipios_trabajo pmt
@@ -469,7 +517,15 @@ exports.listPersonasAdminGrid = async (req, res) => {
         mt.nombre AS municipio_trabajo_nombre,
         p.created_at,
         p.updated_at,
-        t.telefono AS telefono_principal
+        t.telefono AS telefono_principal,
+
+        -- ✅ ESTADO RESUMIDO DE VERIFICACIÓN
+      CASE
+        WHEN p.verificado_at IS NOT NULL THEN 'FINAL'
+        WHEN p.verif_office_at IS NOT NULL THEN 'OFFICE'
+        WHEN p.verif_area_at IS NOT NULL THEN 'AREA'
+        ELSE 'SIN_VERIFICAR'
+      END AS estado_verificacion
 
       FROM personas p
       LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
@@ -500,6 +556,114 @@ exports.listPersonasAdminGrid = async (req, res) => {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Error al obtener grid", detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+
+//kpi verificados
+exports.kpiResumenEjecutivo = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+
+    addFullFilter(params, where);
+
+    const oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
+    const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+    const q = (req.query.q || "").trim();
+
+    if (oficinaId) {
+      params.push(oficinaId);
+      where.push(`p.id_oficina = $${params.length}`);
+    }
+
+    if (capturistaId) {
+      params.push(capturistaId);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
+      params.push(idMunTrabajo);
+      where.push(`p.municipio_trabajo_politico = $${params.length}`);
+    }
+
+    if (q) {
+      params.push(`%${q}%`);
+      const i = params.length;
+      where.push(`
+        (
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
+      `);
+    }
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sql = `
+      SELECT
+        COUNT(*)::int AS total_actores,
+
+        COUNT(*) FILTER (
+          WHERE p.verif_area_at IS NOT NULL
+        )::int AS verificados_direccion,
+
+        COUNT(*) FILTER (
+          WHERE p.verif_office_at IS NOT NULL
+        )::int AS verificados_coordinacion,
+
+        COUNT(*) FILTER (
+          WHERE p.verificado_at IS NOT NULL
+        )::int AS verificados_final,
+
+        COUNT(*) FILTER (
+          WHERE p.verif_office_at IS NOT NULL
+            AND p.verificado_at IS NULL
+        )::int AS pendientes_final,
+
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1
+            FROM controversias_persona c
+            WHERE c.id_persona = p.id_persona
+          )
+        )::int AS con_controversias,
+
+        COUNT(*) FILTER (
+          WHERE COALESCE(lower(trim(p.nivel_confiabilidad)), '') = 'alto'
+        )::int AS confiabilidad_alta
+        
+      FROM personas p
+      ${whereSQL}
+    `;
+
+    const { rows } = await client.query(sql, params);
+    const row = rows[0] || {};
+
+    return res.json({
+      total_actores: Number(row.total_actores || 0),
+      verificados_direccion: Number(row.verificados_direccion || 0),
+      verificados_coordinacion: Number(row.verificados_coordinacion || 0),
+      verificados_final: Number(row.verificados_final || 0),
+      pendientes_final: Number(row.pendientes_final || 0),
+      con_controversias: Number(row.con_controversias || 0),
+      confiabilidad_alta: Number(row.confiabilidad_alta || 0)
+    });
+
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al obtener KPI resumen ejecutivo",
+      detail: e.message
+    });
   } finally {
     client.release();
   }
