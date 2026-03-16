@@ -461,9 +461,9 @@ exports.listPersonasAdminGrid = async (req, res) => {
     // -------- DATA
     const dataSql = `
       SELECT
-        p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno,
+        p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno, p.foto_url,
         (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
-        p.curp, p.rfc, p.clave_elector, p.id_oficina, o.nombre AS oficina_nombre,
+        p.curp, p.rfc, p.clave_elector, p.id_oficina, p.nivel_confiabilidad, o.nombre AS oficina_nombre,
 
         -- trazabilidad creador / editor
         p.creado_por, u_crea.nombre AS creado_por_nombre, u_crea.email AS creado_por_email,
