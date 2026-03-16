@@ -331,7 +331,6 @@ function buildGridQuery(extra = {}) {
 
       bootstrap.Modal.getOrCreateInstance($("modalDesverificarFinal")).show();
     });
-
     $("btnDevolverObservacion")?.addEventListener("click", () => {
       if (!selectedRowData) return;
       bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).show();
@@ -752,6 +751,13 @@ function actionsFormatter(cell) {
   `;
 }
 
+function updateVerificationButtons(data) {
+  const isFinal = !!data?.verificado_at;
+
+  $("btnAprobarFinal")?.classList.toggle("d-none", isFinal);
+  $("btnAbrirDesverificarFinal")?.classList.toggle("d-none", !isFinal);
+}
+
 function initPersonasGrid() {
   if (window.personasGrid) return window.personasGrid;
 
@@ -1051,60 +1057,145 @@ function reloadGrid() {
      DETAIL PANEL
      ========================= */
 
-  function openDetailPanel(row) {
-    selectedRowData = row || null;
-    const panel = $("detailPanel");
-    const backdrop = $("detailPanelBackdrop");
-    const body = $("detailPanelBody");
+function openDetailPanel(row) {
+  selectedRowData = row || null;
 
-    if (!panel || !backdrop || !body || !row) return;
+  const panel = $("detailPanel");
+  const backdrop = $("detailPanelBackdrop");
+  const body = $("detailPanelBody");
 
-    body.innerHTML = `
-      <div class="detail-hero">
-        ${
-          row.foto_url
-            ? `<img class="detail-avatar" src="${esc(row.foto_url)}" alt="Foto">`
-            : `<div class="detail-avatar d-inline-flex align-items-center justify-content-center">${esc(initials(row.nombre_completo || row.nombre || ""))}</div>`
-        }
-        <div>
-          <div class="detail-name">${esc(row.nombre_completo || row.nombre || "Sin nombre")}</div>
-          <div class="detail-subtitle">${esc(row.cargo_actual || row.cargo || row.oficina_nombre || "Sin cargo")}</div>
+  if (!panel || !backdrop || !body || !row) return;
+
+  body.innerHTML = `
+    <div class="detail-hero-professional">
+      ${
+        row.foto_url
+          ? `<div class="avatar-container">
+              <img class="avatar-img" src="${esc(row.foto_url)}" alt="Foto de perfil">
+            </div>`
+          : `<div class="avatar-container no-photo">
+              ${esc(initials(row.nombre_completo || row.nombre || ""))}
+            </div>`
+      }
+      <div class="profile-info">
+        <div class="detail-name">${esc(row.nombre_completo || row.nombre || "Sin nombre")}</div>
+      </div>
+    </div>
+
+    <div class="detail-block">
+      <div class="detail-block-title">Resumen</div>
+      <div class="detail-kv">
+        <div class="detail-kv-row">
+          <span class="label">Municipio principal</span>
+          <span class="value">${esc(row.municipio_trabajo_nombre || "—")}</span>
+        </div>
+        <div class="detail-kv-row">
+          <span class="label">Cobertura territorial</span>
+          <span class="value">
+            ${Number(row.total_municipios_trabajo || 0)} municipio(s)
+            ${
+              Number(row.total_municipios_trabajo || 0) > 1
+                ? `<button class="btn btn-sm btn-outline-primary ms-2" id="btnVerMunicipiosDetalle">Ver más</button>`
+                : ""
+            }
+          </span>
+        </div>
+        <div id="detailMunicipiosExtra" class="d-none"></div>
+        <div class="detail-kv-row">
+          <span class="label">Oficina</span>
+          <span class="value">${esc(row.oficina_nombre || "—")}</span>
+        </div>
+        <div class="detail-kv-row">
+          <span class="label">Capturista</span>
+          <span class="value">${esc(row.creado_por_nombre || "—")}</span>
+        </div>
+        <div class="detail-kv-row">
+          <span class="label">Confiabilidad</span>
+          <span class="value">${esc(row.nivel_confiabilidad || "—")}</span>
+        </div>
+        <div class="detail-kv-row">
+          <span class="label">Verificación</span>
+          <span class="value">${esc(row.estado_verificacion || "SIN VERIFICAR")}</span>
         </div>
       </div>
+    </div>
 
-      <div class="detail-block">
-        <div class="detail-block-title">Resumen</div>
-        <div class="detail-kv">
-          <div class="detail-kv-row"><span class="label">Municipio</span><span class="value">${esc(row.municipio_nombre || "—")}</span></div>
-          <div class="detail-kv-row"><span class="label">Oficina</span><span class="value">${esc(row.oficina_nombre || "—")}</span></div>
-          <div class="detail-kv-row"><span class="label">Capturista</span><span class="value">${esc(row.capturista_nombre || "—")}</span></div>
-          <div class="detail-kv-row"><span class="label">Confiabilidad</span><span class="value">${esc(row.nivel_confiabilidad || "—")}</span></div>
-          <div class="detail-kv-row"><span class="label">Verificación</span><span class="value">${esc(row.estatus_verificacion || "SIN VERIFICAR")}</span></div>
+    <div class="detail-block">
+      <div class="detail-block-title">Señales</div>
+      <div class="d-flex flex-wrap gap-2">
+        ${verificationChip(row.estado_verificacion)}
+        ${confiabilidadChip(row.nivel_confiabilidad)}
+        ${boolChip(Boolean(row.tiene_controversias), "Con controversias", "Sin controversias")}
+      </div>
+    </div>
+
+    <div class="detail-block">
+      <div class="detail-block-title">Trazabilidad</div>
+      <div class="detail-kv">
+        <div class="detail-kv-row">
+          <span class="label">Creado</span>
+          <span class="value">${esc(fmtDate(row.created_at))}</span>
+        </div>
+        <div class="detail-kv-row">
+          <span class="label">Actualizado</span>
+          <span class="value">${esc(fmtDate(row.updated_at))}</span>
+        </div>
+        <div class="detail-kv-row">
+          <span class="label">Verif. Dirección</span>
+          <span class="value">${esc(row.verif_area_por_nombre || "—")}</span>
+        </div>
+        <div class="detail-kv-row">
+          <span class="label">Verif. Coordinación</span>
+          <span class="value">${esc(row.verif_office_por_nombre || "—")}</span>
+        </div>
+        <div class="detail-kv-row">
+          <span class="label">Verificador final</span>
+          <span class="value">${esc(row.verificado_por_nombre || "—")}</span>
         </div>
       </div>
+    </div>
+  `;
 
-      <div class="detail-block">
-        <div class="detail-block-title">Señales</div>
-        <div class="d-flex flex-wrap gap-2">
-          ${verificationChip(row.estatus_verificacion)}
-          ${confiabilidadChip(row.nivel_confiabilidad)}
-          ${boolChip(Boolean(row.tiene_controversias), "Con controversias", "Sin controversias")}
+  //abrir ver mas municipios
+  $("btnVerMunicipiosDetalle")?.addEventListener("click", async () => {
+    if (!row?.id_persona) return;
+
+    const box = document.getElementById("detailMunicipiosExtra");
+    if (!box) return;
+
+    if (box.dataset.loaded === "1") {
+      box.classList.toggle("d-none");
+      return;
+    }
+
+    try {
+      const resp = await apiGet(`/personas/${row.id_persona}/municipios-trabajo`);
+      const rows = resp?.data || [];
+
+      box.innerHTML = `
+        <div class="mt-2">
+          ${rows.map(r => `
+            <div class="d-flex justify-content-between align-items-center border rounded px-2 py-1 mb-1">
+              <span>${esc(r.municipio || "—")}</span>
+              <span class="badge ${r.es_principal ? "bg-primary" : "bg-secondary"}">
+                ${r.es_principal ? "Principal" : "Secundario"}
+              </span>
+            </div>
+          `).join("")}
         </div>
-      </div>
+      `;
+      box.dataset.loaded = "1";
+      box.classList.remove("d-none");
+    } catch (e) {
+      console.error("Error cargando municipios detalle:", e);
+      updateAlert("No se pudieron cargar los municipios del registro.", "danger");
+    }
+  });
 
-      <div class="detail-block">
-        <div class="detail-block-title">Trazabilidad</div>
-        <div class="detail-kv">
-          <div class="detail-kv-row"><span class="label">Creado</span><span class="value">${fmtDate(row.created_at)}</span></div>
-          <div class="detail-kv-row"><span class="label">Actualizado</span><span class="value">${fmtDate(row.updated_at)}</span></div>
-          <div class="detail-kv-row"><span class="label">Verificador final</span><span class="value">${esc(row.verificador_final_nombre || "—")}</span></div>
-        </div>
-      </div>
-    `;
-
-    panel.classList.add("open");
-    backdrop.classList.remove("d-none");
-  }
+  updateVerificationButtons(row);
+  panel.classList.add("open");
+  backdrop.classList.remove("d-none");
+}
 
   function closeDetailPanel() {
     $("detailPanel")?.classList.remove("open");
