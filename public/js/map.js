@@ -265,6 +265,7 @@ function highlightMunicipiosByIdList(ids, { dimOthers = true } = {}) {
   }
 //funcion para poder pintar mapa con filtro de actores, varios municipios de trabajo :
 function highlightPersonaMunicipiosDetalle(rows = []) {
+
   if (!Array.isArray(rows) || !rows.length) {
     resetMunicipiosHighlight();
     return;
@@ -322,6 +323,109 @@ function highlightPersonaMunicipiosDetalle(rows = []) {
     }
   }
 }
+
+// ============================
+// Dashboard: foco territorial por actor
+// ============================
+
+let actorFocusIds = new Set();
+
+function clearActorFocusOnMap({ restoreCoverage = true } = {}) {
+  actorFocusIds = new Set();
+
+  if (restoreCoverage) {
+    applyCoverageStyle?.();
+  }
+}
+
+function paintActorMunicipiosOnMap(rows = [], opts = {}) {
+  const {
+    fit = true,
+    dimOthers = true,
+    principalStyle = {
+      color: "#1d4ed8",
+      weight: 3,
+      fillColor: "#2563eb",
+      fillOpacity: 0.72
+    },
+    secondaryStyle = {
+      color: "#2563eb",
+      weight: 2,
+      fillColor: "#60a5fa",
+      fillOpacity: 0.55
+    }
+  } = opts;
+
+  if (!Array.isArray(rows) || !rows.length) {
+    clearActorFocusOnMap({ restoreCoverage: true });
+    return { painted: 0, ids: [] };
+  }
+
+  const normalized = rows
+    .map(r => ({
+      id_municipio: Number(r.id_municipio),
+      es_principal: !!r.es_principal,
+      municipio: r.municipio || ""
+    }))
+    .filter(r => Number.isFinite(r.id_municipio) && r.id_municipio > 0);
+
+  if (!normalized.length) {
+    clearActorFocusOnMap({ restoreCoverage: true });
+    return { painted: 0, ids: [] };
+  }
+
+  actorFocusIds = new Set(normalized.map(r => r.id_municipio));
+
+  Object.entries(layersById).forEach(([idStr, group]) => {
+    const id = Number(idStr);
+    if (!group) return;
+
+    const hit = actorFocusIds.has(id);
+    const item = normalized.find(r => r.id_municipio === id);
+    const esPrincipal = !!item?.es_principal;
+
+    if (!hit) {
+      if (dimOthers) {
+        const total = municipioCountById.get(id) ?? 0;
+        const baseFill = coverageColor(total);
+
+        group.setStyle({
+          color: "#9ca3af",
+          weight: 1,
+          fillColor: baseFill,
+          fillOpacity: 0.10
+        });
+      }
+      return;
+    }
+
+    group.setStyle(esPrincipal ? principalStyle : secondaryStyle);
+  });
+
+  const selectedLayers = Object.entries(layersById)
+    .filter(([idStr]) => actorFocusIds.has(Number(idStr)))
+    .map(([, group]) => group)
+    .filter(Boolean);
+
+  if (fit && selectedLayers.length && map) {
+    const fg = L.featureGroup(selectedLayers);
+    try {
+      map.fitBounds(fg.getBounds(), { padding: [30, 30] });
+    } catch (e) {
+      console.warn("No pude ajustar bounds del actor:", e);
+    }
+  }
+
+  return {
+    painted: selectedLayers.length,
+    ids: [...actorFocusIds]
+  };
+}
+
+
+window.setMunicipioCoverageCounts = setMunicipioCoverageCounts;
+window.resetMapCoverageView = resetMapCoverageView;
+//DASHBOARD, VARIOS MUNICIPIOS
 
 window.highlightMunicipiosByIdList = highlightMunicipiosByIdList;
 
