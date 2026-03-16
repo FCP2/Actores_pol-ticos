@@ -1,1589 +1,1179 @@
-let municipiosDb = [];            // [{id_municipio,nombre}]
-let perfilModalInstance = null;
-let personasCache = [];
-let municipiosJson = [];          // [{municipio, poligono}]
-let municipioIdByNorm = new Map();// norm(nombreBD) -> id
-let jsonWktByNorm = new Map();    // norm(nombreJSON) -> wkt
-let nombreById = new Map();       // id -> nombre
-//reporte por usuarios
-let personasGrid = null;
-let usuariosFiltroCache = [];
-let gridState = {
-  creado_por: '',      // id_usuario
-  municipio_trabajo: '',// opcional
-  q: '',
-  pageSize: 25
+/* =========================
+   DASHBOARD SUPERADMIN
+   ========================= */
+
+(() => {
+  "use strict";
+
+/* =========================
+   CONFIG
+   ========================= */
+const GRID_DATA_URL = "/api/personas/admin/grid";
+const KPI_MUNICIPIOS_URL = "/api/personas/admin/kpis/municipios";
+const OFICINAS_URL = "/api/personas/admin/oficinas";
+const CAPTURISTAS_URL = "/api/personas/admin/capturistas";
+
+
+const MUNICIPIOS_URL = "/api/municipios";
+const COBERTURA_URL = "/api/analista/municipios/cobertura";
+const MUNICIPIOS_JSON_URL = "/data/municipios.json";
+const KPI_RESUMEN_EJECUTIVO_URL = "/api/personas/admin/kpis/resumen-ejecutivo";
+
+  /* =========================
+     STATE
+     ========================= */
+
+  let municipiosDb = [];
+  let municipiosJson = [];
+  let municipioIdByNorm = new Map();
+  let jsonWktByNorm = new Map();
+  let nombreById = new Map();
+
+  let personasGrid = null;
+  let selectedRowData = null;
+
+  let chartVerificacion = null;
+  let chartMunicipios = null;
+  let chartOficinas = null;
+  let gridLoading = false;
+  let gridReloadPending = false;
+
+const gridState = {
+  pageSize: 25,
+  q: "",
+  oficinaId: "",
+  capturistaId: "",
+  municipio_trabajo: "",
+  multiples_municipios: "",
+  verificado: "", // "1" o "0"
+  referente: "",
+  referenteCargo: "",
+  refNivel: "",
+  refMode: "",
+  sortField: "updated_at",
+  sortDir: "desc"
 };
-let currentMunicipioTrabajoId = null;
-//kpi compeltitud
-let chartCompleto = null;
-let chartUsuarios = null;
 
-//kpi municipios con o sin actores municipio_trabajo_politico
-let chartMunTop = null;
-let editPersonaModalInstance = null;
-//Modal edit 
+  /* =========================
+     HELPERS
+     ========================= */
 
-function showEditAlert(type, msg){
-  const el = document.getElementById("editPersonaAlert");
-  if (!el) return;
-  el.className = `alert alert-${type}`;
-  el.textContent = msg || "";
-  el.classList.toggle("d-none", !msg);
-}
-//helpers
-async function refreshCards(){
-  if (!currentMunicipioTrabajoId) {
-    // si no hay municipio seleccionado, al menos repinta lo que haya
-    applySearch();
-    return;
+  function debounce(fn, wait = 250) {
+    let t = null;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), wait);
+    };
   }
-  await loadPersonasByMunicipioId(currentMunicipioTrabajoId);
-}
-//debounce (para búsqueda)
-function debounce(fn, wait = 300) {
-  let t = null;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), wait);
-  };
-}
+function collectGridFilters() {
+  gridState.q = $("fltSearch")?.value?.trim() || "";
+  gridState.oficinaId = $("filtroOficina")?.value || "";
+  gridState.capturistaId = $("fltCapturista")?.value || "";
+  gridState.municipio_trabajo = $("selMunicipio")?.value || "";
 
-function normalizeName(s) {
-  return (s || '')
-    .toString()
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .replace(/[^\w\s.-]/g, '');
-}
-function setHtmlIfExists(id, html){
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.innerHTML = html;
+  // ✅ nuevo filtro por nivel de verificación
+  gridState.verifLevel = $("fltVerificacion")?.value || "";
+
+  // ✅ viejo filtro rápido: solo pendientes finales
+  gridState.verificado = $("fltSoloPendientesFinal")?.checked ? "0" : "";
+
+  gridState.pageSize = Number($("gridPageSize")?.value || 25);
 }
 
-function esc(s){
-  return String(s ?? '').replace(/[&<>"']/g, c => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
-  }[c]));
-}
-function escAttr(s){
-  // para atributos HTML como src=""
-  return esc(s).replace(/"/g, "&quot;");
-}
+function buildGridQuery(extra = {}) {
+  const qs = new URLSearchParams();
 
-function fillSelectById(selectEl, rows){
-  selectEl.innerHTML = `<option value="" selected disabled>Selecciona un municipio...</option>`;
-  rows.forEach(r=>{
-    const opt = document.createElement('option');
-    opt.value = r.id_municipio;      // ✅ value = ID
-    opt.textContent = r.nombre;      // ✅ texto = nombre oficial BD
-    selectEl.appendChild(opt);
-  });
-  selectEl.disabled = false;
-}
+  const merged = {
+    q: gridState.q,
+    oficinaId: gridState.oficinaId,
+    capturistaId: gridState.capturistaId,
+    municipio_trabajo: gridState.municipio_trabajo,
+    multiples_municipios: gridState.multiples_municipios,
 
-function debugMissingMatches(){
-  const missingDb = [];
-  municipiosDb.forEach(m=>{
-    const key = normalizeName(m.nombre);
-    if (!jsonWktByNorm.has(key)) missingDb.push(m.nombre);
-  });
+    // ✅ nuevo
+    verifLevel: gridState.verifLevel,
 
-  const missingJson = [];
-  municipiosJson.forEach(m=>{
-    const key = normalizeName(m.municipio);
-    if (!municipioIdByNorm.has(key)) missingJson.push(m.municipio);
-  });
+    // ✅ viejo filtro binario, por compatibilidad
+    verificado: gridState.verificado,
 
-  if (missingDb.length) console.warn('BD sin polígono (no match en JSON):', missingDb);
-  if (missingJson.length) console.warn('JSON sin municipio en BD (no match BD):', missingJson);
-  if (!missingDb.length && !missingJson.length) console.log('✅ Match BD <-> JSON perfecto');
-}
-
-function norm(s){
-  return (s || '').toString().trim().toLowerCase();
-}
-
-function badge(text, cls){
-  if (!text) return '';
-  return `<span class="badge ${cls} me-1 mb-1">${text}</span>`;
-}
-
-function labelEscalaInfluencia(v) {
-  if (!v) return '—';
-
-  const mape = {
-    municipal: 'Municipal',
-    regional: 'Regional',
-    distrital: 'Distrital',
-    estatal: 'Estatal',
-    nacional: 'Nacional'
+    referente: gridState.referente,
+    referenteCargo: gridState.referenteCargo,
+    refNivel: gridState.refNivel,
+    refMode: gridState.refMode,
+    sortField: gridState.sortField,
+    sortDir: gridState.sortDir,
+    ...extra
   };
 
-  return mape[String(v).toLowerCase()] || v;
+  Object.entries(merged).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === "") return;
+    qs.set(k, String(v));
+  });
+
+  return qs;
 }
 
-function renderCards(list){
-  const cont = document.getElementById('cardsContainer');
-  cont.innerHTML = '';
-
-  if (!list.length){
-    cont.innerHTML = `<div class="alert alert-light border mb-0">No hay personas registradas para este municipio.</div>`;
-    return;
+  function $(id) {
+    return document.getElementById(id);
   }
 
-  cont.innerHTML = list.map(p => {
-    const badges = [
-      badge(p.oficina_nombre, 'text-bg-light'),
-      badge(`Capturista: ${p.creado_por_nombre || '—'}`, 'text-bg-secondary'),
-      (p.modificado_por_nombre ? badge(`Mod: ${p.modificado_por_nombre}`, 'text-bg-light') : '')
-    ].filter(Boolean).join('');
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#039;"
+    }[c]));
+  }
 
-    return `
-      <div class="card mb-2 shadow-sm">
-        <div class="card-body py-2">
-          <div class="d-flex justify-content-between align-items-start gap-2">
+  function normalizeName(s) {
+    return (s || "")
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .replace(/[^\w\s.-]/g, "");
+  }
 
-            <div class="d-flex gap-2 min-w-0">
-              <img
-                src="${escAttr(p.foto_url || '/img/user.png')}"
-                alt="foto"
-                class="rounded"
-                style="width:44px;height:44px;object-fit:cover"
-              />
+  function norm(s) {
+    return (s || "").toString().trim().toLowerCase();
+  }
 
-              <div class="min-w-0">
-                <div class="fw-semibold text-truncate">${esc(p.nombre_completo || '—')}</div>
-                <div class="small text-muted text-truncate">
-                  ${esc(p.municipio_trabajo_politico || '—')}
-                </div>
-                <div class="mt-2 d-flex flex-wrap gap-1">${badges}</div>
-              </div>
-            </div>
+  function fmtNum(n) {
+    const x = Number(n);
+    return Number.isFinite(x) ? x.toLocaleString("es-MX") : "0";
+  }
 
-            <div class="flex-shrink-0 d-flex align-items-center gap-1" style="height:46px;">
-              <button class="btn btn-outline-secondary btn-sm"
-                      data-action="pdf"
-                      data-id="${p.id_persona}">
-                PDF
-              </button>
+  function fmtPct(n) {
+    const x = Number(n);
+    return Number.isFinite(x) ? `${x.toFixed(1)}%` : "0%";
+  }
 
-              <button class="btn btn-outline-primary btn-sm"
-                      data-action="ver"
-                      data-id="${p.id_persona}">
-                Ver
-              </button>
-              <button class="btn btn-outline-warning btn-sm" data-action="edit" data-id="${p.id_persona}">
-                <i class="bi bi-pencil"></i>
-              </button>
-            </div>
+  function fmtDate(d) {
+    if (!d) return "—";
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return String(d);
+    return dt.toLocaleDateString("es-MX");
+  }
 
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+  function setText(id, value, fallback = "—") {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = (value === undefined || value === null || value === "") ? fallback : String(value);
+  }
 
-    cont.querySelectorAll('button[data-action][data-id]').forEach(btn=>{
-      btn.addEventListener('click', async (e)=>{
-        e.preventDefault();
+  function updateAlert(message, type = "info") {
+    const box = $("alertBox");
+    if (!box) return;
+    box.className = `alert alert-${type}`;
+    box.textContent = message;
+    box.classList.remove("d-none");
+  }
 
-        const id = Number(btn.getAttribute('data-id'));
-        const action = btn.getAttribute('data-action');
+  function hideAlert() {
+    const box = $("alertBox");
+    if (!box) return;
+    box.classList.add("d-none");
+    box.textContent = "";
+  }
 
-        if (!Number.isFinite(id) || id <= 0) {
-          console.warn("Botón sin id válido:", action, btn.outerHTML);
-          return;
+  async function fetchJson(url, options = {}) {
+    const token = localStorage.getItem("token");
+    const headers = {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`
+    };
+
+    const res = await fetch(url, { ...options, headers });
+
+    if (res.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      location.href = "/";
+      throw new Error("Sesión expirada");
+    }
+
+    const ct = res.headers.get("content-type") || "";
+    const isJson = ct.includes("application/json");
+    const payload = isJson ? await res.json() : await res.text();
+
+    if (!res.ok) {
+      const msg = isJson ? (payload?.error || payload?.message || "Error de servidor") : String(payload);
+      throw new Error(msg);
+    }
+
+    return payload;
+  }
+
+
+  function getCurrentUser() {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function fillSelect(selectEl, rows, { valueKey, labelKey, firstOption = "Todos", firstValue = "" } = {}) {
+    if (!selectEl) return;
+    const current = selectEl.value || "";
+    selectEl.innerHTML = `<option value="${esc(firstValue)}">${esc(firstOption)}</option>`;
+
+    (rows || []).forEach(r => {
+      const opt = document.createElement("option");
+      opt.value = String(r[valueKey] ?? "");
+      opt.textContent = String(r[labelKey] ?? "");
+      selectEl.appendChild(opt);
+    });
+
+    if (current) selectEl.value = current;
+  }
+
+  function fillMunicipiosSelect(selectEl, municipios, includeAll = true) {
+    if (!selectEl) return;
+    const current = selectEl.value || "";
+    selectEl.innerHTML = includeAll
+      ? `<option value="">Todos</option>`
+      : `<option value="" selected disabled>Selecciona un municipio...</option>`;
+
+    (municipios || []).forEach(m => {
+      const opt = document.createElement("option");
+      opt.value = String(m.id_municipio);
+      opt.textContent = m.nombre;
+      selectEl.appendChild(opt);
+    });
+
+    if (current) selectEl.value = current;
+  }
+//actualizacion UI DESPUES D EVERIFICAR Y DESVERIFICAR
+  function afterVerificationSuccess(message) {
+    updateAlert(message, "success");
+
+    if ($("chkConfirmFinal")) {
+      $("chkConfirmFinal").checked = false;
+    }
+
+    if ($("chkConfirmDesverificarFinal")) {
+      $("chkConfirmDesverificarFinal").checked = false;
+    }
+
+    bootstrap.Modal.getOrCreateInstance($("modalVerificacionFinal"))?.hide();
+    bootstrap.Modal.getOrCreateInstance($("modalDesverificarFinal"))?.hide();
+
+    reloadGrid();
+    loadSummaryKpis().catch(console.error);
+    renderAlertSummary?.();
+    updateGridInfoExtra?.();
+  }
+
+  /* =========================
+     UI BOOT
+     ========================= */
+
+  function bootSessionUI() {
+    const user = getCurrentUser();
+    setText("lblUsuario", user.nombre || user.email || "Usuario");
+    setText("lblRol", Array.isArray(user.roles) ? user.roles.join(", ") : (user.rol || "superadmin"));
+    setText("txtUsuarioActivo", `Usuario: ${user.nombre || user.email || "—"}`);
+    setText("txtFechaCorte", `Corte: ${new Date().toLocaleDateString("es-MX")}`);
+
+    $("btnLogout")?.addEventListener("click", () => {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      location.href = "/";
+    });
+
+    $("btnToggleSidebar")?.addEventListener("click", () => {
+      $("dashboardSidebar")?.classList.toggle("open");
+    });
+
+    $("btnRefreshDashboard")?.addEventListener("click", () => {
+      loadAllDashboardData();
+    });
+
+    $("btnToggleAdvancedFilters")?.addEventListener("click", () => {
+      $("advancedFilters")?.classList.toggle("d-none");
+    });
+
+    $("btnClearFilters")?.addEventListener("click", clearFilters);
+    $("btnApplyFilters")?.addEventListener("click", applyFiltersAndReload);
+
+    $("btnExportar")?.addEventListener("click", () => {
+      const modal = bootstrap.Modal.getOrCreateInstance($("modalExportar"));
+      modal.show();
+    });
+
+    $("btnReporteEjecutivo")?.addEventListener("click", () => {
+      updateAlert("El reporte ejecutivo aún lo conectamos al endpoint final.", "secondary");
+    });
+
+    $("btnExportExcel")?.addEventListener("click", () => exportGrid("xlsx"));
+    $("btnExportCsv")?.addEventListener("click", () => exportGrid("csv"));
+    $("btnExportPdf")?.addEventListener("click", () => updateAlert("La exportación PDF ejecutiva la conectamos en el siguiente paso.", "secondary"));
+
+
+    $("btnCloseDetailPanel")?.addEventListener("click", closeDetailPanel);
+    $("detailPanelBackdrop")?.addEventListener("click", closeDetailPanel);
+
+    $("btnAprobarFinal")?.addEventListener("click", () => {
+      if (!selectedRowData) return;
+      bootstrap.Modal.getOrCreateInstance($("modalVerificacionFinal")).show();
+    });
+//listener
+    $("btnAbrirDesverificarFinal")?.addEventListener("click", () => {
+      if (!selectedRowData?.id_persona) {
+        updateAlert("Selecciona un registro antes de retirar la verificación.", "warning");
+        return;
+      }
+
+      bootstrap.Modal.getOrCreateInstance($("modalDesverificarFinal")).show();
+    });
+
+    $("btnDevolverObservacion")?.addEventListener("click", () => {
+      if (!selectedRowData) return;
+      bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).show();
+    });
+    //place holder
+
+    $("btnConfirmarFinal")?.addEventListener("click", async () => {
+      if (!selectedRowData?.id_persona) return;
+
+      if (!$("chkConfirmFinal")?.checked) {
+        updateAlert("Confirma la casilla antes de aprobar.", "warning");
+        return;
+      }
+
+      try {
+        await apiFetch(`/personas/analista/personas/${selectedRowData.id_persona}/verificar`, {
+          method: "POST"
+        });
+
+        afterVerificationSuccess("Registro aprobado en verificación FINAL.");
+      } catch (err) {
+        updateAlert(err.message || "No se pudo aprobar la verificación final.", "danger");
+      }
+    });
+
+    $("btnConfirmarDesverificarFinal")?.addEventListener("click", async () => {
+      if (!selectedRowData?.id_persona) return;
+
+      if (!$("chkConfirmDesverificarFinal")?.checked) {
+        updateAlert("Confirma la casilla antes de retirar la verificación.", "warning");
+        return;
+      }
+
+      try {
+        await apiFetch(`/personas/analista/personas/${selectedRowData.id_persona}/desverificar`, {
+          method: "POST"
+        });
+
+        afterVerificationSuccess("Se retiró la verificación FINAL del registro.");
+      } catch (err) {
+        updateAlert(err.message || "No se pudo retirar la verificación final.", "danger");
+      }
+    });
+
+    $("btnConfirmarDevolucion")?.addEventListener("click", async () => {
+      if (!selectedRowData) return;
+      const obs = $("txtObservacionFinal")?.value?.trim();
+      if (!obs) {
+        updateAlert("Escribe una observación antes de devolver.", "warning");
+        return;
+      }
+      updateAlert(`Pendiente conectar devolución FINAL para ID ${selectedRowData.id_persona}.`, "secondary");
+      bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).hide();
+    });
+
+    const debouncedApply = debounce(applyFiltersAndReload, 350);
+    $("fltSearch")?.addEventListener("input", debouncedApply);
+
+    [
+      "fltRegion", "filtroOficina", "selMunicipio", "fltVerificacion",
+      "fltPartido", "fltConfiabilidad", "fltLiderazgo", "fltControversias",
+      "fltEmpresas", "fltElecciones", "fltCapturista", "fltAnalista",
+      "fltVerificadorFinal", "fltFechaDesde", "fltFechaHasta", "fltSoloPendientesFinal"
+    ].forEach(id => {
+      const el = $(id);
+      if (!el) return;
+      const evt = el.type === "checkbox" ? "change" : "change";
+      el.addEventListener(evt, () => {
+        if (id === "filtroOficina") {
+          loadCapturistasByOficinaFiltro(el.value).catch(console.error);
         }
-
-        if (action === 'ver') {
-          await openPerfilModal(id);
-          return;
-        }
-
-        if (action === 'pdf') {
-          await generarPDFPersona(id);
-          return;
-        }
-
-        if (action === 'edit') {
-          await openEditPersonaModal(id);
-          return;
-        }
-
-        if (action === 'del') {
-          await confirmDeletePersona(id); // te dejo abajo esta función
-          return;
-        }
+        applyFiltersAndReload();
       });
     });
-}
-//GENERAR PDF
-async function generarPDFPersona(idPersona){
-  const token = localStorage.getItem("token");
-  const res = await fetch(`/api/personas/${idPersona}/pdf`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
 
-  
+    $("btnVerPerfilCompleto")?.addEventListener("click", () => {
+      if (!selectedRowData?.id_persona) return;
+      if (typeof window.openPerfilModal === "function") {
+        window.openPerfilModal(selectedRowData.id_persona);
+      } else {
+        updateAlert(`Aquí conectamos tu modal de perfil para ID ${selectedRowData.id_persona}.`, "secondary");
+      }
+    });
 
-  const blob = await res.blob();
+    $("btnVerTrazabilidad")?.addEventListener("click", () => {
+      if (!selectedRowData?.id_persona) return;
+      updateAlert(`Aquí conectamos la trazabilidad para ID ${selectedRowData.id_persona}.`, "secondary");
+    });
 
+    $("btnDescargarFichaPdf")?.addEventListener("click", () => {
+      if (!selectedRowData?.id_persona) return;
+      generarPDFPersona(selectedRowData.id_persona).catch(err => updateAlert(err.message, "danger"));
+    });
+  }
 
-  // lee los primeros bytes para ver si empieza con %PDF
-  const ab = await blob.slice(0, 20).arrayBuffer();
-  const head = new TextDecoder().decode(ab);
+  function clearFilters() {
+    [
+      "fltSearch", "fltRegion", "filtroOficina", "selMunicipio", "fltVerificacion",
+      "fltPartido", "fltConfiabilidad", "fltLiderazgo", "fltControversias", "fltEmpresas",
+      "fltElecciones", "fltCapturista", "fltAnalista", "fltVerificadorFinal",
+      "fltFechaDesde", "fltFechaHasta"
+    ].forEach(id => {
+      const el = $(id);
+      if (el) el.value = "";
+    });
 
+    if ($("fltSoloPendientesFinal")) $("fltSoloPendientesFinal").checked = false;
 
-  if (res.status === 401) { localStorage.clear(); location.href='/'; return; }
-  if (res.status === 403) { alert("No tienes permisos."); return; }
-  if (!res.ok) { alert("No se pudo generar el PDF"); return; }
+    gridState.q = "";
+    gridState.region = "";
+    gridState.oficina = "";
+    gridState.municipio = "";
+    gridState.verifLevel = "";
+    gridState.partido = "";
+    gridState.confiabilidad = "";
+    gridState.liderazgo = "";
+    gridState.controversias = "";
+    gridState.empresas = "";
+    gridState.elecciones = "";
+    gridState.capturista = "";
+    gridState.analista = "";
+    gridState.verificador_final = "";
+    gridState.fecha_desde = "";
+    gridState.fecha_hasta = "";
+    gridState.solo_pendientes_final = false;
 
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener,noreferrer");
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
+    $("advancedFilters")?.classList.add("d-none");
+    resetMapUI();
+    applyFiltersAndReload();
+  }
 
+  function applyFiltersAndReload() {
+    collectGridFilters();
+    reloadGrid();
+    loadSummaryKpis().catch(console.error);
+    renderAlertSummary();
+    updateGridInfoExtra();
+  }
 
-function applySearch(){
-  const q = norm(document.getElementById('searchInput').value);
-  const filtered = !q ? personasCache : personasCache.filter(p => norm(p.nombre).includes(q));
-  document.getElementById('countBadge').textContent = filtered.length;
-  renderCards(filtered);
-}
+  function quickView(type) {
+    switch (type) {
+      case "pendientes":
+        $("fltSoloPendientesFinal").checked = true;
+        break;
+      case "finalizados":
+        $("fltSoloPendientesFinal").checked = false;
+        gridState.verificado = "1";
+        break;
+      case "alertas":
+        updateAlert("La vista de alertas la conectamos con un filtro backend específico.", "secondary");
+        return;
+      default:
+        clearFilters();
+        return;
+    }
+    applyFiltersAndReload();
+  }
 
-async function loadPersonasByMunicipioId(idMunicipio){
-  currentMunicipioTrabajoId = Number(idMunicipio) || null;  // ✅ guarda estado
+  function updateGridInfoExtra() {
+    const active = [];
+    if (gridState.q) active.push(`búsqueda: "${gridState.q}"`);
+    if (gridState.oficinaId) active.push("oficina");
+    if (gridState.municipio_trabajo) active.push("municipio");
+    if (gridState.verificado === "0") active.push("pendientes FINAL");
+    setText("gridInfoExtra", active.length ? `Filtros activos: ${active.join(" · ")}` : "Sin filtros aplicados");
+  }
 
-  document.getElementById('countBadge').textContent = '...';
+  /* =========================
+     MAPA
+     ========================= */
 
-  const resp = await apiGet(`/personas/admin/cards?municipio_trabajo=${idMunicipio}&page=1&size=500`);
-  personasCache = resp.data || [];
-  document.getElementById('countBadge').textContent = String(resp?.total ?? personasCache.length);
-  applySearch(); // mantiene tu filtro por texto
-}
+  async function initMapModule() {
+    municipiosDb = await fetchJson(MUNICIPIOS_URL);
+    municipiosDb.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
 
-  (function guardDashboard() {
-    const token = localStorage.getItem('token');
-    const u = JSON.parse(localStorage.getItem('user') || '{}');
-    const roles = u.roles || (u.rol ? [u.rol] : []);
+    municipioIdByNorm = new Map();
+    nombreById = new Map();
+    municipiosDb.forEach(m => {
+      const key = normalizeName(m.nombre);
+      municipioIdByNorm.set(key, m.id_municipio);
+      nombreById.set(m.id_municipio, m.nombre);
+    });
 
-if (!token || !(roles.includes('superadmin') || roles.includes('analista'))) {
-  window.location.href = '/';
-}
-  })();
+    municipiosJson = await fetchJson(MUNICIPIOS_JSON_URL);
 
-async function initDashboard(){
-  // 1) cargar municipios de BD (nombres oficiales)
-  municipiosDb = await apiGet('/municipios'); // /api/municipios
-  municipiosDb.sort((a,b)=> a.nombre.localeCompare(b.nombre,'es',{sensitivity:'base'}));
+    jsonWktByNorm = new Map();
+    municipiosJson.forEach(m => {
+      const key = normalizeName(m.municipio);
+      if (m.poligono) jsonWktByNorm.set(key, m.poligono);
+    });
 
-  municipioIdByNorm = new Map();
-  nombreById = new Map();
-  municipiosDb.forEach(m=>{
-    const key = normalizeName(m.nombre);
-    municipioIdByNorm.set(key, m.id_municipio);
-    nombreById.set(m.id_municipio, m.nombre);
-  });
+    const municipiosConPoligono = [];
+    municipiosDb.forEach(m => {
+      const key = normalizeName(m.nombre);
+      const wkt = jsonWktByNorm.get(key);
+      if (wkt) {
+        municipiosConPoligono.push({
+          id_municipio: m.id_municipio,
+          nombre: m.nombre,
+          wkt
+        });
+      }
+    });
 
-  // 2) cargar JSON de polígonos (WKT)
-  const r = await fetch('/data/municipios.json'); // porque ya lo sirves desde public
-  municipiosJson = await r.json();
+    fillMunicipiosSelect($("selMunicipio"), municipiosDb, true);
 
-  jsonWktByNorm = new Map();
-  municipiosJson.forEach(m=>{
-    const key = normalizeName(m.municipio);
-    if (m.poligono) jsonWktByNorm.set(key, m.poligono);
-  });
+    if (typeof window.initMap === "function") {
+      window.initMap();
+    }
+    if (typeof window.drawMunicipios === "function") {
+      window.drawMunicipios(municipiosConPoligono);
+    }
 
-  // 3) construir lista unificada: BD + WKT
-  const municipiosConPoligono = [];
-  municipiosDb.forEach(m=>{
-    const key = normalizeName(m.nombre);
-    const wkt = jsonWktByNorm.get(key);
-    if (wkt){
-      municipiosConPoligono.push({
-        id_municipio: m.id_municipio,
-        nombre: m.nombre,
-        wkt
+    await loadAndPaintMunicipioCoverage();
+
+    if (typeof window.setOnMunicipioSelected === "function") {
+      window.setOnMunicipioSelected((idMunicipio) => {
+        const sel = $("selMunicipio");
+        if (!sel) return;
+        sel.value = String(idMunicipio);
+        sel.dispatchEvent(new Event("change"));
       });
     }
-  });
 
-  debugMissingMatches();
+    $("selMunicipio")?.addEventListener("change", async () => {
+      const id = Number($("selMunicipio").value || 0);
+      if (!id) {
+        resetMapUI();
+        applyFiltersAndReload();
+        return;
+      }
 
-  // 4) init map y dibujar
-  initMap();
-  drawMunicipios(municipiosConPoligono);
-  await loadAndPaintMunicipioCoverage();
+      setText("mapResumen", `Municipio seleccionado: ${nombreById.get(id) || "Municipio"}`);
+      gridState.municipio_trabajo = String(id);
 
-  // 5) llenar select desde BD
-  const sel = document.getElementById('selMunicipio');
-  fillSelectById(sel, municipiosDb);
+      if (typeof window.resaltarMunicipioById === "function") {
+        window.resaltarMunicipioById(id);
+      }
 
-  fillSelectMunicipios(document.getElementById('gridMunicipio'), municipiosDb);
-
-  // 6) hook mapa -> select (por id)
-  setOnMunicipioSelected((id_municipio)=>{
-    sel.value = String(id_municipio);
-    sel.dispatchEvent(new Event('change'));
-  });
-
-  // 7) select -> resaltar + (aquí luego cargas personas)
-  sel.addEventListener('change', async ()=>{
-    const id = Number(sel.value || 0);
-    if (!id) return;
-
-    document.getElementById('munTitle').textContent = nombreById.get(id) || 'Municipio';
-    resaltarMunicipioById(id);
-    await loadPersonasByMunicipioId(id);
-    // aquí ya puedes cargar personas con tu endpoint:
-    // const rows = await apiGet(`/personas?municipio_trabajo=${id}`);
-    // ...
-  });
-    document.getElementById("btnResetMap")?.addEventListener("click", () => {
-      // reset select
-      const sel = document.getElementById("selMunicipio");
-      if (sel) sel.value = "";
-
-      // reset titulo
-      const title = document.getElementById("munTitle");
-      if (title) title.textContent = "Estado de México";
-
-      // opcional: limpiar tarjetas
-      const cont = document.getElementById("cardsContainer");
-      if (cont) cont.innerHTML = `<div class="alert alert-light border mb-0">Selecciona un municipio para ver registros.</div>`;
-
-      // reset mapa con cobertura
-      resetMapCoverageView();
+      applyFiltersAndReload();
     });
-  //buscador
-  document.getElementById('searchInput').addEventListener('input', applySearch);
-}
 
-//modal perfil helpers
-function esc(s){
-  return (s ?? '').toString()
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#039;");
-}
+    $("btnResetMap")?.addEventListener("click", () => {
+      resetMapUI();
+      applyFiltersAndReload();
+    });
 
-function badgeHtml(text, cls){
-  if (!text) return '';
-  return `<span class="badge ${cls}">${esc(text)}</span>`;
-}
+    $("mapLayerSelect")?.addEventListener("change", () => {
+      updateMapLayerText();
+    });
 
-function badgeResultadoEleccion(resultado){
-  if (resultado === 'ganada') return `<span class="badge text-bg-success">Ganó</span>`;
-  if (resultado === 'no_ganada') return `<span class="badge text-bg-secondary">No ganó</span>`;
-  return `<span class="badge text-bg-light text-muted border">Sin dato</span>`;
-}
+    updateMapLayerText();
+  }
 
-function fmtNum(n){
-  if (n === null || n === undefined || n === '') return '—';
-  const x = Number(n);
-  return Number.isFinite(x) ? x.toLocaleString('es-MX') : String(n);
-}
+  function resetMapUI() {
+    if ($("selMunicipio")) $("selMunicipio").value = "";
+    window.clearActorFocusOnMap?.({ restoreCoverage: true });
+    setText("mapResumen", "Selecciona una capa para visualizar indicadores territoriales.", "");
+    if (typeof window.resetMapCoverageView === "function") {
+      window.resetMapCoverageView();
+    }
+  }
 
-function fmtPct(n){
-  if (n === null || n === undefined || n === '') return '—';
-  const x = Number(n);
-  return Number.isFinite(x) ? `${x.toFixed(2)}%` : `${n}%`;
-}
+  function updateMapLayerText() {
+    const layer = $("mapLayerSelect")?.value || "cobertura";
+    const map = {
+      cobertura: "Capa activa: cobertura de registros.",
+      verificacion: "Capa activa: nivel de verificación por municipio.",
+      confiabilidad: "Capa activa: confiabilidad por municipio.",
+      controversias: "Capa activa: controversias por municipio.",
+      influencia: "Capa activa: influencia territorial."
+    };
+    setText("mapResumen", map[layer], "");
+  }
 
-function fmtDate(d){
-  if (!d) return '—';
-  // si viene ISO: "2026-01-12T..." o "2026-01-12"
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return esc(d);
-  return dt.toLocaleDateString('es-MX');
-}
+  async function loadAndPaintMunicipioCoverage() {
+    try {
+      const resp = await fetchJson(COBERTURA_URL);
+      const conteo = resp?.data || resp || [];
 
-function listOrEmpty(arr){
-  return Array.isArray(arr) ? arr : [];
-}
+      if (typeof window.setMunicipioCoverageCounts === "function") {
+        const normalized = {};
+        (conteo || []).forEach(row => {
+          const id = Number(row.id_municipio);
+          if (!id) return;
+          normalized[id] = Number(row.total || row.count || 0);
+        });
+        window.setMunicipioCoverageCounts(normalized);
+      }
+    } catch (err) {
+      console.warn("No se pudo pintar cobertura municipal:", err.message);
+    }
+  }
 
-function showPerfilState({loading=false, error=null}){
-  const loader = document.getElementById('perfilLoader');
-  const content = document.getElementById('perfilContent');
-  const errBox = document.getElementById('perfilError');
+async function loadPersonaMunicipiosTrabajoDashboard(idPersona) {
+  try {
 
-  loader.classList.toggle('d-none', !loading);
-  content.classList.toggle('d-none', loading || !!error);
 
-  if (error){
-    errBox.classList.remove('d-none');
-    errBox.textContent = error;
-  } else {
-    errBox.classList.add('d-none');
-    errBox.textContent = '';
+    const resp = await apiGet(`/personas/${idPersona}/municipios-trabajo`);
+
+    const rows = resp.data || [];
+
+
+    if (rows.length) {
+      if (window.mapReady && window.highlightPersonaMunicipiosDetalle) {
+        window.highlightPersonaMunicipiosDetalle(rows);
+      } else {
+        window._pendingPersonaMunicipiosDetalle = rows;
+      }
+    } else {
+      window.resetMunicipiosHighlight?.();
+    }
+  } catch (e) {
+    window.resetMunicipiosHighlight?.();
   }
 }
 
-function renderSimpleList(items, renderRow){
-  if (!items.length) return `<div class="text-muted small">—</div>`;
-  return `<div class="vstack gap-2">${items.map(renderRow).join('')}</div>`;
-}
+  /* =========================
+     FILTROS CATÁLOGOS
+     ========================= */
 
-// 1) Diccionario -> etiqueta bonita
-const LID_TIPO_LABELS = {
-  territorial: "Territorial",
-  politico_institucional: "Político",
-  social_comunitario: "Social",
-  empresarial: "Empresarial",
-  mediatico: "Mediático",
-  tecnico_especializado: "Técnico",
-  otro: "Otro",
-};
+  async function loadOficinasFiltro() {
+    const oficinas = await fetchJson(OFICINAS_URL);
+    fillSelect($("filtroOficina"), oficinas || [], {
+      valueKey: "id_oficina",
+      labelKey: "nombre",
+      firstOption: "Todas",
+      firstValue: ""
+    });
+  }
 
-// 2) Convierte array/string crudo a array limpio de etiquetas
-function prettyLiderazgoTipos(tipos, otroTexto) {
-  let arr = [];
+async function loadCapturistasByOficinaFiltro(oficinaId) {
+  const qs = new URLSearchParams();
+  if (oficinaId) qs.set("oficinaId", String(oficinaId));
 
-  if (Array.isArray(tipos)) arr = tipos;
-  else if (typeof tipos === "string") arr = tipos.split(","); // por si llega "a,b,c"
-  else arr = [];
+  const url = qs.toString()
+    ? `${CAPTURISTAS_URL}?${qs.toString()}`
+    : CAPTURISTAS_URL;
 
-  const clean = arr
-    .map(x => String(x || "").trim())
-    .filter(Boolean);
+  const capturistas = await fetchJson(url);
 
-  return clean.map(t => {
-    const key = t.toLowerCase();
-    if (key === "otro" && otroTexto) return `Otro: ${otroTexto}`;
-    return LID_TIPO_LABELS[key] || t; // fallback
+  fillSelect($("fltCapturista"), capturistas || [], {
+    valueKey: "id_usuario",
+    labelKey: "nombre",
+    firstOption: "Todos",
+    firstValue: ""
   });
 }
-//baner nivel de confiabilidad
-function renderConfiabilidadBanner(nivel) {
-  if (!nivel) return "";
 
-  const key = String(nivel).trim().toLowerCase();
+  /* =========================
+     TABULATOR
+     ========================= */
 
-  const map = {
-    alto:  { label: "Alto",  cls: "alert-success", icon: "bi-shield-check" },
-    media: { label: "Medio", cls: "alert-warning", icon: "bi-shield-exclamation" }, // por si llega "media"
-    medio: { label: "Medio", cls: "alert-warning", icon: "bi-shield-exclamation" },
-    bajo:  { label: "Bajo",  cls: "alert-danger",  icon: "bi-shield-x" }
-  };
+function initials(nombre = "") {
+  return String(nombre)
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(s => s[0]?.toUpperCase() || "")
+    .join("");
+}
 
-  const c = map[key] || { label: nivel, cls: "alert-secondary", icon: "bi-info-circle" };
-
-  // puntito tipo semáforo
-  const dot =
-    c.cls.includes("success") ? "background:#16a34a" :
-    c.cls.includes("warning") ? "background:#f59e0b" :
-    c.cls.includes("danger")  ? "background:#dc2626" :
-    "background:#6b7280";
+function personaFormatter(cell) {
+  const row = cell.getRow().getData();
+  const nombre = row.nombre_completo || "Sin nombre";
+  const sub = row.telefono_principal || row.referentes_nombres || "Sin detalle";
 
   return `
-    <div class="alert ${c.cls} d-flex align-items-center justify-content-between mb-0 py-2 px-3">
-      <div class="d-flex align-items-center gap-2">
-        <span style="width:10px;height:10px;border-radius:999px;${dot};display:inline-block"></span>
-        <i class="bi ${c.icon} fs-5"></i>
-        <div class="fw-semibold">Confiabilidad: ${c.label}</div>
+    <div class="persona-cell">
+      <div class="persona-meta">
+        <div class="persona-nombre">${esc(nombre)}</div>
+        <div class="persona-sub">${esc(sub)}</div>
       </div>
-      <span class="badge text-bg-light border">Semáforo</span>
     </div>
   `;
 }
-//mapeo participacion 
-function labelParticipacionTipo(tipoRaw) {
-  const t = (tipoRaw || "").toString().trim().toLowerCase();
 
-  const map = {
-    partido: "Partido",
-    organizacion_politica: "Organización política",
-    organizacion_social: "Organización social",
-    organizacion_civil: "Organización civil",
-    sindicato: "Sindicato",
-    camara_empresarial: "Cámara empresarial",
-    otro: "Otro",
-  };
-
-  // si no está en el mapa, lo "humaniza"
-  if (map[t]) return map[t];
-
-  // fallback: "organizacion_politica" -> "Organizacion politica" (sin acentos)
-  // si quieres acentos perfectos, agrega el tipo al map de arriba
-  return t
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-async function openPerfilModal(idPersona){
-  const el = document.getElementById('perfilModal');
-  if (!perfilModalInstance) perfilModalInstance = new bootstrap.Modal(el);
-  perfilModalInstance.show();
-
-  // estado inicial
-  document.getElementById('perfilModalTitle').textContent = 'Perfil';
-  document.getElementById('perfilModalSubtitle').textContent = '';
-  document.getElementById('perfilBadges').innerHTML = '';
-  showPerfilState({loading:true, error:null});
- // reset foto borrar estado anterior
-  const img = document.getElementById("perfilFoto");
-  const fb  = document.getElementById("perfilFotoFallback");
-  img.src = "";
-  img.style.display = "none";
-  fb.style.display = "inline-block";
-
-  try {
-      const p = await apiGet(`/personas/${idPersona}/perfil`);
-      // NIVEL DE CONFIABILIDAD
-      const banner = document.getElementById("perfilConfiabilidadBanner");
-      if (p.nivel_confiabilidad) {
-        banner.innerHTML = renderConfiabilidadBanner(p.nivel_confiabilidad);
-        banner.classList.remove("d-none");
-      } else {
-        banner.innerHTML = "";
-        banner.classList.add("d-none");
-      }
-    // FOTO
-    const img = document.getElementById("perfilFoto");
-    const fb  = document.getElementById("perfilFotoFallback");
-
-    const url = (p.foto_url || "").trim();
-
-    if (url) {
-      img.src = url;
-      img.style.display = "inline-block";
-      fb.style.display = "none";
-
-      // fallback si falla la imagen
-      img.onerror = () => {
-        img.style.display = "none";
-        fb.style.display = "inline-block";
-        img.onerror = null;
-      };
-    } else {
-      img.style.display = "none";
-      fb.style.display = "inline-block";
-    }
-    // Nombre completo
-    const nombreCompleto = [p.nombre, p.apellido_paterno, p.apellido_materno].filter(Boolean).join(' ');
-    document.getElementById('perfilModalTitle').textContent = nombreCompleto || 'Perfil';
-
-    // Municipio subtitle (prioridad: trabajo > real > legal)
-    const mun = p.municipio_trabajo_politico
-      || p.residencia_real_display
-      || p.residencia_legal_display
-      || '—';
-    document.getElementById('perfilModalSubtitle').textContent = `• ${mun}`;
-
-    // Badges principales
-    const partido = p.partido_actual_siglas || p.partido_actual || null;
-
-    const badgesPerfil = [
-      badgeHtml(p.grupo_postulacion, 'text-bg-info'),
-      badgeHtml(partido, 'text-bg-dark'),
-      badgeHtml(p.ideologia_politica, 'text-bg-secondary'),
-      badgeHtml(p.tema_interes_central, 'text-bg-warning'),
-      (p.sin_controversias_publicas === true ? badgeHtml('Sin controversias', 'text-bg-success') : '')
-    ].filter(Boolean).join(' ');
-
-    // Badges meta (captura/modificación)
-
-
-    // Render final
-    document.getElementById('perfilBadges').innerHTML = `
-      <div class="d-flex flex-wrap gap-1">
-        ${badgesPerfil || `<span class="text-muted small">—</span>`}
-      </div>
-    `;
-
-    function fmtDateMX(dt) {
-      if (!dt) return '—';
-      const d = new Date(dt);
-      if (Number.isNaN(d.getTime())) return '—';
-      return new Intl.DateTimeFormat('es-MX', {
-        dateStyle: 'medium',
-        timeStyle: 'short'
-      }).format(d);
-    }
-
-    const metaParts = [
-      `Oficina: <b>${esc(p.oficina_nombre || '—')}</b>`,
-      `Capturó: <b>${esc(p.creado_por_nombre || '—')}</b>`,
-      `Creado: <b>${fmtDateMX(p.created_at)}</b>`,
-      (p.modificado_por_nombre ? `Modificó: <b>${esc(p.modificado_por_nombre)}</b>` : null),
-      `Actualizado: <b>${fmtDateMX(p.updated_at)}</b>`
-    ].filter(Boolean);
-
-    document.getElementById('perfilMeta').innerHTML = metaParts.join(' &nbsp;•&nbsp; ');
-
-    // Tab controversias: disable si aplica (con guard)
-    const tabCont = document.getElementById('tab-controversias');
-    if (tabCont) {
-      if (p.sin_controversias_publicas === true) {
-        tabCont.classList.add('disabled');
-        tabCont.setAttribute('tabindex', '-1');
-        tabCont.setAttribute('aria-disabled', 'true');
-      } else {
-        tabCont.classList.remove('disabled');
-        tabCont.removeAttribute('tabindex');
-        tabCont.removeAttribute('aria-disabled');
-      }
-    }
-
-    // General
-    setText('v_curp',  p.curp);
-    setText('v_rfc',   p.rfc);
-    setText('v_clave', p.clave_elector);
-    setText('v_ecivil', p.estado_civil);
-
-    setText('v_mun_legal', p.residencia_legal_display || p.municipio_residencia_legal || '—');
-    setText('v_mun_real',  p.residencia_real_display  || p.municipio_residencia_real  || '—');
-    setText('v_mun_trab',  p.municipio_trabajo_politico || '—');
-
-    // Flags
-    const flags = [];
-    if (p.sin_servicio_publico === true) flags.push(badgeHtml('Sin servicio público', 'text-bg-secondary'));
-    if (p.ha_contendido_eleccion === true) flags.push(badgeHtml('Ha contendió elección', 'text-bg-primary'));
-    if (p.sin_controversias_publicas === true) flags.push(badgeHtml('Sin controversias públicas', 'text-bg-success'));
-    document.getElementById('v_flags').innerHTML = flags.join(' ') || `<span class="text-muted small">—</span>`;
-
-    // INE
-    setText('v_ine_seccion', p?.datos_ine?.seccion_electoral);
-    setText('v_ine_df',      p?.datos_ine?.distrito_federal);
-    setText('v_ine_dl',      p?.datos_ine?.distrito_local);
-
-    // Teléfonos
-    const tels = listOrEmpty(p.telefonos);
-    document.getElementById('v_telefonos').innerHTML = renderSimpleList(tels, (t) => {
-      const tipo = t.tipo ? `<span class="text-muted small">(${esc(t.tipo)})</span>` : '';
-      const pri = t.principal ? `<span class="badge text-bg-success ms-2">Principal</span>` : '';
-      return `
-        <div class="border rounded p-2">
-          <div class="d-flex align-items-center justify-content-between gap-2">
-            <div class="fw-semibold">${esc(t.telefono || '—')} ${tipo}</div>
-            <div>${pri}</div>
-          </div>
-        </div>
-      `;
-    });
-
-    // Formación
-    const fa = listOrEmpty(p.formacion_academica);
-    document.getElementById('v_formacion').innerHTML = renderSimpleList(fa, (x) => {
-      const line1 = [x.nivel, x.grado_obtenido || x.grado].filter(Boolean).join(' • ');
-      const inst = x.institucion ? `<div class="text-muted small">${esc(x.institucion)}</div>` : '';
-      const years = (x.anio_inicio || x.anio_fin) ? `<div class="text-muted small">${esc(x.anio_inicio || '—')} - ${esc(x.anio_fin || '—')}</div>` : '';
-      const tit = (x.titulado === true) ? `<span class="badge text-bg-success mt-1">Titulado</span>` : '';
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${esc(line1 || '—')}</div>
-          ${inst}
-          ${years}
-          ${tit}
-        </div>
-      `;
-    });
-
-    // Redes
-    const redes = listOrEmpty(p.redes_sociales);
-    document.getElementById('v_redes').innerHTML = renderSimpleList(redes, (r) => {
-      const url = r.url ? `<a href="${escAttr(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` : '—';
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${esc(r.red || '—')}</div>
-          <div class="small">${url}</div>
-        </div>
-      `;
-    });
-
-    // Temas de interés
-    const temas = listOrEmpty(p.temas_interes);
-    setHtmlIfExists('v_temas_interes', renderSimpleList(temas, (t) => {
-      const head = t.tema ? esc(t.tema) : (t.id_tema ? `Tema #${esc(t.id_tema)}` : 'Tema');
-      const otro = t.otro_texto ? `<div class="text-muted small">${esc(t.otro_texto)}</div>` : '';
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${head}</div>
-          ${otro}
-        </div>
-      `;
-    }) || `<span class="text-muted small">—</span>`);
-
-    //Municipalidades de trabajo (lista nueva)
-    const munTrab = listOrEmpty(p.municipios_trabajo);
-    setHtmlIfExists('v_municipios_trabajo', renderSimpleList(munTrab, (m) => {
-      const pri = m.es_principal ? `<span class="badge text-bg-success ms-2">Principal</span>` : '';
-      const notas = m.notas ? `<div class="text-muted small">${esc(m.notas)}</div>` : '';
-      return `
-        <div class="border rounded p-2">
-          <div class="d-flex align-items-center justify-content-between gap-2">
-            <div class="fw-semibold">${esc(m.municipio || '—')}</div>
-            <div>${pri}</div>
-          </div>
-          ${notas}
-        </div>
-      `;
-    }) || `<span class="text-muted small">—</span>`);
-
-    //Fuentes de consulta (nueva)
-    const fuentes = listOrEmpty(p.fuentes_consulta);
-    setHtmlIfExists('v_fuentes', renderSimpleList(fuentes, (f) => {
-      const head = esc(f.fuente || `Fuente #${f.id_fuente || '—'}`);
-      const fecha = f.fecha_consulta ? `<div class="text-muted small">Fecha: ${esc(f.fecha_consulta)}</div>` : '';
-      const det = f.detalle ? `<div class="text-muted small">${esc(f.detalle)}</div>` : '';
-
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${head}</div>
-          ${fecha}
-          ${det}
-        </div>
-      `;
-    }) || `<span class="text-muted small">—</span>`);
-
-    // Liderazgo e influencia
-    const lid = p.liderazgo_influencia;
-
-    if (!lid) {
-      document.getElementById("v_liderazgo").innerHTML = `<span class="text-muted small">—</span>`;
-    } else {
-      const nivel = lid.nivel ? esc(String(lid.nivel).toUpperCase()) : "—";
-      const presencia = lid.presencia_territorial ? esc(lid.presencia_territorial) : "—";
-      const cuenta = (lid.cuenta_con_estructura === true) ? "Sí" : (lid.cuenta_con_estructura === false ? "No" : "—");
-
-      const tiposBonitos = prettyLiderazgoTipos(lid.tipos, lid.tipo_otro_texto);
-
-      const tiposHtml = tiposBonitos.length
-        ? `<div class="d-flex flex-wrap gap-1">
-            ${tiposBonitos.map(t => `<span class="badge text-bg-light border">${esc(t)}</span>`).join("")}
-          </div>`
-        : `<span class="text-muted small">—</span>`;
-
-      document.getElementById("v_liderazgo").innerHTML = `
-        <div class="border rounded p-2">
-          <div class="row g-2 small">
-            <div class="col-12"><span class="text-muted">Nivel:</span> <b>${nivel}</b></div>
-            <div class="col-12"><span class="text-muted">Presencia territorial:</span> <b>${esc(presencia)}</b></div>
-            <div class="col-12"><span class="text-muted">Cuenta con estructura:</span> <b>${esc(cuenta)}</b></div>
-            <div class="col-12 mt-1"><span class="text-muted">Tipos:</span><div class="mt-1">${tiposHtml}</div></div>
-          </div>
-        </div>
-      `;
-    }
-
-    // Empresas 
-    const emps = listOrEmpty(p.empresas);
-    setHtmlIfExists('v_empresas', renderSimpleList(emps, (e) => {
-      const head = esc(e.nombre_empresa || '—');
-      const rol = [e.rol, e.rol_otro].filter(Boolean).map(esc).join(' / ');
-      const rel = [e.nombre_relacionado, e.relacion].filter(Boolean).map(esc).join(' • ');
-      const per = e.periodo ? `<div class="text-muted small">${esc(e.periodo)}</div>` : '';
-      const notas = e.notas ? `<div class="text-muted small">${esc(e.notas)}</div>` : '';
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${head}</div>
-          ${rol ? `<div class="text-muted small">${rol}</div>` : ''}
-          ${rel ? `<div class="text-muted small">${rel}</div>` : ''}
-          ${per}
-          ${notas}
-        </div>
-      `;
-    }) || `<span class="text-muted small">—</span>`);
-
-    // Cargos elección popular
-    const cargosEP = listOrEmpty(p.cargos_eleccion_popular);
-    setHtmlIfExists('v_cargos_ep', renderSimpleList(cargosEP, (c) => {
-      // ✅ display primero (nuevo), si no existe usa legacy
-      const cargoTxt = c.cargo_display || c.cargo_catalogo || c.cargo || '—';
-      const partidoTxt = c.partido_display || c.partido_postulante_siglas || c.partido_postulante_catalogo || c.partido_postulante || null;
-
-      const metaParts = [
-        c.periodo,
-        c.modalidad ? String(c.modalidad).toUpperCase() : null,
-        partidoTxt
-      ].filter(Boolean).map(esc);
-
-      const suplente = (c.es_suplente === true)
-        ? `<span class="badge text-bg-warning ms-2">Suplente</span>`
-        : '';
-
-      const titular = (c.es_suplente === true && c.titular_candidatura)
-        ? `<div class="text-muted small mt-1">Titular: <b>${esc(c.titular_candidatura)}</b></div>`
-        : '';
-
-      const orden = c.orden_gobierno
-        ? `<span class="badge text-bg-light border ms-2">${esc(c.orden_gobierno)}</span>`
-        : '';
-
-      return `
-        <div class="border rounded p-2">
-          <div class="d-flex align-items-center flex-wrap gap-2">
-            <div class="fw-semibold">${esc(cargoTxt)}</div>
-            ${suplente}
-            ${orden}
-          </div>
-          ${metaParts.length ? `<div class="text-muted small">${metaParts.join(' • ')}</div>` : ''}
-          ${titular}
-        </div>
-      `;
-    }) || `<span class="text-muted small">—</span>`);
-
-    // Eventos movilización (lista)
-    const eventos = listOrEmpty(p.capacidad_movilizacion_eventos);
-    setHtmlIfExists('v_eventos_movilizacion', renderSimpleList(eventos, (e) => {
-      const head = esc(e.nombre_evento || '—');
-      const meta = [
-        e.fecha_evento ? `Fecha: ${e.fecha_evento}` : null,
-        e.asistencia != null ? `Asistencia: ${e.asistencia}` : null,
-        e.lugar_evento ? `Lugar: ${e.lugar_evento}` : null
-      ].filter(Boolean).map(esc).join(' • ');
-
-      const fotos = Array.isArray(e.fotos) ? e.fotos.filter(Boolean) : [];
-      const fotosHtml = fotos.length ? `
-        <div class="d-flex flex-wrap gap-2 mt-2">
-          ${fotos.map(url => `
-            <a href="${escAttr(url)}" target="_blank" rel="noopener">
-              <img src="${escAttr(url)}" style="width:92px;height:64px;object-fit:cover" class="rounded border">
-            </a>
-          `).join('')}
-        </div>
-      ` : '';
-
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${head}</div>
-          ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
-          ${fotosHtml}
-        </div>
-      `;
-    }) || `<span class="text-muted small">—</span>`);
-
-    // Experiencia laboral
-    const exp = listOrEmpty(p.experiencia_laboral);
-    setHtmlIfExists('v_experiencia', renderSimpleList(exp, (x) => {
-      const head = esc(x.cargo || '—');
-      const org  = x.organizacion ? `<div class="text-muted small">${esc(x.organizacion)}</div>` : '';
-      const per  = x.periodo ? `<div class="text-muted small">${esc(x.periodo)}</div>` : '';
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${head}</div>
-          ${org}
-          ${per}
-        </div>
-      `;
-    }) || `<span class="text-muted small">—</span>`);
-
-    // Participación
-    const po = listOrEmpty(p.participacion_organizaciones);
-    document.getElementById('v_participacion').innerHTML = renderSimpleList(po, (o) => {
-      const tipoLabel = o.tipo ? labelParticipacionTipo(o.tipo) : null;
-      const top = `${tipoLabel ? esc(tipoLabel) + ': ' : ''}${esc(o.nombre || '—')}`;
-
-      const meta = [o.rol, o.periodo].filter(Boolean).map(esc).join(' • ');
-      const notas = o.notas ? `<div class="text-muted small">${esc(o.notas)}</div>` : '';
-
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${top}</div>
-          ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
-          ${notas}
-        </div>
-      `;
-    });
-
-    // Controversias
-    if (p.sin_controversias_publicas === true) {
-      document.getElementById('v_controversias').innerHTML =
-        `<div class="alert alert-success mb-0 py-2">Marcado como <strong>Sin controversias públicas</strong>.</div>`;
-    } else {
-      const conv = listOrEmpty(p.controversias);
-      document.getElementById('v_controversias').innerHTML = renderSimpleList(conv, (c) => {
-        const head = c.tipo ? esc(c.tipo) : `Tipo #${esc(c.id_tipo || '—')}`;
-        const meta = [c.estatus, c.fecha_registro].filter(Boolean).map(esc).join(' • ');
-        const fuente = c.fuente ? `<div class="small"><span class="text-muted">Fuente:</span> ${esc(c.fuente)}</div>` : '';
-        const desc = c.descripcion ? `<div class="small">${esc(c.descripcion)}</div>` : '';
-        return `
-          <div class="border rounded p-2">
-            <div class="fw-semibold">${head}</div>
-            ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
-            ${fuente}
-            ${desc}
-          </div>
-        `;
-      });
-    }
-
-    // Parejas + Hijos (usa periodo)
-    const parejas = listOrEmpty(p.parejas);
-    document.getElementById('v_parejas').innerHTML = renderSimpleList(parejas, (pa) => {
-      const head = [pa.nombre_pareja, pa.tipo_relacion].filter(Boolean).map(esc).join(' • ') || '—';
-      const periodo = pa.periodo ? `<div class="text-muted small">${esc(pa.periodo)}</div>` : '';
-
-      const hijos = listOrEmpty(pa.hijos);
-      const hijosHtml = hijos.length
-        ? `<div class="mt-2">
-            <div class="small text-muted mb-1">Hijos</div>
-            ${hijos.map(h => `
-              <div class="border rounded p-2 mb-2">
-                <div class="d-flex gap-2 flex-wrap align-items-center">
-                  <span class="fw-semibold">${esc(h.sexo || '—')}</span>
-                  <span class="text-muted small">Año: ${esc(h.anio_nacimiento || '—')}</span>
-                  <span class="text-muted small">Años: ${esc(h.anios ?? '—')}</span>
-                </div>
-              </div>
-            `).join('')}
-          </div>`
-        : `<div class="small text-muted mt-2">Sin hijos registrados</div>`;
-
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${head}</div>
-          ${periodo}
-          ${hijosHtml}
-        </div>
-      `;
-    });
-
-    // Servicio público
-    const sp = listOrEmpty(p.servicio_publico);
-    document.getElementById('v_servicio_publico').innerHTML = renderSimpleList(sp, (s) => {
-      const head = esc(s.cargo || '—');
-      const dep  = s.dependencia ? `<div class="text-muted small">${esc(s.dependencia)}</div>` : '';
-      const per  = s.periodo ? `<div class="text-muted small">${esc(s.periodo)}</div>` : '';
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${head}</div>
-          ${dep}
-          ${per}
-        </div>
-      `;
-    });
-
-    // Elecciones
-    const elx = listOrEmpty(p.elecciones);
-    document.getElementById('v_elecciones').innerHTML = renderSimpleList(elx, (e) => {
-      const head = [e.anio_eleccion, e.candidatura].filter(Boolean).map(esc).join(' • ') || '—';
-      const partidoP = e.partido_postulacion ? `<span class="text-muted small">${esc(e.partido_postulacion)}</span>` : '';
-      const badge = badgeResultadoEleccion(e.resultado);
-
-      const diff = (e.diferencia_votos || e.diferencia_porcentaje)
-        ? `<div class="text-muted small">Diferencia: ${fmtNum(e.diferencia_votos)} votos • ${fmtPct(e.diferencia_porcentaje)}</div>`
-        : '';
-
-      return `
-        <div class="border rounded p-2">
-          <div class="d-flex justify-content-between align-items-start gap-2">
-            <div>
-              <div class="fw-semibold">${head}</div>
-              ${partidoP ? `<div>${partidoP}</div>` : ''}
-              ${diff}
-            </div>
-            <div>${badge}</div>
-          </div>
-        </div>
-      `;
-    });
-
-    // Capacidad movilización
-
-
-    // Equipos
-    const equipos = listOrEmpty(p.equipos);
-    document.getElementById('v_equipos').innerHTML = renderSimpleList(equipos, (eq) => {
-      const activo = (eq.activo === true)
-        ? `<span class="badge text-bg-success ms-2">Activo</span>`
-        : `<span class="badge text-bg-secondary ms-2">Inactivo</span>`;
-      return `
-        <div class="border rounded p-2 d-flex align-items-center justify-content-between">
-          <div class="fw-semibold">${esc(eq.nombre_equipo || '—')}</div>
-          <div>${activo}</div>
-        </div>
-      `;
-    });
-
-    // Referentes (CORREGIDO)
-    // Referentes (FIX: cargo no definido)
-    const refs = listOrEmpty(p.referentes);
-
-    document.getElementById('v_referentes').innerHTML = renderSimpleList(refs, (r) => {
-      const nombreRef = [r.nombres, r.apellido_paterno, r.apellido_materno]
-        .filter(Boolean)
-        .map(esc)
-        .join(' ') || '—';
-
-      const lvl = r.nivel
-        ? `<span class="badge text-bg-info ms-2">${esc(r.nivel)}</span>`
-        : '';
-
-      // ✅ aquí estaba el bug: antes usabas `cargo` sin declararlo
-      const cargoHtml = r.cargo
-        ? `<div class="text-muted small mt-1">${esc(r.cargo)}</div>`
-        : '';
-
-      return `
-        <div class="border rounded p-2">
-          <div class="d-flex align-items-center flex-wrap gap-2">
-            <div class="fw-semibold">${nombreRef}</div>
-            ${lvl}
-          </div>
-          ${cargoHtml}
-        </div>
-      `;
-    });
-
-    // Familiares
-    const fam = listOrEmpty(p.familiares);
-    document.getElementById('v_familiares').innerHTML = renderSimpleList(fam, (f) => {
-      const head = [f.nombre, f.parentesco].filter(Boolean).map(esc).join(' • ') || '—';
-      const meta = [f.cargo, f.institucion].filter(Boolean).map(esc).join(' • ');
-      return `
-        <div class="border rounded p-2">
-          <div class="fw-semibold">${head}</div>
-          ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
-        </div>
-      `;
-    });
-
-    showPerfilState({loading:false, error:null});
-  } catch (err) {
-    console.error(err);
-    showPerfilState({loading:false, error:'No pude cargar el perfil. ' + (err.message || '')});
+  function chipFormatter(value, type = "neutral", text = null) {
+    return `<span class="grid-chip ${type}">${esc(text ?? value ?? "—")}</span>`;
   }
+
+  function verificationChip(value) {
+    const v = String(value || "").toUpperCase();
+    if (v === "FINAL") return chipFormatter("FINAL", "success");
+    if (v === "OFFICE") return chipFormatter("OFFICE", "warning");
+    if (v === "AREA") return chipFormatter("AREA", "info");
+    return chipFormatter("SIN VERIFICAR", "neutral");
+  }
+
+  function confiabilidadChip(value) {
+    const v = String(value || "").toLowerCase();
+    if (v.includes("alta") || v === "alto") return chipFormatter("Alta", "success");
+    if (v.includes("media") || v.includes("medio")) return chipFormatter("Media", "warning");
+    if (v.includes("baja") || v === "bajo") return chipFormatter("Baja", "danger");
+    return chipFormatter("N/D", "neutral");
+  }
+
+  function boolChip(value, yesText = "Sí", noText = "No") {
+    return value
+      ? chipFormatter(yesText, "danger")
+      : chipFormatter(noText, "neutral");
+  }
+
+function actionsFormatter(cell) {
+  const row = cell.getRow().getData();
+  return `
+    <div class="grid-actions">
+      <button class="grid-action-btn view" data-action="ver" data-id="${row.id_persona}" title="Ver perfil">
+        <i class="bi bi-eye"></i>
+      </button>
+      <button class="grid-action-btn edit" data-action="edit" data-id="${row.id_persona}" title="Editar">
+        <i class="bi bi-pencil"></i>
+      </button>
+      <button class="grid-action-btn delete" data-action="del" data-id="${row.id_persona}" title="Eliminar">
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+  `;
 }
 
-// helper para setText con fallback
-function setText(id, value){
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = (value === undefined || value === null || value === '') ? '—' : String(value);
-}
-
-
-//Inicializar Tabulator (modo remoto)
 function initPersonasGrid() {
-  const el = document.getElementById('gridPersonas');
-  if (!el) return;
+  if (window.personasGrid) return window.personasGrid;
 
-  // Si el grid está dentro de un tab/pane oculto, NO inicialices aún
-  const pane = document.getElementById('pane-grid'); // ajusta si tu id es otro
-  const isHidden = pane && pane.offsetParent === null;
-
-  if (isHidden) {
-    document.getElementById('tab-grid')?.addEventListener(
-      'shown.bs.tab',
-      () => {
-        initPersonasGrid();
-        if (window.personasGrid) {
-          window.personasGrid.redraw(true);
-          window.personasGrid.setData();
-        }
-      },
-      { once: true }
-    );
-    return;
-  }
-
-  if (window.personasGrid) {
-    window.personasGrid.destroy();
-    window.personasGrid = null;
-  }
-
-  window.personasGrid = new Tabulator(el, {
+  window.personasGrid = new Tabulator("#gridPersonas", {
     layout: "fitColumns",
-    height: "70vh",
+    height: "620px",
+    placeholder: "Sin registros para mostrar",
     responsiveLayout: "collapse",
-    placeholder: "Sin registros",
-    responsiveLayoutCollapseStartOpen: false,
-
-    responsiveLayoutCollapseFormatter: (data) => {
-      const wrap = document.createElement("div");
-      wrap.className = "p-2";
-
-      const safe = (v) => {
-        if (v === null || v === undefined) return "—";
-        if (typeof v === "string") return v;
-        if (typeof v === "number" || typeof v === "boolean") return String(v);
-        try { return JSON.stringify(v); } catch { return String(v); }
-      };
-
-      const labelMap = {
-        oficina_nombre: "Oficina",
-        creado_por_nombre: "Capturó",
-        creado_por_email: "Correo",
-        modificado_por_nombre: "Modificó",
-        municipio_trabajo_nombre: "Municipio",
-        telefono_principal: "Teléfono",
-        created_at: "Creado",
-        updated_at: "Actualizado",
-        curp: "CURP",
-        rfc: "RFC",
-        clave_elector: "Clave elector",
-      };
-
-      Object.entries(data).forEach(([k, v]) => {
-        let val = v;
-        if ((k === "created_at" || k === "updated_at") && typeof fmtDate === "function") val = fmtDate(v);
-
-        const row = document.createElement("div");
-        row.className = "small mb-1";
-
-        const label = document.createElement("strong");
-        label.textContent = (labelMap[k] || k) + ": ";
-
-        const value = document.createElement("span");
-        value.textContent = safe(val);
-
-        row.appendChild(label);
-        row.appendChild(value);
-        wrap.appendChild(row);
-      });
-
-      return wrap;
-    },
-
     pagination: true,
     paginationMode: "remote",
     paginationSize: gridState.pageSize,
     paginationSizeSelector: [10, 25, 50, 100],
+    movableColumns: false,
+    headerSortTristate: true,
+    rowHeight: 80,
+    ajaxFiltering: false,
+    ajaxSorting: true,
 
-    ajaxURL: "/api/personas/admin/grid",
-    ajaxConfig: { method: "GET" },
-
-    ajaxRequestFunc: async (url, config, params) => {
-      const page = params.page || 1;
-      const size = params.size || gridState.pageSize;
-
-      // sorters de Tabulator
-      let sortField = "updated_at";
-      let sortDir = "desc";
-      if (Array.isArray(params.sorters) && params.sorters.length) {
-        sortField = params.sorters[0].field || sortField;
-        sortDir = params.sorters[0].dir || sortDir;
+    ajaxURL: GRID_DATA_URL,
+    ajaxConfig: {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token") || ""}`
       }
-
-      const qs = new URLSearchParams();
-      qs.set("page", String(page));
-      qs.set("size", String(size));
-      qs.set("sortField", sortField);
-      qs.set("sortDir", sortDir);
-
-      // 🔎 filtros UI (ajusta si tu gridState usa otros nombres)
-      if (gridState.oficinaId) qs.set("oficinaId", String(gridState.oficinaId));
-      if (gridState.capturistaId) qs.set("capturistaId", String(gridState.capturistaId));
-      if (gridState.municipio_trabajo) qs.set("municipio_trabajo", String(gridState.municipio_trabajo));
-      if (gridState.q) qs.set("q", gridState.q);
-
-      return apiGet(`/personas/admin/grid?${qs.toString()}`);
     },
 
-    ajaxResponse: (url, params, resp) => {
-      // backend: { data, total, page, size, last_page }
+    ajaxURLGenerator: function (url, config, params) {
+      const qs = buildGridQuery({
+        page: params.page || 1,
+        size: params.size || gridState.pageSize
+      });
+      return `${url}?${qs.toString()}`;
+    },
+
+    ajaxResponse: function (url, params, response) {
+      const total = Number(response?.total || 0);
+      const data = response?.data || [];
+      const pageSize = Number(params.size || gridState.pageSize || 25);
+      const lastPage = Number(response?.last_page || Math.max(1, Math.ceil(total / pageSize)));
+
+      setText("gridInfo", `Mostrando ${fmtNum(data.length)} de ${fmtNum(total)} registros`, "");
       return {
-        data: resp.data || [],
-        last_page: resp.last_page || 1,
-        total_records: resp.total || 0,
+        last_page: lastPage,
+        data
       };
+    },
+
+    dataLoaded: function(data) {
+      console.log("✅ Tabla lista con", data.length, "filas");
+    },
+
+    ajaxError: function (xhr) {
+      if (xhr?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/";
+        return;
+      }
+      updateAlert("No se pudo cargar la bandeja de actores.", "danger");
     },
 
     columns: [
       {
-        title: "Nombre",
+        title: "Actor político",
         field: "nombre_completo",
-        minWidth: 260,
-        responsive: 0,
-        headerSort: true,
-        formatter: (cell) => {
-          const r = cell.getRow().getData();
-          const muni = r.municipio_trabajo_nombre || "—";
-          const tel = r.telefono_principal || "—";
-          return `
-            <div class="min-w-0">
-              <div class="fw-semibold text-truncate">${esc(r.nombre_completo || "—")}</div>
-              <div class="small text-muted text-truncate">${esc(muni)} • Tel: ${esc(tel)}</div>
-            </div>
-          `;
-        }
+        formatter: personaFormatter,
+        minWidth: 240,
+        responsive: 0
+      },
+      {
+        title: "Municipio",
+        field: "municipio_trabajo_nombre",
+        formatter: cell => `<span class="grid-chip primary">${esc(cell.getValue() || "—")}</span>`,
+        minWidth: 140,
+        hozAlign: "center",
+        responsive: 1
       },
       {
         title: "Oficina",
         field: "oficina_nombre",
-        width: 220,
-        minWidth: 180,
-        responsive: 2,
-        headerSort: false,
-        formatter: (cell) => esc(cell.getValue() || "—")
+        minWidth: 150,
+        responsive: 2
       },
       {
-        title: "Capturó",
-        field: "creado_por_nombre",
-        width: 220,
-        minWidth: 180,
-        responsive: 1,
-        headerSort: false,
-        formatter: (cell) => {
-          const r = cell.getRow().getData();
-          const name = r.creado_por_nombre || "—";
-          const email = r.creado_por_email || "";
-          return `
-            <div class="min-w-0">
-              <div class="text-truncate">${esc(name)}</div>
-              <div class="small text-muted text-truncate">${email ? esc(email) : "—"}</div>
-            </div>
-          `;
-        }
-      },
-      {
-        title: "Actualizado",
-        field: "updated_at",
-        width: 150,
-        minWidth: 140,
-        responsive: 4,
-        headerSort: true,
-        formatter: (cell) => fmtDate(cell.getValue())
-      },
-      {
-        title: "",
-        field: "_actions",
-        width: 110,
+        title: "Municipios",
+        field: "total_municipios_trabajo",
+        formatter: cell => {
+          const n = Number(cell.getValue() || 0);
+          return n > 1
+            ? `<span class="grid-chip warning">${n} municipios</span>`
+            : `<span class="grid-chip neutral">${n || 0}</span>`;
+        },
         minWidth: 110,
-        frozen: true,
-        headerSort: false,
-        hozAlign: "right",
-        responsive: 0,
-        formatter: () => `<button type="button" class="btn btn-outline-primary btn-sm">Ver</button>`,
-        cellClick: (e, cell) => {
-          const r = cell.getRow().getData();
-          const id = Number(r.id_persona);
-          if (Number.isFinite(id)) openPerfilModal(id);
-          if (act === "edit") return openEditPersonaModal(id);
-        }
-      }
-    ],
-  });
-
-  requestAnimationFrame(() => {
-    if (window.personasGrid) window.personasGrid.setData();
-  });
-
-  document.getElementById('tab-grid')?.addEventListener('shown.bs.tab', () => {
-    if (window.personasGrid) window.personasGrid.redraw(true);
-  });
-}
-
-
-//Wire-up de filtros (usuario + búsqueda + pageSize)
-
-function refreshGridSafe() {
-  // Si aún no existe el grid, no hagas nada (ya se cargará al abrir tab)
-  if (!window.personasGrid) return;
-
-  // Si existe, refresca remoto
-  window.personasGrid.setData();
-}
-
-function initGridFilters() {
-  const selOficina    = document.getElementById('filtroOficina');
-  const selCapturista = document.getElementById('filtroCapturista');
-
-  const inpSearch   = document.getElementById('gridSearch');
-  const selPageSize = document.getElementById('gridPageSize');
-  const selGridMun  = document.getElementById('gridMunicipio');
-
-  if (selGridMun) {
-    selGridMun.addEventListener('change', () => {
-      gridState.municipio_trabajo = selGridMun.value || '';
-      refreshGridSafe();
-    });
-  }
-
-  // ✅ Oficina → recarga capturistas
-  if (selOficina) {
-    selOficina.addEventListener('change', async () => {
-      const oficinaId = selOficina.value || '';
-      gridState.oficinaId = oficinaId;
-
-      // reset capturista al cambiar oficina
-      gridState.capturistaId = '';
-      if (selCapturista) selCapturista.value = '';
-
-      await loadCapturistasByOficinaFiltro(oficinaId);
-      refreshGridSafe();
-    });
-  }
-
-  // ✅ Capturista
-  if (selCapturista) {
-    selCapturista.addEventListener('change', () => {
-      gridState.capturistaId = selCapturista.value || '';
-      refreshGridSafe();
-    });
-  }
-
-  // ✅ Page size
-  if (selPageSize) {
-    selPageSize.addEventListener('change', () => {
-      const n = Number(selPageSize.value);
-      gridState.pageSize = Number.isFinite(n) ? n : 25;
-
-      if (window.personasGrid) {
-        window.personasGrid.setPageSize(gridState.pageSize);
-        window.personasGrid.setData();
-      }
-    });
-  }
-
-  // ✅ Search debounce
-  if (inpSearch) {
-    const onSearch = debounce(() => {
-      gridState.q = (inpSearch.value || '').trim();
-      refreshGridSafe();
-    }, 300);
-    inpSearch.addEventListener('input', onSearch);
-  }
-
-  // ✅ Al abrir tab grid: init + redraw + cargar
-  document.getElementById('tab-grid')?.addEventListener('shown.bs.tab', () => {
-    const sel = document.getElementById('gridMunicipio');
-    gridState.municipio_trabajo = sel ? (sel.value || '') : '';
-
-    if (!window.personasGrid) initPersonasGrid();
-
-    if (window.personasGrid) {
-      requestAnimationFrame(() => {
-        window.personasGrid.redraw(true);
-        window.personasGrid.setData();
-      });
-    }
-  });
-}
-
-
-
-
-async function initAdminDatagrid() {
-  // 1) Oficinas
-  await loadOficinasFiltro();
-
-  // 2) Capturistas inicial (según oficina seleccionada)
-  const selOfi = document.getElementById('filtroOficina');
-  const oficinaIdInit = selOfi ? (selOfi.value || '') : '';
-  await loadCapturistasByOficinaFiltro(oficinaIdInit);
-
-  // 3) listeners
-  initGridFilters();
-
-  // 4) si el tab grid ya está activo
-  const paneGrid = document.getElementById('pane-grid');
-  if (paneGrid?.classList.contains('active') || paneGrid?.classList.contains('show')) {
-    initPersonasGrid();
-    requestAnimationFrame(() => window.personasGrid?.setData());
-  }
-}
-
-
-function fillSelectMunicipios(selectEl, municipios) {
-  if (!selectEl) return;
-  const current = selectEl.value || '';
-  selectEl.innerHTML = `<option value="">Todos</option>` +
-    municipios.map(m => `<option value="${m.id_municipio}">${esc(m.nombre)}</option>`).join('');
-  if (current) selectEl.value = current;
-}
-
-//oficina filtro
-
-async function loadOficinasFiltro() {
-  const sel = document.getElementById('filtroOficina');
-  if (!sel) return;
-
-  sel.innerHTML = `<option value="">Todas</option>`;
-
-  const oficinas = await apiGet('/personas/admin/oficinas'); // [{id_oficina,nombre},...]
-  (oficinas || []).forEach(o => {
-    const opt = document.createElement('option');
-    opt.value = String(o.id_oficina);
-    opt.textContent = o.nombre;
-    sel.appendChild(opt);
-  });
-}
-
-async function loadCapturistasByOficinaFiltro(oficinaId) {
-  const sel = document.getElementById('filtroCapturista');
-  if (!sel) return;
-
-  sel.innerHTML = `<option value="">Todos</option>`;
-
-  const qs = new URLSearchParams();
-  if (oficinaId) qs.set('oficinaId', String(oficinaId));
-
-  const capturistas = await apiGet(`/personas/admin/capturistas?${qs.toString()}`);
-  (capturistas || []).forEach(u => {
-    const opt = document.createElement('option');
-    opt.value = String(u.id_usuario);
-    opt.textContent = `${u.nombre} — ${u.email || ''}`.trim();
-    sel.appendChild(opt);
-  });
-}
-//kpi completitud
-
-function fmtPct(n) {
-  if (n == null || isNaN(n)) return "—";
-  return `${Number(n).toFixed(2)}%`;
-}
-function fmtNum(n) {
-  if (n == null || isNaN(n)) return "—";
-  return String(n);
-}
-
-async function loadKpisCompletitud() {
-  // Endpoint nuevo
-  const data = await apiGet("/personas/admin/kpis/completitud");
-  const g = data?.global || {};
-  const users = data?.por_usuario || [];
-
-  // KPIs
-  document.getElementById("kpiTotal").textContent = fmtNum(g.total_personas);
-  document.getElementById("kpiAvg").textContent = (g.score_promedio != null ? Number(g.score_promedio).toFixed(2) : "—");
-  document.getElementById("kpiPct80").textContent = fmtPct(g.pct_completos_80);
-  document.getElementById("kpiCompletos80").textContent = fmtNum(g.completos_80);
-  document.getElementById("kpiCrit").textContent = fmtNum(g.criticos_lt50);
-
-  // Label detalle dona
-  const incompletos = (g.total_personas || 0) - (g.completos_80 || 0);
-  document.getElementById("lblCompletoDetail").textContent =
-    `Completos: ${fmtNum(g.completos_80)} | Incompletos: ${fmtNum(incompletos)} | Total: ${fmtNum(g.total_personas)}`;
-
-  // Chart: dona completitud global
-  const ctx1 = document.getElementById("chartCompleto");
-  if (chartCompleto) chartCompleto.destroy();
-
-  chartCompleto = new Chart(ctx1, {
-    type: "doughnut",
-    data: {
-      labels: ["Completos (≥80)", "Incompletos"],
-      datasets: [{
-        data: [g.completos_80 || 0, incompletos || 0]
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: "bottom" },
-        tooltip: { enabled: true }
-      }
-    }
-  });
-
-  // Chart: barras % completos por usuario (Top 10)
-  const top = [...users].slice(0, 10);
-  const labels = top.map(u => u.nombre || u.email || `Usuario ${u.id_usuario}`);
-  const pct = top.map(u => Number(u.pct_completos_80 || 0));
-
-  const ctx2 = document.getElementById("chartUsuarios");
-  if (chartUsuarios) chartUsuarios.destroy();
-
-  chartUsuarios = new Chart(ctx2, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        label: "% completos ≥80",
-        data: pct
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: { beginAtZero: true, max: 100 }
+        hozAlign: "center",
+        responsive: 2
       },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (c) => `${Number(c.raw).toFixed(2)}%`
+      {
+        title: "Dirección",
+        field: "verif_area_at",
+        formatter: cell => {
+          const row = cell.getRow().getData();
+          return verificationLevelCard(
+            row.verif_area_at,
+            row.verif_area_por_nombre,
+            "Dirección"
+          );
+        },
+        minWidth: 150,
+        hozAlign: "center",
+        responsive: 2
+      },
+      {
+        title: "Coordinación",
+        field: "verif_office_at",
+        formatter: cell => {
+          const row = cell.getRow().getData();
+          return verificationLevelCard(
+            row.verif_office_at,
+            row.verif_office_por_nombre,
+            "Coordinación"
+          );
+        },
+        minWidth: 160,
+        hozAlign: "center",
+        responsive: 1
+      },
+      {
+        title: "Ofi. Subsecretario",
+        field: "verificado_at",
+        formatter: cell => {
+          const row = cell.getRow().getData();
+          return verificationLevelCard(
+            row.verificado_at,
+            row.verificado_por_nombre,
+            "Ofi. del Subsecretario"
+          );
+        },
+        minWidth: 160,
+        hozAlign: "center",
+        responsive: 1
+      },
+      {
+        title: "Capturista",
+        field: "creado_por_nombre",
+        minWidth: 140,
+        responsive: 3
+      },
+      {
+        title: "Fecha de captura:",
+        field: "created_at",
+        formatter: cell => esc(fmtDate(cell.getValue())),
+        minWidth: 110,
+        hozAlign: "center",
+        responsive: 3
+      },
+      {
+        title: "Acciones",
+        field: "id_persona",
+        formatter: actionsFormatter,
+        headerSort: false,
+        hozAlign: "center",
+        width: 130,
+        responsive: 0,
+        cellClick: async function (e, cell) {
+          const btn = e.target.closest("[data-action]");
+          if (!btn) return;
+
+          e.stopPropagation();
+
+          const action = btn.dataset.action;
+          const row = cell.getRow().getData();
+
+          console.log("CLICK botón acción:", action, row);
+
+          if (action === "ver") {
+            selectedRowData = row;
+            openDetailPanel(row);
+
+            if (row?.id_persona) {
+              await loadPersonaMunicipiosTrabajoDashboard(row.id_persona);
+            }
+            return;
+          }
+
+          if (action === "edit") {
+            if (typeof window.openEditPersonaModal === "function") {
+              window.openEditPersonaModal(row.id_persona);
+            }
+            return;
+          }
+
+          if (action === "del") {
+            updateAlert(`Aquí conectamos eliminación para ID ${row.id_persona}.`, "secondary");
           }
         }
       }
+    ]
+  });
+
+  // ✅ igual que analista.js
+  window.personasGrid.on("rowClick", async function (_e, row) {
+    const data = row.getData();
+    selectedRowData = data;
+
+
+
+    try {
+      openDetailPanel(data);
+    } catch (err) {
+      console.error("Error en openDetailPanel:", err);
+    }
+
+    if (data?.id_persona) {
+      await loadPersonaMunicipiosTrabajoDashboard(data.id_persona);
     }
   });
 
-  // Tabla detalle
-  const tbody = document.getElementById("tblUsuariosKpi");
-  if (!users.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-muted">Sin datos</td></tr>`;
+  return window.personasGrid;
+}
+
+function verificationLevelCard(dateValue, userName, label) {
+  if (!dateValue) {
+    return `
+      <div class="verif-cell">
+        <div class="verif-chip neutral">Pendiente</div>
+        <div class="verif-user">—</div>
+        <div class="verif-date">—</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="verif-cell" title="${esc(label)}: ${esc(userName || "Usuario")} · ${esc(fmtDate(dateValue))}">
+      <div class="verif-chip success">${esc(label)}</div>
+      <div class="verif-user">${esc(userName || "Usuario")}</div>
+      <div class="verif-date">${esc(fmtDate(dateValue))}</div>
+    </div>
+  `;
+}
+
+async function loadKpisResumenEjecutivo() {
+  try {
+    const qs = buildGridQuery();
+    const data = await fetchJson(`${KPI_RESUMEN_EJECUTIVO_URL}?${qs.toString()}`);
+
+    setText("kpiTotalActores", fmtNum(data.total_actores || 0), "0");
+    setText("kpiDireccion", fmtNum(data.verificados_direccion || 0), "0");
+    setText("kpiCoordinacion", fmtNum(data.verificados_coordinacion || 0), "0");
+    setText("kpiFinal", fmtNum(data.verificados_final || 0), "0");
+    setText("kpiPendientesFinal", fmtNum(data.pendientes_final || 0), "0");
+    setText("kpiControversias", fmtNum(data.con_controversias || 0), "0");
+    setText("kpiConfiabilidadAlta", fmtNum(data.confiabilidad_alta || 0), "0");
+
+    if ($("kpiTotalActoresMeta")) $("kpiTotalActoresMeta").textContent = "Registro general";
+    if ($("kpiDireccionMeta")) $("kpiDireccionMeta").textContent = "Primer nivel";
+    if ($("kpiCoordinacionMeta")) $("kpiCoordinacionMeta").textContent = "Segundo nivel";
+    if ($("kpiFinalMeta")) $("kpiFinalMeta").textContent = "Cierre institucional";
+    if ($("kpiPendientesFinalMeta")) $("kpiPendientesFinalMeta").textContent = "Requieren revisión";
+    if ($("kpiControversiasMeta")) $("kpiControversiasMeta").textContent = "Seguimiento sensible";
+    if ($("kpiConfiabilidadAltaMeta")) $("kpiConfiabilidadAltaMeta").textContent = "Base sólida";
+  } catch (err) {
+    console.warn("No se pudo cargar KPI resumen ejecutivo:", err.message);
+  }
+}
+
+function reloadGrid() {
+  collectGridFilters();
+
+  if (!window.personasGrid) {
+    initPersonasGrid();
     return;
   }
 
-  tbody.innerHTML = users.map(u => {
-    const nombre = (u.nombre || u.email || `Usuario ${u.id_usuario}`);
-    const score = (u.score_promedio != null ? Number(u.score_promedio).toFixed(2) : "—");
-    const pct80 = (u.pct_completos_80 != null ? `${Number(u.pct_completos_80).toFixed(2)}%` : "—");
-    return `
-      <tr>
-        <td class="text-truncate" style="max-width: 420px;">
-          <div class="fw-semibold">${nombre}</div>
-          <div class="text-muted small">${u.email || ""}</div>
-        </td>
-        <td class="text-end">${u.total ?? "—"}</td>
-        <td class="text-end">${score}</td>
-        <td class="text-end">${pct80}</td>
-        <td class="text-end">${u.completos_80 ?? "—"}</td>
-      </tr>
-    `;
-  }).join("");
-}
-
-function initKpisUI() {
-  document.getElementById("btnRefreshKpis")?.addEventListener("click", () => {
-    loadKpisMunicipios().catch(err => {
-      console.error(err);
-      alert("No se pudieron cargar los KPIs: " + (err.message || err));
-    });
-
-    loadKpisCompletitud().catch(err => {
-      console.error(err);
-      alert("No se pudieron cargar los KPIs: " + (err.message || err));
-    });
-
-  });
-
-  // Carga inicial
-  loadKpisCompletitud().catch(err => {
-    console.error(err);
-    alert("No se pudieron cargar los KPIs: " + (err.message || err));
-  });
-}
-
-//kpi municipios con o sin actores municipio_trabajo_politico
-
-async function loadKpisMunicipios() {
-  const data = await apiGet("/personas/admin/kpis/municipios");
-  const r = data?.resumen || {};
-  const top10 = data?.top10 || [];
-  const bottom10 = data?.bottom10 || [];
-  const cero = data?.cero || [];
-
-  // Resumen textual
-  const lbl = document.getElementById("lblMunResumen");
-  if (lbl) {
-    lbl.textContent = `Municipios: ${r.total_municipios ?? "—"} | Con registros: ${r.municipios_con_registros ?? "—"} | Sin registros: ${r.municipios_sin_registros ?? "—"} | Total actores: ${r.total_personas ?? "—"}`;
+  if (gridLoading) {
+    gridReloadPending = true;
+    return;
   }
 
-  // Badge de cero
-  const badge = document.getElementById("badgeMunCero");
-  if (badge) badge.textContent = (r.municipios_sin_registros ?? cero.length ?? "—");
+  const newSize = Number(gridState.pageSize || 25);
+  if (window.personasGrid.getPageSize() !== newSize) {
+    window.personasGrid.setPageSize(newSize);
+    return;
+  }
 
-  // Chart Top 10
-  const labels = top10.map(x => x.municipio);
-  const values = top10.map(x => Number(x.total || 0));
+  window.personasGrid.setData();
+}
 
-  const c = document.getElementById("chartMunicipiosTop");
-  if (c) {
-    if (chartMunTop) chartMunTop.destroy();
-    chartMunTop = new Chart(c, {
+  function exportGrid(type) {
+    if (!personasGrid) return;
+    if (type === "csv") personasGrid.download("csv", "actores_politicos.csv");
+    if (type === "xlsx") {
+      updateAlert("Para Excel con Tabulator necesitas incluir sheetjs/jszip si aún no lo tienes cargado.", "secondary");
+    }
+  }
+
+  /* =========================
+     DETAIL PANEL
+     ========================= */
+
+  function openDetailPanel(row) {
+    selectedRowData = row || null;
+    const panel = $("detailPanel");
+    const backdrop = $("detailPanelBackdrop");
+    const body = $("detailPanelBody");
+
+    if (!panel || !backdrop || !body || !row) return;
+
+    body.innerHTML = `
+      <div class="detail-hero">
+        ${
+          row.foto_url
+            ? `<img class="detail-avatar" src="${esc(row.foto_url)}" alt="Foto">`
+            : `<div class="detail-avatar d-inline-flex align-items-center justify-content-center">${esc(initials(row.nombre_completo || row.nombre || ""))}</div>`
+        }
+        <div>
+          <div class="detail-name">${esc(row.nombre_completo || row.nombre || "Sin nombre")}</div>
+          <div class="detail-subtitle">${esc(row.cargo_actual || row.cargo || row.oficina_nombre || "Sin cargo")}</div>
+        </div>
+      </div>
+
+      <div class="detail-block">
+        <div class="detail-block-title">Resumen</div>
+        <div class="detail-kv">
+          <div class="detail-kv-row"><span class="label">Municipio</span><span class="value">${esc(row.municipio_nombre || "—")}</span></div>
+          <div class="detail-kv-row"><span class="label">Oficina</span><span class="value">${esc(row.oficina_nombre || "—")}</span></div>
+          <div class="detail-kv-row"><span class="label">Capturista</span><span class="value">${esc(row.capturista_nombre || "—")}</span></div>
+          <div class="detail-kv-row"><span class="label">Confiabilidad</span><span class="value">${esc(row.nivel_confiabilidad || "—")}</span></div>
+          <div class="detail-kv-row"><span class="label">Verificación</span><span class="value">${esc(row.estatus_verificacion || "SIN VERIFICAR")}</span></div>
+        </div>
+      </div>
+
+      <div class="detail-block">
+        <div class="detail-block-title">Señales</div>
+        <div class="d-flex flex-wrap gap-2">
+          ${verificationChip(row.estatus_verificacion)}
+          ${confiabilidadChip(row.nivel_confiabilidad)}
+          ${boolChip(Boolean(row.tiene_controversias), "Con controversias", "Sin controversias")}
+        </div>
+      </div>
+
+      <div class="detail-block">
+        <div class="detail-block-title">Trazabilidad</div>
+        <div class="detail-kv">
+          <div class="detail-kv-row"><span class="label">Creado</span><span class="value">${fmtDate(row.created_at)}</span></div>
+          <div class="detail-kv-row"><span class="label">Actualizado</span><span class="value">${fmtDate(row.updated_at)}</span></div>
+          <div class="detail-kv-row"><span class="label">Verificador final</span><span class="value">${esc(row.verificador_final_nombre || "—")}</span></div>
+        </div>
+      </div>
+    `;
+
+    panel.classList.add("open");
+    backdrop.classList.remove("d-none");
+  }
+
+  function closeDetailPanel() {
+    $("detailPanel")?.classList.remove("open");
+    $("detailPanelBackdrop")?.classList.add("d-none");
+  }
+
+  /* =========================
+     KPIS Y CHARTS
+     ========================= */
+
+async function loadSummaryKpis() {
+  await loadKpisResumenEjecutivo();
+
+  try {
+    const qs = buildGridQuery();
+    const data = await fetchJson(`${KPI_MUNICIPIOS_URL}?${qs.toString()}`);
+
+    const resumen = data?.resumen || {};
+    const top10 = data?.top10 || [];
+
+    const pct = Number(resumen.total_municipios)
+      ? (Number(resumen.municipios_con_registros || 0) / Number(resumen.total_municipios)) * 100
+      : 0;
+
+    setText("kpiCobertura", fmtPct(pct), "0%");
+    if ($("kpiCoberturaMeta")) $("kpiCoberturaMeta").textContent = "Presencia territorial";
+
+    renderChartMunicipios(top10);
+  } catch (err) {
+    console.warn("No se pudo cargar KPI municipios:", err.message);
+  }
+}
+
+  function renderChartVerificacion(rows) {
+    const canvas = $("chartVerificacion");
+    if (!canvas) return;
+
+    const labels = rows.length
+      ? rows.map(r => r.label)
+      : ["Sin verificar", "AREA", "OFFICE", "FINAL"];
+
+    const values = rows.length
+      ? rows.map(r => Number(r.total || 0))
+      : [0, 0, 0, 0];
+
+    if (chartVerificacion) chartVerificacion.destroy();
+    chartVerificacion = new Chart(canvas, {
+      type: "doughnut",
+      data: {
+        labels,
+        datasets: [{ data: values }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } }
+      }
+    });
+  }
+
+  function renderChartMunicipios(rows) {
+    const canvas = $("chartMunicipios");
+    if (!canvas) return;
+
+    const labels = (rows || []).slice(0, 10).map(r => r.municipio);
+    const values = (rows || []).slice(0, 10).map(r => Number(r.total || 0));
+
+    if (chartMunicipios) chartMunicipios.destroy();
+    chartMunicipios = new Chart(canvas, {
       type: "bar",
       data: {
         labels,
@@ -1598,362 +1188,153 @@ async function loadKpisMunicipios() {
     });
   }
 
-  // Tabla municipios cero
-  const tbCero = document.getElementById("tblMunCero");
-  if (tbCero) {
-    if (!cero.length) {
-      tbCero.innerHTML = `<tr><td class="text-muted">Sin municipios en cero 🎉</td></tr>`;
-    } else {
-      tbCero.innerHTML = cero.map(m => `<tr><td>${m.municipio}</td></tr>`).join("");
-    }
-  }
+  function renderChartOficinas(rows) {
+    const canvas = $("chartOficinas");
+    if (!canvas) return;
 
-  // Tabla bottom 10
-  const tbBottom = document.getElementById("tblMunBottom");
-  if (tbBottom) {
-    if (!bottom10.length) {
-      tbBottom.innerHTML = `<tr><td colspan="2" class="text-muted">Sin datos</td></tr>`;
-    } else {
-      tbBottom.innerHTML = bottom10.map(m => `
-        <tr>
-          <td>${m.municipio}</td>
-          <td class="text-end">${m.total}</td>
-        </tr>
-      `).join("");
-    }
-  }
-}
+    const labels = (rows || []).map(r => r.oficina || r.label || "—");
+    const values = (rows || []).map(r => Number(r.total || 0));
 
-//map vs kpi
-async function loadAndPaintMunicipioCoverage(){
-  // endpoint KPI (debe traer conteo completo o al menos top/bottom/cero)
-  const data = await apiGet("/personas/admin/kpis/municipios");
-
-  // Ideal: que el endpoint regrese "conteo" con TODOS.
-  // Si aún no lo tienes, te digo cómo ajustarlo.
-  const conteo = data?.conteo || [];
-
-  // Si no hay conteo completo, no podemos pintar todos.
-  if (!conteo.length) {
-    console.warn("KPI municipios: no viene 'conteo' completo. Ajusta endpoint para incluirlo.");
-    return;
-  }
-
-  // Construye Map id->total
-  const countsMap = new Map(conteo.map(x => [Number(x.id_municipio), Number(x.total || 0)]));
-
-  // Esta función está en map.js
-  setMunicipioCoverageCounts(countsMap);
-}
-
-//edicion abri modal 
-let currentEditId = null;
-
-// helpers
-function fillSelect(el, rows, valueKey, textKey, placeholder = 'Seleccione') {
-  if (!el) return;
-  el.innerHTML = `<option value="">${placeholder}</option>`;
-  (rows || []).forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r[valueKey];
-    opt.textContent = r[textKey];
-    el.appendChild(opt);
-  });
-}
-
-function setFormDisabled(form, disabled){
-  if (!form) return;
-  [...form.elements].forEach(el => el.disabled = disabled);
-}
-
-// ✅ crea los checks dentro del root (modal)
-function renderTemasChecks(root, temas){
-  const wrap = root.querySelector('#temasInteresChecks');
-  if (!wrap) return;
-
-  wrap.innerHTML = '';
-  (temas || []).forEach(t => {
-    const id = Number(t.id_tema);
-    const div = document.createElement('div');
-    div.className = 'form-check';
-
-    div.innerHTML = `
-      <input class="form-check-input tema-interes-chk" type="checkbox" data-id="${id}" id="tema_${id}">
-      <label class="form-check-label" for="tema_${id}">
-        ${t.nombre}
-      </label>
-    `;
-
-    wrap.appendChild(div);
-  });
-}
-// cache global de catálogos (para no pedirlos cada vez)
-let _sharedEdit = null;
-
-function ensureShared(){
-  if (_sharedEdit) return _sharedEdit;
-
-  const modalEl = document.getElementById("editPersonaModal");
-  if (!modalEl) throw new Error("No existe #editPersonaModal");
-
-  // PersonaShared debe venir de /static/js/persona.shared.js
-  if (!window.PersonaShared || typeof window.PersonaShared.init !== "function") {
-    throw new Error("PersonaShared no está cargado. Revisa <script src='/static/js/persona.shared.js'> y el orden.");
-  }
-
-  _sharedEdit = window.PersonaShared.init({
-    root: modalEl,
-    catalogs: {
-      municipios: window.municipiosCache || [],
-      redes: window.redesCatalog || [],
-      controversias: window.controversiasCatalog || [],
-      temas: window.temasCatalog || [],
-      partidos: window.partidosCatalog || [],
-      ideologias: window.ideologiasCatalog || [],
-      grupos: window.gruposCatalog || [],
-    }
-  });
-
-  return _sharedEdit;
-}
-
-let _catsEdit = null;
-
-async function ensureCatalogosEdicion(){
-  if (_catsEdit) return _catsEdit;
-
-  // Ajusta estas rutas según TU apiGet (si ya agrega /api o no)
-  // Si apiGet ya prefija "/api", entonces aquí NO pongas "/api"
-  const [
-    redes,
-    controversias,
-    temas,
-    partidos,
-    ideologias,
-    grupos,
-    municipios
-  ] = await Promise.all([
-    apiGet('/catalogos/redes'),
-    apiGet('/catalogos/controversias'),
-    apiGet('/catalogos/temas-interes'),
-    apiGet('/catalogos/partidos'),
-    apiGet('/catalogos/ideologias'),
-    apiGet('/catalogos/grupos-postulacion'),
-    apiGet('/municipios'), // 👈 tu router municipios es /api/municipios (si apiGet agrega /api)
-  ]);
-
-  _catsEdit = { redes, controversias, temas, partidos, ideologias, grupos, municipios };
-  return _catsEdit;
-}
-
-async function openEditPersonaModal(idPersona){
-  const id = Number(idPersona);
-  if (!Number.isFinite(id) || id <= 0) return;
-
-  currentEditId = id;
-
-  const modalEl = document.getElementById("editPersonaModal");
-  const formEl  = modalEl?.querySelector("#personaForm");
-  if (!modalEl || !formEl) return;
-
-  setFormDisabled(formEl, true);
-
-  try{
-    const cats = await ensureCatalogosEdicion();
-
-    // --- llena selects ANTES de aplicar payload ---
-    fillSelect(modalEl.querySelector('#mun_legal'),   cats.municipios, 'id_municipio', 'nombre', 'Seleccione');
-    fillSelect(modalEl.querySelector('#mun_real'),    cats.municipios, 'id_municipio', 'nombre', 'Seleccione');
-    fillSelect(modalEl.querySelector('#mun_trabajo'), cats.municipios, 'id_municipio', 'nombre', 'Seleccione');
-
-    fillSelect(modalEl.querySelector('#selPartidoActual'),     cats.partidos,   'id_partido',   'nombre', 'Seleccione');
-    fillSelect(modalEl.querySelector('#selIdeologia'),         cats.ideologias, 'id_ideologia', 'nombre', 'Seleccione');
-    fillSelect(modalEl.querySelector('#selGrupoPostulacion'),  cats.grupos,     'id_grupo',     'nombre', 'Seleccione');
-
-    window.redesCatalog = cats.redes;
-    window.controversiasCatalog = cats.controversias;
-    window.temasCatalog = cats.temas;
-    renderTemasChecks(modalEl, cats.temas); // tu función
-
-    const payload = await apiGet(`/personas/${id}/payload`); // OJO: aquí depende de tu apiGet si ya agrega /api
-    const shared = ensureShared();
-    shared.applyPayloadToForm(payload);
-
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
-  }catch(err){
-    console.error("openEditPersonaModal error:", err);
-  }finally{
-    setFormDisabled(formEl, false);
-  }
-}
-
-// submit (una sola vez)
-// ====== FOTO + SUBMIT (1 sola vez) ======
-document.addEventListener("DOMContentLoaded", () => {
-  const modalEl = document.getElementById("editPersonaModal");
-  if (!modalEl) return;
-
-  const formEl = modalEl.querySelector("#personaForm");
-  if (!formEl) return;
-
-  const inp = modalEl.querySelector("#inpFoto");
-  const img = modalEl.querySelector("#previewFoto");
-  const hid = modalEl.querySelector("#foto_url");
-
-  // ---- Foto: preview + upload + set hidden ----
-  if (inp && img && hid) {
-    inp.addEventListener("change", async () => {
-      const file = inp.files?.[0];
-      if (!file) return;
-
-      // preview local inmediato
-      const localUrl = URL.createObjectURL(file);
-      img.src = localUrl;
-      img.classList.remove("d-none");
-
-      try {
-        inp.disabled = true;
-
-        // SUBE AL BACKEND
-        const fotoUrl = await uploadFotoPersona(file); // <- tu función
-
-        // guarda en hidden para que buildPayload lo mande en PUT
-        hid.value = fotoUrl;
-
-        // preview desde servidor (evita cache)
-        img.src = fotoUrl + (fotoUrl.includes("?") ? "&" : "?") + "t=" + Date.now();
-        img.classList.remove("d-none");
-      } catch (err) {
-        console.error("Error subiendo foto:", err);
-      } finally {
-        inp.disabled = false;
-        URL.revokeObjectURL(localUrl);
+    if (chartOficinas) chartOficinas.destroy();
+    chartOficinas = new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{ label: "Registros", data: values }]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true } }
       }
     });
   }
 
-  // ---- Submit edición ----
-  formEl.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  function renderAlertSummary() {
+    const c = $("alertsContainer");
+    if (!c) return;
 
-    const id = Number(currentEditId);
-    if (!Number.isFinite(id) || id <= 0) return;
+    const alertas = [];
 
+    if (gridState.solo_pendientes_final) {
+      alertas.push({
+        cls: "is-warning",
+        title: "Vista enfocada en pendientes FINAL",
+        text: "La bandeja muestra registros que requieren cierre institucional."
+      });
+    }
+
+    if (gridState.controversias === "1") {
+      alertas.push({
+        cls: "is-danger",
+        title: "Filtro de controversias activo",
+        text: "Se priorizan perfiles con seguimiento sensible."
+      });
+    }
+
+    if (gridState.oficina) {
+      alertas.push({
+        cls: "is-info",
+        title: "Segmentación por oficina",
+        text: "El tablero está acotado a una oficina específica."
+      });
+    }
+
+    if (!alertas.length) {
+      c.innerHTML = `
+        <div class="alert-item">
+          <div class="alert-item-title">Sin alertas cargadas</div>
+          <div class="alert-item-text text-muted">Aquí aparecerán incidencias, focos de atención y prioridades.</div>
+        </div>
+      `;
+      return;
+    }
+
+    c.innerHTML = alertas.map(a => `
+      <div class="alert-item ${a.cls}">
+        <div class="alert-item-title">${esc(a.title)}</div>
+        <div class="alert-item-text">${esc(a.text)}</div>
+      </div>
+    `).join("");
+  }
+
+  /* =========================
+     PDF PERSONA
+     ========================= */
+
+  async function generarPDFPersona(idPersona) {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`/api/personas/${idPersona}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (res.status === 401) {
+      localStorage.clear();
+      location.href = "/";
+      return;
+    }
+
+    if (res.status === 403) {
+      updateAlert("No tienes permisos para generar el PDF.", "warning");
+      return;
+    }
+
+    if (!res.ok) {
+      updateAlert("No se pudo generar el PDF.", "danger");
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  /* =========================
+     CARGA GENERAL
+     ========================= */
+
+  async function loadAllDashboardData() {
+    hideAlert();
     try {
-      const shared = ensureShared();
-
-      // ✅ IMPORTANTE: construir payload ANTES de deshabilitar (FormData ignora disabled)
-      const payload = shared.buildPayload();
-
-      // validación rápida en front para evitar roundtrip
-      if (!payload?.persona?.nombre) {
-        console.warn("Nombre vacío en payload:", payload);
-        // showEditAlert("El nombre es obligatorio.", "warning");
-        return;
-      }
-
-      // ahora sí deshabilita
-      setFormDisabled(formEl, true);
-
-      // ✅ tu apiFetch ya agrega "/api", así que NO pongas /api aquí
-      await apiPut(`/personas/${id}`, payload);
-
-      bootstrap.Modal.getInstance(modalEl)?.hide();
-
-      // refrescar UI (si existe)
-      await loadPersonasByMunicipioId(currentMunicipioTrabajoId);
-
+      collectGridFilters();
+      await Promise.all([
+        loadSummaryKpis(),
+        renderAlertSummary()
+      ]);
+      reloadGrid();
+      setText("txtFechaCorte", `Corte: ${new Date().toLocaleDateString("es-MX")}`);
     } catch (err) {
-      console.error("submit edit error:", err);
-    } finally {
-      setFormDisabled(formEl, false);
+      updateAlert(err.message || "No se pudo cargar el dashboard.", "danger");
     }
-  });
-});
-//helper foto
-async function uploadFotoPersona(file) {
-  const fd = new FormData();
-  fd.append("foto", file);
-
-  // OJO: aquí NO uses apiPost porque apiPost fuerza JSON.
-  // Usamos fetch directo pero con token.
-  const token = localStorage.getItem("token") || "";
-  const res = await fetch("/api/upload/foto", {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: fd
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "No se pudo subir la foto");
-
-  return data.foto_url; // <- tu backend devuelve foto_url
-}
-
-
-
-
-//delete modal persona 
-document.getElementById("btnDeletePersona")?.addEventListener("click", async () => {
-  const id = Number(currentEditId);
-  if (!Number.isFinite(id) || id <= 0) return;
-
-  const ok = confirm(`¿Eliminar a la persona #${id}? Esta acción NO se puede deshacer.`);
-  if (!ok) return;
-
-  try {
-    await apiDelete(`/personas/${id}`); // 👈 SIN /api
-    bootstrap.Modal.getInstance(document.getElementById("editPersonaModal"))?.hide();
-
-    // refresca cards + grid
-   
-    // o si no, recarga las cards del municipio actual:
-    await loadPersonasByMunicipioId(currentMunicipioTrabajoId);
-
-  } catch (err) {
-    console.error(err);
-    // showEditAlert("No pude eliminar: " + (err.message || ""), "danger");
-    alert("No pude eliminar: " + (err.message || ""));
   }
-});
 
-async function confirmDeletePersona(idPersona){
-  const ok = confirm(`¿Eliminar la persona #${idPersona}? Esta acción no se puede deshacer.`);
-  if (!ok) return;
+  async function initDashboard() {
+    bootSessionUI();
+    initPersonasGrid();
 
-  try{
-    await apiDelete(`/personas/${idPersona}`); // o apiFetch con method DELETE
-    // refresca UI
-    if (typeof refreshGridSafe === "function") refreshGridSafe();
-    // si estás viendo cards por municipio, vuelve a cargar o re-filtra
-    // por ejemplo:
-    // applySearch();
-    alert("Eliminado ✅");
-  }catch(err){
-    console.error(err);
-    alert("No se pudo eliminar. " + (err.message || ""));
+    await Promise.all([
+      initMapModule(),
+      loadOficinasFiltro()
+    ]);
+
+    await loadCapturistasByOficinaFiltro("");
+    await loadAllDashboardData();
   }
-}
 
-
-// Llama esto cuando tu dashboard ya esté listo
-document.addEventListener("DOMContentLoaded", () => {
-  let loaded = false;
-
-  document.getElementById("tab-kpis")?.addEventListener("shown.bs.tab", () => {
-    if (!loaded) {
-      initKpisUI();
-      loadKpisMunicipios();      // municipios
-      loaded = true;
-    }
+  document.addEventListener("DOMContentLoaded", () => {
+    initDashboard().catch(err => {
+      console.error(err);
+      updateAlert(err.message || "Error al iniciar el dashboard.", "danger");
+    });
   });
-});
 
-document.addEventListener('DOMContentLoaded', () => {
-  initAdminDatagrid();
-  initDashboard().catch(err=>{
-    console.error(err);
-    alert('Error cargando dashboard. Revisa consola.');
-  });
-});
-
+  // expón algunas referencias por si quieres usarlas desde otros scripts
+  window.dashboardSuperadmin = {
+    reloadGrid,
+    loadAllDashboardData,
+    openDetailPanel
+  };
+})();
