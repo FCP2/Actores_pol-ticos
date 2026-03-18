@@ -41,7 +41,7 @@ async function loadSessionUser() {
       `${(r.user.roles || []).join(", ")} · ${r.user.scope || ""}`;
   }
 }
-/*referentes bloqueo map*/
+/*referentes bloqueo 
 function setReferenteFilter(nombre) {
   currentReferente = (nombre || "").trim();
   referFilterActive = !!currentReferente;
@@ -60,7 +60,7 @@ function clearReferenteFilter() {
   // reset grid + mapa
   if (grid) grid.setPage(1);
   window.resetMunicipiosHighlight?.();
-}
+}map*/
 
   // Si ya tienes estas funciones en otro lado, reutilízalas.
   function showAlert(type, msg) {
@@ -135,11 +135,21 @@ function renderTrazabilidad(p) {
 
   el.innerHTML = `
     <div class="timeline-container">
-      <div class="header-section d-flex align-items-center gap-3">
-        <span class="badge badge-id px-3 py-2 rounded-1 small">ID: ${p.id_persona ?? "—"}</span>
-        <h6 class="mb-0 fw-bold text-uppercase" style="letter-spacing: 1px; color: #444;">
-          Trazabilidad de Registro
-        </h6>
+      <div class="header-section">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+          <div>
+            <div class="fw-bold" style="font-size: 1rem; color: var(--inst-maroon); line-height: 1.2;">
+              ${esc(p.nombre_completo || p.nombre || "Registro sin nombre")}
+            </div>
+            <div class="text-muted small mt-1">
+              Control de historial y validación
+            </div>
+          </div>
+
+          <span class="badge badge-id px-3 py-2 rounded-1 small">
+            ID: ${p.id_persona ?? "—"}
+          </span>
+        </div>
       </div>
 
       <div class="mb-4 mt-3">
@@ -223,7 +233,6 @@ function updateVerifButtons(p) {
   const btnD = document.getElementById("btnDesverificar");
   if (!btnV || !btnD) return;
 
-  // default
   btnV.disabled = true;
   btnD.disabled = true;
 
@@ -237,17 +246,11 @@ function updateVerifButtons(p) {
     btnV.disabled = hasArea;
     btnD.disabled = !hasArea;
   } else if (scope === "OFFICE") {
-    // requiere AREA primero
-    btnV.disabled = (!hasArea || hasOffice);
+    btnV.disabled = !hasArea || hasOffice;
     btnD.disabled = !hasOffice;
   } else if (scope === "ALL") {
-    // requiere OFFICE primero
-    btnV.disabled = (!hasOffice || hasAdmin);
+    btnV.disabled = !hasOffice || hasAdmin;
     btnD.disabled = !hasAdmin;
-  } else {
-    // SELF: sin botones
-    btnV.disabled = true;
-    btnD.disabled = true;
   }
 }
 
@@ -550,6 +553,10 @@ async function loadReferentesSelect(){
         if (estado && estado !== "all") {
           qs.set("verificado", estado);
         }
+        const verif = document.getElementById("fltVerificacion")?.value;
+        if (verif) {
+          qs.set("verifLevel", verif);
+        }
         const search = document.getElementById("fSearch")?.value?.trim();
         if (search) {
           qs.set("q", search);
@@ -765,32 +772,25 @@ async function loadReferentesSelect(){
 
       
       // ✅ AQUÍ SÍ puedes hacer cualquier acción
-      grid.on("rowClick", async (e, row) => {
-        const data = row.getData();
-        selectedRow = row;
-        selectedData = data;
+    grid.on("rowClick", async (e, row) => {
+      const data = row.getData();
+      selectedRow = row;
+      selectedData = data;
 
-        renderTrazabilidad(selectedData);
-        updateVerifButtons(selectedData);
+      renderTrazabilidad(selectedData);
+      updateVerifButtons(selectedData);
 
-        const btnV = document.getElementById("btnVerificar");
-        const btnDV = document.getElementById("btnDesverificar");
-        if (btnV) btnV.disabled = !!data.verificado_at;
-        if (btnDV) btnDV.disabled = !data.verificado_at;
+      const multi = document.getElementById("fMultiMunicipio")?.value;
+      if (multi === "1" && data.id_persona) {
+        await loadPersonaMunicipiosTrabajo(data.id_persona);
+        return;
+      }
 
-        // ✅ modo pro: si está activo filtro de múltiples municipios, enfocar persona
-        const multi = document.getElementById("fMultiMunicipio")?.value;
-        if (multi === "1" && data.id_persona) {
-          await loadPersonaMunicipiosTrabajo(data.id_persona);
-          return;
-        }
-
-        // comportamiento normal anterior
-        const mun = data.municipio_trabajo_nombre;
-        if (window.selectMunicipioByName && mun) {
-          window.selectMunicipioByName(mun);
-        }
-      });
+      const mun = data.municipio_trabajo_nombre;
+      if (window.selectMunicipioByName && mun) {
+        window.selectMunicipioByName(mun);
+      }
+    });
     });
  
 
@@ -816,84 +816,82 @@ async function loadReferentesSelect(){
 
 
 async function onVerificar() {
-    if (!selectedData?.id_persona) return;
+  if (!selectedData?.id_persona) return;
 
-    try {
-      const id = selectedData.id_persona;
-      // 1. Enviar a la base de datos
-      const res = await apiPost(`/personas/analista/personas/${id}/verificar`, {});
-      showAlert("success", "Registro verificado.");
+  try {
+    const id = selectedData.id_persona;
+    const res = await apiPost(`/personas/analista/personas/${id}/verificar`, {});
+    showAlert("success", "Registro verificado.");
 
-      // 2. Refrescar Grid en segundo plano
-      refreshGridSafe();
+    if (res?.persona) {
+      selectedData = { ...selectedData, ...res.persona };
 
-      // 3. ¡ESTA ES LA CLAVE! 
-      // Si tu API 'res' trae el objeto actualizado, úsalo:
-      if (res?.data) {
-        selectedData = res.data;
-      } else {
-        // Si la API no devuelve el objeto, "emulamos" el cambio para la UI
-        // Esto engaña al ojo y hace que el panel se vea actualizado al instante
-        const scope = window.sessionUser?.scope;
-        const ahora = new Date().toISOString();
-        const nombreUsuario = window.sessionUser?.nombre || "Usuario Actual";
+      if (selectedRow) {
+        selectedRow.update(selectedData);
+      }
+    } else {
+      const scope = window.sessionUser?.scope;
+      const ahora = new Date().toISOString();
+      const nombreUsuario = window.sessionUser?.nombre || "Usuario Actual";
 
-        if (scope === "AREA") {
-          selectedData.verif_area_at = ahora;
-          selectedData.verif_area_por_nombre = nombreUsuario;
-        } else if (scope === "OFFICE") {
-          selectedData.verif_office_at = ahora;
-          selectedData.verif_office_por_nombre = nombreUsuario;
-        } else if (scope === "ALL") {
-          selectedData.verificado_at = ahora;
-          selectedData.verificado_por_nombre = nombreUsuario;
-        }
+      if (scope === "AREA") {
+        selectedData.verif_area_at = ahora;
+        selectedData.verif_area_por_nombre = nombreUsuario;
+      } else if (scope === "OFFICE") {
+        selectedData.verif_office_at = ahora;
+        selectedData.verif_office_por_nombre = nombreUsuario;
+      } else if (scope === "ALL") {
+        selectedData.verificado_at = ahora;
+        selectedData.verificado_por_nombre = nombreUsuario;
       }
 
-      // 4. Renderizar inmediatamente (Sin esperar clics ni tiempos)
-      renderTrazabilidad(selectedData);
-      updateVerifButtons(selectedData);
-
-    } catch (err) {
-      console.error(err);
-      showAlert("danger", "No se pudo verificar.");
+      if (selectedRow) {
+        selectedRow.update(selectedData);
+      }
     }
+
+    renderTrazabilidad(selectedData);
+    updateVerifButtons(selectedData);
+
+    refreshGridSafe();
+
+  } catch (err) {
+    console.error(err);
+    showAlert("danger", err?.message || "No se pudo verificar.");
+  }
+}
+
+async function onDesverificar() {
+  if (!selectedData?.id_persona) {
+    showAlert("warning", "Selecciona un registro primero");
+    return;
   }
 
-  async function onDesverificar() {
-    if (!selectedData?.id_persona) {
-      showAlert("warning", "Selecciona un registro primero");
-      return;
+  if (!confirm("¿Seguro que deseas desverificar este registro?")) return;
+
+  try {
+    const id = selectedData.id_persona;
+    const res = await apiPost(`/personas/analista/personas/${id}/desverificar`, {});
+    showAlert("success", "Registro desverificado.");
+
+    if (res?.persona) {
+      selectedData = { ...selectedData, ...res.persona };
+
+      if (selectedRow) {
+        selectedRow.update(selectedData);
+      }
     }
-    
-    if (!confirm("¿Seguro que deseas desverificar este registro?")) return;
 
-    try {
-      const id = selectedData.id_persona;
-      console.log("🔄 Desverificando ID:", id);
+    renderTrazabilidad(selectedData);
+    updateVerifButtons(selectedData);
 
-      await apiPost(`/personas/analista/personas/${id}/desverificar`, {});
-      showAlert("success", "Registro desverificado.");
+    refreshGridSafe();
 
-      // ✅ CAMBIO: refreshGridSafe() en vez de loadGridData()
-      refreshGridSafe();
-
-      // ✅ Re-selecciona fila DESPUÉS del refresh
-      setTimeout(() => {
-        const row = grid.getRow(id);
-        if (row) {
-          selectedRow = row;
-          selectedData = row.getData();
-          renderTrazabilidad(selectedData);
-          updateVerifButtons(selectedData);
-        }
-      }, 500);
-
-    } catch (err) {
-      console.error(err);
-      showAlert("danger", err?.message || "No se pudo desverificar.");
-    }
+  } catch (err) {
+    console.error(err);
+    showAlert("danger", err?.message || "No se pudo desverificar.");
   }
+}
 
 
 
@@ -1000,7 +998,12 @@ async function onVerificar() {
       }
 
     });
-    
+
+    document.getElementById("fltVerificacion")?.addEventListener("change", () => {
+      if (grid) grid.setPage(1);
+      refreshGridSafe();
+    });
+        
   }
 
   //kpi grid remoto:
