@@ -62,6 +62,9 @@ router.get(
 router.get('/admin/kpis/completitud', requireAuth, requireRole('superadmin','analista'), applySmartFilters, ctrl.kpiCompletitud);
 router.get('/admin/kpis/municipios', requireAuth, requireRole('superadmin','analista'), applySmartFilters,  ctrl.kpiMunicipios);
 
+router.get('/dashboard/kpi/verificacion', requireAuth, applySmartFilters, ctrl.kpiVerificacion);
+router.get('/dashboard/kpi/oficinas', requireAuth, applySmartFilters, ctrl.kpiOficinas);
+
 router.get(
   '/admin/kpis/resumen-ejecutivo',
   requireAuth,
