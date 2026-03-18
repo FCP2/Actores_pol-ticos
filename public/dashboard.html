@@ -138,7 +138,7 @@
           </button>
 
           <div>
-            <h1 class="topbar-title mb-0">Dashboard Superadmin</h1>
+            <h1 class="topbar-title mb-0">Dashboard-Administrador</h1>
             <div class="topbar-subtitle">
               Plataforma de inteligencia política del Estado de México
             </div>
@@ -241,7 +241,7 @@
               </div>
 
               <div class="col-md-4 col-xl-2">
-                <label class="form-label">Liderazgo</label>
+                <label class="form-label">Influencia</label>
                 <select class="form-select" id="fltLiderazgo">
                   <option value="">Todos</option>
                 </select>
@@ -254,6 +254,19 @@
                   <option value="1">Con controversias</option>
                   <option value="0">Sin controversias</option>
                 </select>
+              </div>
+
+              <div class="col-md-4 col-xl-3">
+                <label class="form-label">Referente político</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="fltReferente"
+                  list="lstReferentesDashboard"
+                  placeholder="Escribe para buscar referente"
+                  autocomplete="off"
+                >
+                <datalist id="lstReferentesDashboard"></datalist>
               </div>
 
               <div class="col-md-4 col-xl-2">
@@ -541,14 +554,10 @@
     <div class="detail-panel-body" id="detailPanelBody">
       <div class="text-muted">Selecciona un actor para visualizar su resumen.</div>
     </div>
-
     <div class="detail-panel-footer">
       <div class="d-grid gap-2">
-        <button class="btn btn-outline-primary" id="btnVerPerfilCompleto">
-          <i class="bi bi-person-vcard me-1"></i>Ver perfil completo
-        </button>
         <button class="btn btn-outline-secondary" id="btnVerTrazabilidad">
-          <i class="bi bi-clock-history me-1"></i>Ver trazabilidad
+          <i class="bi bi-clock-history me-1"></i>Control de Historial
         </button>
         <button class="btn btn-outline-dark" id="btnDescargarFichaPdf">
           <i class="bi bi-file-earmark-pdf me-1"></i>Descargar PDF
@@ -588,6 +597,26 @@
       </div>
     </div>
   </div>
+
+    <!-- ===================== MODAL control e historial ===================== -->
+  <div class="modal fade" id="modalTrazabilidad" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Control de historial</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="trazabilidadHeader" class="mb-3"></div>
+          <div id="trazabilidadTimeline"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- ===================== MODAL OBSERVACIÓN ===================== -->
   <div class="modal fade" id="modalObservacionFinal" tabindex="-1" aria-hidden="true">
