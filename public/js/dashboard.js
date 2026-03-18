@@ -10,6 +10,10 @@
    ========================= */
 const GRID_DATA_URL = "/api/personas/admin/grid";
 const KPI_MUNICIPIOS_URL = "/api/personas/admin/kpis/municipios";
+
+const KPI_VERIFICACION_URL = "/api/personas/dashboard/kpi/verificacion";
+const KPI_OFICINAS_URL = "/api/personas/dashboard/kpi/oficinas";
+
 const OFICINAS_URL = "/api/personas/admin/oficinas";
 const CAPTURISTAS_URL = "/api/personas/admin/capturistas";
 
@@ -39,19 +43,23 @@ const KPI_RESUMEN_EJECUTIVO_URL = "/api/personas/admin/kpis/resumen-ejecutivo";
   let gridReloadPending = false;
 
 const gridState = {
-  pageSize: 25,
   q: "",
   oficinaId: "",
   capturistaId: "",
   municipio_trabajo: "",
   multiples_municipios: "",
-  verificado: "", // "1" o "0"
+  verifLevel: "",
+  verificado: "",
+  partidoId: "",
+  confiabilidad: "",
+  liderazgo: "",
+  controversias: "",
   referente: "",
-  referenteCargo: "",
   refNivel: "",
-  refMode: "",
+  refMode: "exact",
   sortField: "updated_at",
-  sortDir: "desc"
+  sortDir: "desc",
+  pageSize: 25
 };
 
   /* =========================
@@ -65,12 +73,64 @@ const gridState = {
       t = setTimeout(() => fn(...args), wait);
     };
   }
+  function fmtDateTime(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+
+  return d.toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+function getChartBaseOptions(extra = {}) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: "index",
+      intersect: false
+    },
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: {
+          boxWidth: 12,
+          boxHeight: 12,
+          padding: 16,
+          color: "#374151",
+          font: {
+            size: 12,
+            weight: "600"
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: "rgba(17, 24, 39, 0.96)",
+        titleColor: "#fff",
+        bodyColor: "#e5e7eb",
+        padding: 12,
+        cornerRadius: 10,
+        displayColors: true
+      }
+    },
+    ...extra
+  };
+}
 function collectGridFilters() {
   gridState.q = $("fltSearch")?.value?.trim() || "";
   gridState.oficinaId = $("filtroOficina")?.value || "";
   gridState.capturistaId = $("fltCapturista")?.value || "";
   gridState.municipio_trabajo = $("selMunicipio")?.value || "";
-
+  gridState.partidoId = $("fltPartido")?.value || "";
+  gridState.confiabilidad = $("fltConfiabilidad")?.value || "";
+  gridState.liderazgo = $("fltLiderazgo")?.value || "";
+  gridState.controversias = $("fltControversias")?.value || "";
+  gridState.referente = $("fltReferente")?.value?.trim() || "";
+  gridState.refMode = "exact";
   // ✅ nuevo filtro por nivel de verificación
   gridState.verifLevel = $("fltVerificacion")?.value || "";
 
@@ -89,12 +149,18 @@ function buildGridQuery(extra = {}) {
     capturistaId: gridState.capturistaId,
     municipio_trabajo: gridState.municipio_trabajo,
     multiples_municipios: gridState.multiples_municipios,
+    confiabilidad: gridState.confiabilidad,
+    liderazgo: gridState.liderazgo,
+    controversias: gridState.controversias,
+    referente: gridState.referente,
+    refMode: gridState.refMode,
 
     // ✅ nuevo
     verifLevel: gridState.verifLevel,
 
     // ✅ viejo filtro binario, por compatibilidad
     verificado: gridState.verificado,
+    partidoId: gridState.partidoId,
 
     referente: gridState.referente,
     referenteCargo: gridState.referenteCargo,
@@ -275,6 +341,19 @@ function buildGridQuery(extra = {}) {
 
   function bootSessionUI() {
     const user = getCurrentUser();
+    const debouncedReferentes = debounce(() => {
+      loadReferentesDashboard().catch(console.error);
+    }, 250);
+
+    $("fltReferente")?.addEventListener("focus", () => {
+      loadReferentesDashboard().catch(console.error);
+    });
+
+    $("fltReferente")?.addEventListener("input", debouncedReferentes);
+
+    $("fltReferente")?.addEventListener("change", () => {
+      applyFiltersAndReload();
+    });
     setText("lblUsuario", user.nombre || user.email || "Usuario");
     setText("lblRol", Array.isArray(user.roles) ? user.roles.join(", ") : (user.rol || "superadmin"));
     setText("txtUsuarioActivo", `Usuario: ${user.nombre || user.email || "—"}`);
@@ -405,19 +484,11 @@ function buildGridQuery(extra = {}) {
         applyFiltersAndReload();
       });
     });
-
-    $("btnVerPerfilCompleto")?.addEventListener("click", () => {
-      if (!selectedRowData?.id_persona) return;
-      if (typeof window.openPerfilModal === "function") {
-        window.openPerfilModal(selectedRowData.id_persona);
-      } else {
-        updateAlert(`Aquí conectamos tu modal de perfil para ID ${selectedRowData.id_persona}.`, "secondary");
-      }
-    });
-
     $("btnVerTrazabilidad")?.addEventListener("click", () => {
       if (!selectedRowData?.id_persona) return;
-      updateAlert(`Aquí conectamos la trazabilidad para ID ${selectedRowData.id_persona}.`, "secondary");
+
+      renderTrazabilidadModal(selectedRowData);
+      bootstrap.Modal.getOrCreateInstance($("modalTrazabilidad")).show();
     });
 
     $("btnDescargarFichaPdf")?.addEventListener("click", () => {
@@ -431,7 +502,7 @@ function buildGridQuery(extra = {}) {
       "fltSearch", "fltRegion", "filtroOficina", "selMunicipio", "fltVerificacion",
       "fltPartido", "fltConfiabilidad", "fltLiderazgo", "fltControversias", "fltEmpresas",
       "fltElecciones", "fltCapturista", "fltAnalista", "fltVerificadorFinal",
-      "fltFechaDesde", "fltFechaHasta"
+      "fltFechaDesde", "fltFechaHasta","fltReferente"
     ].forEach(id => {
       const el = $(id);
       if (el) el.value = "";
@@ -441,20 +512,22 @@ function buildGridQuery(extra = {}) {
 
     gridState.q = "";
     gridState.region = "";
-    gridState.oficina = "";
-    gridState.municipio = "";
+    gridState.oficinaId = "";
+    gridState.municipio_trabajo = "";
     gridState.verifLevel = "";
-    gridState.partido = "";
+    gridState.partidoId = "";
     gridState.confiabilidad = "";
     gridState.liderazgo = "";
     gridState.controversias = "";
     gridState.empresas = "";
     gridState.elecciones = "";
-    gridState.capturista = "";
+    gridState.capturistaId = "";
     gridState.analista = "";
     gridState.verificador_final = "";
     gridState.fecha_desde = "";
     gridState.fecha_hasta = "";
+    gridState.referente = "";
+    gridState.refMode = "exact";
     gridState.solo_pendientes_final = false;
 
     $("advancedFilters")?.classList.add("d-none");
@@ -466,6 +539,7 @@ function buildGridQuery(extra = {}) {
     collectGridFilters();
     reloadGrid();
     loadSummaryKpis().catch(console.error);
+    loadAndPaintFilteredMunicipiosDashboard().catch(console.error);
     renderAlertSummary();
     updateGridInfoExtra();
   }
@@ -575,7 +649,6 @@ function buildGridQuery(extra = {}) {
 
     $("btnResetMap")?.addEventListener("click", () => {
       resetMapUI();
-      applyFiltersAndReload();
     });
 
     $("mapLayerSelect")?.addEventListener("change", () => {
@@ -648,6 +721,54 @@ async function loadPersonaMunicipiosTrabajoDashboard(idPersona) {
   }
 }
 
+/*refrentes, seleccion actores pintar el mapa*/
+async function loadAndPaintFilteredMunicipiosDashboard() {
+  try {
+    const hasRelevantFilter =
+      !!gridState.referente ||
+      !!gridState.municipio_trabajo ||
+      !!gridState.oficinaId ||
+      !!gridState.capturistaId ||
+      !!gridState.partidoId ||
+      !!gridState.confiabilidad ||
+      !!gridState.liderazgo ||
+      !!gridState.controversias ||
+      !!gridState.verifLevel ||
+      !!gridState.q;
+
+    if (!hasRelevantFilter) {
+      window.resetMunicipiosHighlight?.();
+      window.resetMapCoverageView?.();
+      return;
+    }
+
+    const qs = buildGridQuery();
+    const resp = await apiGet(`/personas/admin/grid/mapa-municipios?${qs.toString()}`);
+    const rows = resp?.data || [];
+
+    const ids = [...new Set(
+      rows.map(r => Number(r.id_municipio)).filter(Boolean)
+    )];
+
+    if (!ids.length) {
+      window.resetMunicipiosHighlight?.();
+      window.resetMapCoverageView?.();
+      return;
+    }
+
+    if (window.mapReady && window.highlightMunicipiosByIdList) {
+      window.highlightMunicipiosByIdList(ids, { dimOthers: true });
+    } else {
+      window._pendingHighlightMunicipiosById = ids;
+    }
+
+  } catch (e) {
+    console.error("Error cargando municipios filtrados del dashboard:", e);
+    window.resetMunicipiosHighlight?.();
+    window.resetMapCoverageView?.();
+  }
+}
+
   /* =========================
      FILTROS CATÁLOGOS
      ========================= */
@@ -678,6 +799,79 @@ async function loadCapturistasByOficinaFiltro(oficinaId) {
     firstOption: "Todos",
     firstValue: ""
   });
+}
+
+async function loadPartidosFiltro() {
+  try {
+    const resp = await apiGet("/catalogos/partidos");
+
+    const data = resp?.data || resp || [];
+    const sel = $("fltPartido");
+    if (!sel) return;
+
+    sel.innerHTML =
+      `<option value="">Todos</option>` +
+      data.map(p => `<option value="${p.id_partido}">${esc(p.nombre)}</option>`).join("");
+
+  } catch (e) {
+    console.error("Error cargando partidos:", e);
+  }
+}
+
+function loadConfiabilidadFiltro() {
+  const sel = $("fltConfiabilidad");
+  if (!sel) return;
+
+  sel.innerHTML = `
+    <option value="">Todas</option>
+    <option value="alto">Alto</option>
+    <option value="medio">Medio</option>
+    <option value="bajo">Bajo</option>
+  `;
+}
+
+function loadInfluenciaFiltro() {
+  const sel = $("fltLiderazgo");
+  if (!sel) return;
+
+  sel.innerHTML = `
+    <option value="">Todos</option>
+    <option value="municipal">Municipal</option>
+    <option value="regional">Regional</option>
+    <option value="distrital">Distrital</option>
+    <option value="estatal">Estatal</option>
+    <option value="nacional">Nacional</option>
+  `;
+}
+
+async function loadReferentesDashboard() {
+  try {
+    const qs = new URLSearchParams();
+
+    if ($("filtroOficina")?.value) qs.set("oficinaId", $("filtroOficina").value);
+    if ($("fltCapturista")?.value) qs.set("capturistaId", $("fltCapturista").value);
+    if ($("selMunicipio")?.value) qs.set("municipio_trabajo", $("selMunicipio").value);
+    if ($("fltSearch")?.value?.trim()) qs.set("q", $("fltSearch").value.trim());
+
+    const typed = $("fltReferente")?.value?.trim();
+    if (typed) qs.set("referente", typed);
+
+    qs.set("mode", "ref_list_dashboard");
+    qs.set("refMode", "exact");
+
+    const resp = await fetchJson(`${GRID_DATA_URL}?${qs.toString()}`);
+    const rows = resp?.data || [];
+
+    const dl = $("lstReferentesDashboard");
+    if (!dl) return;
+
+    dl.innerHTML = rows.map(r => {
+      const nombre = String(r.label || r.nombre || "").trim();
+      return `<option value="${esc(nombre)}"></option>`;
+    }).join("");
+  } catch (e) {
+    console.error("Error cargando referentes dashboard:", e);
+  }
 }
 
   /* =========================
@@ -740,12 +934,6 @@ function actionsFormatter(cell) {
     <div class="grid-actions">
       <button class="grid-action-btn view" data-action="ver" data-id="${row.id_persona}" title="Ver perfil">
         <i class="bi bi-eye"></i>
-      </button>
-      <button class="grid-action-btn edit" data-action="edit" data-id="${row.id_persona}" title="Editar">
-        <i class="bi bi-pencil"></i>
-      </button>
-      <button class="grid-action-btn delete" data-action="del" data-id="${row.id_persona}" title="Eliminar">
-        <i class="bi bi-trash"></i>
       </button>
     </div>
   `;
@@ -1130,7 +1318,7 @@ function openDetailPanel(row) {
     </div>
 
     <div class="detail-block">
-      <div class="detail-block-title">Trazabilidad</div>
+      <div class="detail-block-title">Historial y validación</div>
       <div class="detail-kv">
         <div class="detail-kv-row">
           <span class="label">Creado</span>
@@ -1201,6 +1389,119 @@ function openDetailPanel(row) {
     $("detailPanel")?.classList.remove("open");
     $("detailPanelBackdrop")?.classList.add("d-none");
   }
+  function renderTrazabilidadModal(row) {
+    const header = $("trazabilidadHeader");
+    const timeline = $("trazabilidadTimeline");
+    if (!header || !timeline || !row) return;
+
+    header.innerHTML = `
+      <div class="d-flex align-items-center gap-3">
+        ${
+              `<div class="rounded-circle d-flex align-items-center justify-content-center bg-secondary text-white"
+                    style="width:56px;height:56px;font-weight:700;">
+                ${esc(initials(row.nombre_completo || row.nombre || ""))}
+              </div>`
+        }
+        <div>
+          <div class="fw-bold fs-5">${esc(row.nombre_completo || "Sin nombre")}</div>
+          <div class="text-muted">${esc(row.oficina_nombre || "Sin oficina")}</div>
+        </div>
+      </div>
+    `;
+
+    const events = [];
+
+    if (row.created_at) {
+      events.push({
+        type: "Creación del registro",
+        icon: "bi-plus-circle",
+        badge: "bg-primary",
+        user: row.creado_por_nombre || "—",
+        cargo: row.creado_por_cargo || "",
+        area: row.creado_por_area || "",
+        at: row.created_at
+      });
+    }
+
+    if (row.updated_at && row.modificado_por_nombre) {
+      events.push({
+        type: "Última modificación",
+        icon: "bi-pencil-square",
+        badge: "bg-warning text-dark",
+        user: row.modificado_por_nombre || "—",
+        cargo: row.modificado_por_cargo || "",
+        area: row.modificado_por_area || "",
+        at: row.updated_at
+      });
+    }
+
+    if (row.verif_area_at) {
+      events.push({
+        type: "Verificación Dirección",
+        icon: "bi-shield-check",
+        badge: "bg-info text-dark",
+        user: row.verif_area_por_nombre || "—",
+        cargo: row.verif_area_por_cargo || "",
+        area: row.verif_area_por_area || "",
+        at: row.verif_area_at
+      });
+    }
+
+    if (row.verif_office_at) {
+      events.push({
+        type: "Verificación Coordinación",
+        icon: "bi-shield-check",
+        badge: "bg-secondary",
+        user: row.verif_office_por_nombre || "—",
+        cargo: row.verif_office_por_cargo || "",
+        area: row.verif_office_por_area || "",
+        at: row.verif_office_at
+      });
+    }
+
+    if (row.verificado_at) {
+      events.push({
+        type: "Verificación Final",
+        icon: "bi-patch-check-fill",
+        badge: "bg-success",
+        user: row.verificado_por_nombre || "—",
+        cargo: row.verificado_por_cargo || "",
+        area: row.verificado_por_area || "",
+        at: row.verificado_at
+      });
+    }
+
+    timeline.innerHTML = `
+      <div class="timeline-wrap">
+        ${events.map(ev => `
+          <div class="timeline-item d-flex gap-3 mb-4">
+            <div class="timeline-marker">
+              <span class="badge rounded-pill ${ev.badge} p-3">
+                <i class="bi ${ev.icon}"></i>
+              </span>
+            </div>
+            <div class="timeline-content flex-grow-1 border rounded-3 p-3 bg-light-subtle">
+              <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                  <div class="fw-semibold">${esc(ev.type)}</div>
+                  <div class="text-muted small">${esc(ev.user)}</div>
+                </div>
+                <div class="small text-muted">${esc(fmtDateTime(ev.at))}</div>
+              </div>
+              ${
+                ev.cargo || ev.area
+                  ? `<div class="mt-2 small">
+                      ${ev.cargo ? `<div><strong>Cargo:</strong> ${esc(ev.cargo)}</div>` : ""}
+                      ${ev.area ? `<div><strong>Área:</strong> ${esc(ev.area)}</div>` : ""}
+                    </div>`
+                  : ""
+              }
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
 
   /* =========================
      KPIS Y CHARTS
@@ -1227,81 +1528,225 @@ async function loadSummaryKpis() {
   } catch (err) {
     console.warn("No se pudo cargar KPI municipios:", err.message);
   }
+
+  await Promise.all([
+    loadKpiVerificacion(),
+    loadKpiOficinas()
+  ]);
 }
 
-  function renderChartVerificacion(rows) {
-    const canvas = $("chartVerificacion");
-    if (!canvas) return;
+function renderChartMunicipios(rows) {
+  const canvas = $("chartMunicipios");
+  if (!canvas) return;
 
-    const labels = rows.length
-      ? rows.map(r => r.label)
-      : ["Sin verificar", "AREA", "OFFICE", "FINAL"];
+  const top = (rows || []).slice(0, 10);
+  const labels = top.map(r => r.municipio);
+  const values = top.map(r => Number(r.total || 0));
 
-    const values = rows.length
-      ? rows.map(r => Number(r.total || 0))
-      : [0, 0, 0, 0];
-
-    if (chartVerificacion) chartVerificacion.destroy();
-    chartVerificacion = new Chart(canvas, {
-      type: "doughnut",
-      data: {
-        labels,
-        datasets: [{ data: values }]
+  if (chartMunicipios) chartMunicipios.destroy();
+  chartMunicipios = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Actores",
+        data: values,
+        backgroundColor: "#7c3aed",
+        borderRadius: 8,
+        borderSkipped: false,
+        maxBarThickness: 18
+      }]
+    },
+    options: getChartBaseOptions({
+      indexAxis: "y",
+      interaction: {
+        mode: "nearest",
+        intersect: true
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: "bottom" } }
-      }
-    });
-  }
-
-  function renderChartMunicipios(rows) {
-    const canvas = $("chartMunicipios");
-    if (!canvas) return;
-
-    const labels = (rows || []).slice(0, 10).map(r => r.municipio);
-    const values = (rows || []).slice(0, 10).map(r => Number(r.total || 0));
-
-    if (chartMunicipios) chartMunicipios.destroy();
-    chartMunicipios = new Chart(canvas, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [{ label: "Actores", data: values }]
+      plugins: {
+        ...getChartBaseOptions().plugins,
+        legend: { display: false }
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: {
+            color: "rgba(15, 23, 42, 0.08)"
+          },
+          ticks: {
+            color: "#6b7280",
+            precision: 0
+          }
+        },
+        y: {
+          grid: {
+            display: false
+          },
+          ticks: {
+            color: "#374151",
+            font: {
+              size: 11,
+              weight: "600"
+            }
+          }
+        }
       }
-    });
+    })
+  });
+}
+
+  async function loadKpiVerificacion() {
+  try {
+    const qs = buildGridQuery();
+    const resp = await fetchJson(`${KPI_VERIFICACION_URL}?${qs.toString()}`);
+    const rows = resp?.data || [];
+    renderChartVerificacion(rows);
+  } catch (err) {
+    console.warn("No se pudo cargar KPI verificación:", err.message);
   }
+}
 
-  function renderChartOficinas(rows) {
-    const canvas = $("chartOficinas");
-    if (!canvas) return;
+function renderChartVerificacion(rows) {
+  const canvas = $("chartVerificacion");
+  if (!canvas) return;
 
-    const labels = (rows || []).map(r => r.oficina || r.label || "—");
-    const values = (rows || []).map(r => Number(r.total || 0));
+  const order = ["SIN VERIFICAR", "AREA", "OFFICE", "FINAL"];
+  const labelsMap = {
+    "SIN VERIFICAR": "Sin verificar",
+    "AREA": "Dirección",
+    "OFFICE": "Coordinación",
+    "FINAL": "Ofi. Subsecretario"
+  };
 
-    if (chartOficinas) chartOficinas.destroy();
-    chartOficinas = new Chart(canvas, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [{ label: "Registros", data: values }]
+  const map = new Map(
+    (rows || []).map(r => [
+      String(r.estado_verificacion || "").toUpperCase(),
+      Number(r.total || 0)
+    ])
+  );
+
+  const labels = order.map(k => labelsMap[k]);
+  const values = order.map(k => map.get(k) || 0);
+
+  if (chartVerificacion) chartVerificacion.destroy();
+  chartVerificacion = new Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: [
+          "#9ca3af", // Sin verificar
+          "#f59e0b", // Dirección
+          "#3b82f6", // Coordinación
+          "#16a34a"  // Final
+        ],
+        borderWidth: 0,
+        hoverOffset: 8
+      }]
+    },
+    options: getChartBaseOptions({
+      cutout: "62%",
+      plugins: {
+        ...getChartBaseOptions().plugins,
+        legend: {
+          position: "bottom",
+          labels: {
+            boxWidth: 12,
+            boxHeight: 12,
+            padding: 16,
+            color: "#374151",
+            font: { size: 12, weight: "600" }
+          }
+        }
+      }
+    })
+  });
+}
+
+async function loadKpiOficinas() {
+  try {
+    const qs = buildGridQuery();
+    const resp = await fetchJson(`${KPI_OFICINAS_URL}?${qs.toString()}`);
+    const rows = resp?.data || [];
+    renderChartOficinas(rows);
+  } catch (err) {
+    console.warn("No se pudo cargar KPI oficinas:", err.message);
+  }
+}
+
+function renderChartOficinas(rows) {
+  const canvas = $("chartOficinas");
+  if (!canvas) return;
+
+  const top = (rows || []).slice(0, 8);
+  const labels = top.map(r => r.oficina || "Sin oficina");
+  const total = top.map(r => Number(r.total || 0));
+  const finalizados = top.map(r => Number(r.finalizados || 0));
+
+  if (chartOficinas) chartOficinas.destroy();
+  chartOficinas = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Total registros",
+          data: total,
+          backgroundColor: "#cbd5e1",
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: 22
+        },
+        {
+          label: "Finalizados",
+          data: finalizados,
+          backgroundColor: "#16a34a",
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: 22
+        }
+      ]
+    },
+    options: getChartBaseOptions({
+      plugins: {
+        ...getChartBaseOptions().plugins,
+        legend: {
+          position: "bottom",
+          labels: {
+            boxWidth: 12,
+            boxHeight: 12,
+            padding: 14,
+            color: "#374151",
+            font: { size: 12, weight: "600" }
+          }
+        }
       },
-      options: {
-        indexAxis: "y",
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true } }
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: "#374151",
+            font: {
+              size: 11,
+              weight: "600"
+            }
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: "rgba(15, 23, 42, 0.08)"
+          },
+          ticks: {
+            color: "#6b7280",
+            precision: 0
+          }
+        }
       }
-    });
-  }
+    })
+  });
+}
 
   function renderAlertSummary() {
     const c = $("alertsContainer");
@@ -1412,6 +1857,10 @@ async function loadSummaryKpis() {
     ]);
 
     await loadCapturistasByOficinaFiltro("");
+    await loadPartidosFiltro();
+    loadConfiabilidadFiltro();
+    loadInfluenciaFiltro();
+    //loadReferentesDashboard().catch(console.error);
     await loadAllDashboardData();
   }
 
