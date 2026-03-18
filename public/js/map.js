@@ -32,10 +32,10 @@ function drawMunicipios(municipiosConPoligono){
 
     const layer = L.geoJSON(geo, {
       style:{
-        color:"#6c757d",
-        weight:1,
-        fillColor:"#adb5bd",
-        fillOpacity:0.30
+        color: "#1f2937",        // Borde más oscuro
+        weight: 1.8,             // Un poco más grueso
+        fillColor: "#e5e7eb",    // Gris más claro y profesional
+        fillOpacity: 0.35        // Base más visible (era 0.30)
       },
     onEachFeature: (f, l) => {
       // ✅ INYECTA propiedades para que el highlight funcione
@@ -125,13 +125,14 @@ function applyCoverageStyle(){
   Object.entries(layersById).forEach(([idStr, group]) => {
     const id = Number(idStr);
     const total = municipioCountById.get(id) ?? 0;
+    
+    // 🎨 COLORES MÁS VIVOS - PALETA POLÍTICA EJECUTIVA
     const fillColor = coverageColor(total);
-
     const style = {
-      color: "#1f2937",
-      weight: 1.5,
+      color: "#111827",        // Borde más oscuro y definido
+      weight: 2.2,             // Borde más grueso
       fillColor,
-      fillOpacity: 0.6
+      fillOpacity: 0.80        // 🔑 OPACIDAD EJECUTIVA (era 0.6)
     };
 
     if (group?.setStyle) {
@@ -162,20 +163,21 @@ function addCoverageLegend(){
     div.style.lineHeight = "1.2";
 
     const bins = [
-      { label:"0",     color: coverageColor(0) },
-      { label:"1-10",  color: coverageColor(1) },
-      { label:"11-20", color: coverageColor(15) },
-      { label:"21-30", color: coverageColor(25) },
-      { label:"31-40", color: coverageColor(35) },
-      { label:"41+",   color: coverageColor(50) },
+      { label:"0",      color: coverageColor(0) },
+      { label:"1-10",   color: coverageColor(1) },
+      { label:"11-20",  color: coverageColor(15) },
+      { label:"21-30",  color: coverageColor(25) },
+      { label:"31-40",  color: coverageColor(35) },
+      { label:"41+",    color: coverageColor(50) },
     ];
 
+    // Legend con colores más brillantes
     div.innerHTML = `
-      <div style="font-weight:700; margin-bottom:6px;">Cobertura</div>
+      <div style="font-weight:700; margin-bottom:8px; color:#111827;">Cobertura Ejecutiva</div>
       ${bins.map(b => `
-        <div style="display:flex; align-items:center; gap:8px; margin:4px 0;">
-          <span style="width:14px; height:14px; border-radius:4px; background:${b.color}; display:inline-block; border:1px solid rgba(0,0,0,.15)"></span>
-          <span>${b.label}</span>
+        <div style="display:flex; align-items:center; gap:8px; margin:5px 0;">
+          <span style="width:16px; height:16px; border-radius:4px; background:${b.color}; display:inline-block; border:2px solid rgba(0,0,0,.2); box-shadow:0 1px 3px rgba(0,0,0,.2);"></span>
+          <span style="font-weight:500;">${b.label}</span>
         </div>
       `).join("")}
     `;
