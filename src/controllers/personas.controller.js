@@ -178,10 +178,17 @@ exports.listPersonasAdminGrid = async (req, res) => {
     const offset = (page - 1) * size;
 
     // -------- filtros
+
     let oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
     const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
     const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
-
+    const partidoIdRaw = String(req.query.partidoId || "").trim();
+    const confiabilidad = (req.query.confiabilidad || "").trim().toLowerCase();
+    const liderazgo = (req.query.liderazgo || "").trim().toLowerCase();
+    const controversias =
+    (req.query.controversias === "1" || req.query.controversias === "0")
+      ? req.query.controversias
+      : null;
     const referente = (req.query.referente || "").trim();
     const referenteCargo = (req.query.referenteCargo || "").trim();
     const refNivelRaw = (req.query.refNivel || "").trim().toLowerCase();
@@ -251,6 +258,46 @@ exports.listPersonasAdminGrid = async (req, res) => {
           OR COALESCE(p.clave_elector,'') ILIKE $${i}
         )
       `);
+    }
+    //filtro partido politico actual
+    if (partidoIdRaw === "__OTRO__") {
+      where.push(`COALESCE(TRIM(p.partido_otro_texto), '') <> ''`);
+    } else {
+      const partidoId = Number(partidoIdRaw);
+      if (Number.isFinite(partidoId) && partidoId > 0) {
+        params.push(partidoId);
+        where.push(`p.id_partido_actual = $${params.length}`);
+      }
+    }
+
+    if (["alto", "medio", "bajo"].includes(confiabilidad)) {
+      params.push(confiabilidad);
+      where.push(`LOWER(COALESCE(p.nivel_confiabilidad, '')) = $${params.length}`);
+    }
+
+    if (controversias === "1") {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (controversias === "0") {
+      where.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (["municipal", "regional", "distrital", "estatal", "nacional"].includes(liderazgo)) {
+      params.push(liderazgo);
+      where.push(`LOWER(COALESCE(p.escala_influencia, '')) = $${params.length}`);
     }
 //filtro mas de un municipio de trabajo politico
     if (multiplesMunicipios === "1") {
@@ -452,6 +499,68 @@ exports.listPersonasAdminGrid = async (req, res) => {
       return res.json({ data: rows });
     }
 
+    if (mode === "ref_list_dashboard") {
+      const refParams = [];
+      const refWhere = [];
+      addFullFilter(refParams, refWhere);
+
+      if (oficinaId) {
+        refParams.push(oficinaId);
+        refWhere.push(`p.id_oficina = $${refParams.length}`);
+      }
+
+      if (capturistaId) {
+        refParams.push(capturistaId);
+        refWhere.push(`p.creado_por = $${refParams.length}`);
+      }
+
+      if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
+        refParams.push(idMunTrabajo);
+        refWhere.push(`p.municipio_trabajo_politico = $${refParams.length}`);
+      }
+
+      if (q) {
+        refParams.push(`%${q}%`);
+        const iq = refParams.length;
+        refWhere.push(`
+          (
+            COALESCE(p.nombre,'') ILIKE $${iq}
+            OR COALESCE(p.apellido_paterno,'') ILIKE $${iq}
+            OR COALESCE(p.apellido_materno,'') ILIKE $${iq}
+            OR COALESCE(p.curp,'') ILIKE $${iq}
+            OR COALESCE(p.rfc,'') ILIKE $${iq}
+            OR COALESCE(p.clave_elector,'') ILIKE $${iq}
+          )
+        `);
+      }
+
+      if (verificado === "1") refWhere.push(`p.verificado_at IS NOT NULL`);
+      if (verificado === "0") refWhere.push(`p.verificado_at IS NULL`);
+
+      if (refNivel) {
+        refParams.push(refNivel);
+        refWhere.push(`COALESCE(lower(trim(rp.nivel)), '') = $${refParams.length}`);
+      }
+
+      const refWhereSQL = refWhere.length ? `WHERE ${refWhere.join(" AND ")}` : "";
+
+      const sql = `
+        SELECT
+          INITCAP(rp.nombre_full) AS nombre,
+          INITCAP(rp.nombre_full) AS label,
+          COUNT(*)::int AS menciones
+        FROM personas p
+        JOIN referentes_politicos rp ON rp.id_persona = p.id_persona
+        ${refWhereSQL}
+        GROUP BY rp.nombre_full
+        ORDER BY menciones DESC, nombre ASC
+        LIMIT 500
+      `;
+
+      const { rows } = await client.query(sql, refParams);
+      return res.json({ data: rows });
+    }
+
     // -------- TOTAL
     const totalSql = `SELECT COUNT(*)::int AS total FROM personas p ${whereSQL}`;
     const { rows: totalRows } = await client.query(totalSql, params);
@@ -464,6 +573,10 @@ exports.listPersonasAdminGrid = async (req, res) => {
         p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno, p.foto_url,
         (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
         p.curp, p.rfc, p.clave_elector, p.id_oficina, p.nivel_confiabilidad, o.nombre AS oficina_nombre,
+        -- partido politico filtro 
+        p.id_partido_actual,
+        p.partido_otro_texto,
+        COALESCE(NULLIF(TRIM(p.partido_otro_texto), ''), cp.nombre) AS partido_nombre,
 
         -- trazabilidad creador / editor
         p.creado_por, u_crea.nombre AS creado_por_nombre, u_crea.email AS creado_por_email,
@@ -535,6 +648,7 @@ exports.listPersonasAdminGrid = async (req, res) => {
       LEFT JOIN usuarios u_vo   ON u_vo.id_usuario   = p.verif_office_por
       LEFT JOIN usuarios u_ver  ON u_ver.id_usuario  = p.verificado_por
       LEFT JOIN municipios mt ON mt.id_municipio = p.municipio_trabajo_politico
+      LEFT JOIN catalogo_partidos cp ON cp.id_partido = p.id_partido_actual
       LEFT JOIN LATERAL (
         SELECT telefono
         FROM telefonos
@@ -688,6 +802,16 @@ exports.listPersonasAdminGridMapaMunicipios = async (req, res) => {
 
     const q = (req.query.q || "").trim();
 
+    const partidoIdRaw = String(req.query.partidoId || "").trim();
+    const confiabilidad = (req.query.confiabilidad || "").trim().toLowerCase();
+    const liderazgo = (req.query.liderazgo || "").trim().toLowerCase();
+    const verifLevel = String(req.query.verifLevel || "").trim().toLowerCase();
+
+    const controversias =
+      (req.query.controversias === "1" || req.query.controversias === "0")
+        ? req.query.controversias
+        : null;
+
     const verificado = (req.query.verificado === "1" || req.query.verificado === "0")
       ? req.query.verificado
       : null;
@@ -735,6 +859,100 @@ exports.listPersonasAdminGridMapaMunicipios = async (req, res) => {
         )
       `);
     }
+
+    //OTRO FILTROS
+    if (partidoIdRaw === "__OTRO__") {
+      where.push(`COALESCE(TRIM(p.partido_otro_texto), '') <> ''`);
+    } else if (partidoIdRaw === "__INDEPENDIENTE__") {
+      where.push(`
+        p.id_partido_actual IS NULL
+        AND COALESCE(TRIM(p.partido_otro_texto), '') = ''
+      `);
+    } else {
+      const partidoId = Number(partidoIdRaw);
+      if (Number.isFinite(partidoId) && partidoId > 0) {
+        params.push(partidoId);
+        where.push(`p.id_partido_actual = $${params.length}`);
+      }
+    }
+
+    if (["alto", "medio", "bajo"].includes(confiabilidad)) {
+      params.push(confiabilidad);
+      where.push(`LOWER(COALESCE(p.nivel_confiabilidad, '')) = $${params.length}`);
+    }
+
+    if (["municipal", "regional", "distrital", "estatal", "nacional"].includes(liderazgo)) {
+      params.push(liderazgo);
+      where.push(`LOWER(COALESCE(p.escala_influencia, '')) = $${params.length}`);
+    }
+    if (controversias === "1") {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (controversias === "0") {
+      where.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (verifLevel === "final") {
+      where.push(`p.verificado_at IS NOT NULL`);
+    }
+
+    if (verifLevel === "office") {
+      where.push(`
+        p.verif_office_at IS NOT NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "area") {
+      where.push(`
+        p.verif_area_at IS NOT NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "sin_verificar") {
+      where.push(`
+        p.verif_area_at IS NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "parcial") {
+      where.push(`
+        (
+          p.verif_area_at IS NOT NULL
+          OR p.verif_office_at IS NOT NULL
+        )
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "cualquiera_verificado") {
+      where.push(`
+        (
+          p.verif_area_at IS NOT NULL
+          OR p.verif_office_at IS NOT NULL
+          OR p.verificado_at IS NOT NULL
+        )
+      `);
+    }
+
+
 
     // -------- filtro referente
     if (referente || refNivel) {
@@ -4373,6 +4591,328 @@ exports.kpiMunicipios = async (req, res) => {
   } catch (e) {
     console.error('ERROR kpiMunicipios:', e);
     return res.status(500).json({ error: "Error KPI municipios", detail: e.message });
+  }
+};
+
+exports.kpiVerificacion = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const params = [];
+    const where = [];
+
+    // scope
+    req.smartFilters?.addFullFilter?.(params, where);
+
+    // filtros manuales
+    const oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
+    const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+    const q = (req.query.q || "").trim();
+
+    const verifLevel = String(req.query.verifLevel || "").trim().toLowerCase();
+    const verificado = (req.query.verificado === "1" || req.query.verificado === "0")
+      ? req.query.verificado
+      : null;
+
+    const partidoIdRaw = String(req.query.partidoId || "").trim();
+    const confiabilidad = (req.query.confiabilidad || "").trim().toLowerCase();
+    const liderazgo = (req.query.liderazgo || "").trim().toLowerCase();
+
+    const controversias =
+      (req.query.controversias === "1" || req.query.controversias === "0")
+        ? req.query.controversias
+        : null;
+
+    if (oficinaId) {
+      params.push(oficinaId);
+      where.push(`p.id_oficina = $${params.length}`);
+    }
+
+    if (capturistaId) {
+      params.push(capturistaId);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
+      params.push(idMunTrabajo);
+      where.push(`p.municipio_trabajo_politico = $${params.length}`);
+    }
+
+    if (q) {
+      params.push(`%${q}%`);
+      const i = params.length;
+      where.push(`
+        (
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
+      `);
+    }
+
+    if (partidoIdRaw === "__OTRO__") {
+      where.push(`COALESCE(TRIM(p.partido_otro_texto), '') <> ''`);
+    } else {
+      const partidoId = Number(partidoIdRaw);
+      if (Number.isFinite(partidoId) && partidoId > 0) {
+        params.push(partidoId);
+        where.push(`p.id_partido_actual = $${params.length}`);
+      }
+    }
+
+    if (["alto", "medio", "bajo"].includes(confiabilidad)) {
+      params.push(confiabilidad);
+      where.push(`LOWER(COALESCE(p.nivel_confiabilidad, '')) = $${params.length}`);
+    }
+
+    if (["municipal", "regional", "distrital", "estatal", "nacional"].includes(liderazgo)) {
+      params.push(liderazgo);
+      where.push(`LOWER(COALESCE(p.escala_influencia, '')) = $${params.length}`);
+    }
+
+    if (controversias === "1") {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (controversias === "0") {
+      where.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (verificado === "1") where.push(`p.verificado_at IS NOT NULL`);
+    if (verificado === "0") where.push(`p.verificado_at IS NULL`);
+
+    if (verifLevel === "final") {
+      where.push(`p.verificado_at IS NOT NULL`);
+    }
+
+    if (verifLevel === "office") {
+      where.push(`
+        p.verif_office_at IS NOT NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "area") {
+      where.push(`
+        p.verif_area_at IS NOT NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "sin_verificar") {
+      where.push(`
+        p.verif_area_at IS NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "parcial") {
+      where.push(`
+        (
+          p.verif_area_at IS NOT NULL
+          OR p.verif_office_at IS NOT NULL
+        )
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "cualquiera_verificado") {
+      where.push(`
+        (
+          p.verif_area_at IS NOT NULL
+          OR p.verif_office_at IS NOT NULL
+          OR p.verificado_at IS NOT NULL
+        )
+      `);
+    }
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sql = `
+      SELECT
+        CASE
+          WHEN p.verificado_at IS NOT NULL THEN 'FINAL'
+          WHEN p.verif_office_at IS NOT NULL THEN 'OFFICE'
+          WHEN p.verif_area_at IS NOT NULL THEN 'AREA'
+          ELSE 'SIN VERIFICAR'
+        END AS estado_verificacion,
+        COUNT(*)::int AS total
+      FROM personas p
+      ${whereSQL}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+
+    const { rows } = await client.query(sql, params);
+    return res.json({ ok: true, data: rows });
+
+  } catch (e) {
+    console.error("ERROR kpiVerificacion:", e);
+    return res.status(500).json({ error: "Error KPI verificación", detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+
+exports.kpiOficinas = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const params = [];
+    const where = [];
+
+    req.smartFilters?.addFullFilter?.(params, where);
+
+    const oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
+    const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+    const q = (req.query.q || "").trim();
+
+    const verifLevel = String(req.query.verifLevel || "").trim().toLowerCase();
+    const partidoIdRaw = String(req.query.partidoId || "").trim();
+    const confiabilidad = (req.query.confiabilidad || "").trim().toLowerCase();
+    const liderazgo = (req.query.liderazgo || "").trim().toLowerCase();
+
+    const controversias =
+      (req.query.controversias === "1" || req.query.controversias === "0")
+        ? req.query.controversias
+        : null;
+
+    if (oficinaId) {
+      params.push(oficinaId);
+      where.push(`p.id_oficina = $${params.length}`);
+    }
+
+    if (capturistaId) {
+      params.push(capturistaId);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
+      params.push(idMunTrabajo);
+      where.push(`p.municipio_trabajo_politico = $${params.length}`);
+    }
+
+    if (q) {
+      params.push(`%${q}%`);
+      const i = params.length;
+      where.push(`
+        (
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
+      `);
+    }
+
+    if (partidoIdRaw === "__OTRO__") {
+      where.push(`COALESCE(TRIM(p.partido_otro_texto), '') <> ''`);
+    } else {
+      const partidoId = Number(partidoIdRaw);
+      if (Number.isFinite(partidoId) && partidoId > 0) {
+        params.push(partidoId);
+        where.push(`p.id_partido_actual = $${params.length}`);
+      }
+    }
+
+    if (["alto", "medio", "bajo"].includes(confiabilidad)) {
+      params.push(confiabilidad);
+      where.push(`LOWER(COALESCE(p.nivel_confiabilidad, '')) = $${params.length}`);
+    }
+
+    if (["municipal", "regional", "distrital", "estatal", "nacional"].includes(liderazgo)) {
+      params.push(liderazgo);
+      where.push(`LOWER(COALESCE(p.escala_influencia, '')) = $${params.length}`);
+    }
+
+    if (controversias === "1") {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (controversias === "0") {
+      where.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (verifLevel === "final") {
+      where.push(`p.verificado_at IS NOT NULL`);
+    }
+
+    if (verifLevel === "office") {
+      where.push(`
+        p.verif_office_at IS NOT NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "area") {
+      where.push(`
+        p.verif_area_at IS NOT NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "sin_verificar") {
+      where.push(`
+        p.verif_area_at IS NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sql = `
+      SELECT
+        COALESCE(o.nombre, 'Sin oficina') AS oficina,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE p.verificado_at IS NOT NULL)::int AS finalizados
+      FROM personas p
+      LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
+      ${whereSQL}
+      GROUP BY o.nombre
+      ORDER BY total DESC, oficina ASC
+    `;
+
+    const { rows } = await client.query(sql, params);
+    return res.json({ ok: true, data: rows });
+
+  } catch (e) {
+    console.error("ERROR kpiOficinas:", e);
+    return res.status(500).json({ error: "Error KPI oficinas", detail: e.message });
+  } finally {
+    client.release();
   }
 };
 
