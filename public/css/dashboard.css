@@ -1341,3 +1341,67 @@ canvas{
     font-size: 1.25rem;
   }
 }
+/*timeline render control he historial*/
+.timeline-item {
+  position: relative;
+}
+
+.timeline-marker {
+  min-width: 56px;
+  display: flex;
+  justify-content: center;
+}
+
+.timeline-content {
+  box-shadow: 0 4px 14px rgba(0,0,0,.05);
+}
+/*chart*/
+/* =========================
+   CHARTS / DASHBOARD
+   ========================= */
+
+#chartVerificacion,
+#chartMunicipios,
+#chartOficinas {
+  min-height: 280px;
+  max-height: 280px;
+}
+
+.card-body canvas {
+  min-height: 280px;
+  max-height: 280px;
+}
+
+/* contenedor visual más limpio */
+.dashboard-card .card-body {
+  position: relative;
+  padding: 1rem 1rem 1.25rem;
+}
+
+/* títulos más ejecutivos */
+.dashboard-card-header h3.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.dashboard-card-header small {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.82rem;
+  color: #6b7280;
+}
+
+/* opcional: cards más elegantes */
+.dashboard-card {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.dashboard-card .card-header {
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 1rem 1rem 0.85rem;
+}
