@@ -20,6 +20,7 @@ exports.login = async (req, res) => {
         u.cargo,
         u.area,
         u.scope,
+        u.puede_verificar_final,
         array_remove(array_agg(r.nombre), NULL) AS roles
       FROM usuarios u
       LEFT JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
@@ -44,7 +45,8 @@ exports.login = async (req, res) => {
       cargo: user.cargo,
       roles: user.roles || [],
       id_oficina: user.id_oficina ?? null,
-      scope: user.scope
+      scope: user.scope,
+      puede_verificar_final: user.puede_verificar_final === true
     });
 
     return res.json({
@@ -58,7 +60,8 @@ exports.login = async (req, res) => {
         area: user.area ?? null,
         roles: user.roles || [],
         id_oficina: user.id_oficina ?? null,
-        scope: user.scope
+        scope: user.scope,
+        puede_verificar_final: user.puede_verificar_final === true
       }
     });
     
@@ -79,6 +82,7 @@ exports.me = async (req, res) => {
         u.cargo,
         u.area,
         u.scope,
+        u.puede_verificar_final,
         o.nombre AS nombre_oficina,
         COALESCE(array_remove(array_agg(r.nombre), NULL), '{}') AS roles
       FROM usuarios u
@@ -86,7 +90,11 @@ exports.me = async (req, res) => {
       LEFT JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
       LEFT JOIN roles r ON r.id_rol = ur.id_rol
       WHERE u.id_usuario = $1
-      GROUP BY u.id_usuario, u.nombre, u.email, u.activo, u.id_oficina, u.cargo, u.area, o.nombre
+      GROUP BY
+        u.id_usuario, u.nombre, u.email, u.activo,
+        u.id_oficina, u.cargo, u.area, u.scope,
+        u.puede_verificar_final,
+        o.nombre
     `, [req.user.id_usuario]);
     
     client.release();
@@ -108,6 +116,7 @@ exports.me = async (req, res) => {
         id_oficina: user.id_oficina ?? null,
         nombre_oficina: user.nombre_oficina || null,
         scope: user.scope,
+        puede_verificar_final: user.puede_verificar_final === true
       }
     });
   } catch (e) {
