@@ -66,6 +66,11 @@ const gridState = {
      HELPERS
      ========================= */
 
+  function canVerifyFinal() {
+    const user = getCurrentUser();
+    return user?.puede_verificar_final === true;
+  }
+
   function debounce(fn, wait = 250) {
     let t = null;
     return (...args) => {
@@ -131,6 +136,8 @@ function collectGridFilters() {
   gridState.controversias = $("fltControversias")?.value || "";
   gridState.referente = $("fltReferente")?.value?.trim() || "";
   gridState.refMode = "exact";
+  gridState.fechaDesde = $("fltFechaDesde")?.value || "";
+  gridState.fechaHasta = $("fltFechaHasta")?.value || ""; 
   // ✅ nuevo filtro por nivel de verificación
   gridState.verifLevel = $("fltVerificacion")?.value || "";
 
@@ -154,6 +161,9 @@ function buildGridQuery(extra = {}) {
     controversias: gridState.controversias,
     referente: gridState.referente,
     refMode: gridState.refMode,
+    
+    fechaDesde: gridState.fechaDesde,
+    fechaHasta: gridState.fechaHasta,
 
     // ✅ nuevo
     verifLevel: gridState.verifLevel,
@@ -939,11 +949,30 @@ function actionsFormatter(cell) {
   `;
 }
 
-function updateVerificationButtons(data) {
-  const isFinal = !!data?.verificado_at;
+function updateVerificationButtons(row) {
+  const canVerify = canVerifyFinal();
 
-  $("btnAprobarFinal")?.classList.toggle("d-none", isFinal);
-  $("btnAbrirDesverificarFinal")?.classList.toggle("d-none", !isFinal);
+  const btnAprobar = $("btnAprobarFinal");
+  const btnDesverificar = $("btnAbrirDesverificarFinal");
+
+  if (!btnAprobar || !btnDesverificar) return;
+
+  // 🚫 Si NO puede verificar → oculta todo
+  if (!canVerify) {
+    btnAprobar.classList.add("d-none");
+    btnDesverificar.classList.add("d-none");
+    return;
+  }
+
+  // ✅ Si SÍ puede verificar → mostrar según estado
+  btnAprobar.classList.remove("d-none");
+  btnDesverificar.classList.remove("d-none");
+
+  const yaFinal = !!row.verificado_at;
+
+  // lógica UX pro
+  btnAprobar.disabled = yaFinal;
+  btnDesverificar.disabled = !yaFinal;
 }
 
 function initPersonasGrid() {
@@ -1245,6 +1274,47 @@ function reloadGrid() {
      DETAIL PANEL
      ========================= */
 
+function getPartidoLogo(row) {
+  // Prioridad: 1. siglas del JOIN, 2. partido_nombre, 3. fallback
+  const siglas = row.siglas?.trim().toUpperCase() || 
+                 (row.partido_nombre || '').trim().toUpperCase() || '';
+  
+  const logos = {
+    'PAN': '/static/assets/partidos/pan.png',
+    'PRI': '/static/assets/partidos/pri.png', 
+    'PVEM': '/static/assets/partidos/pvem.png',
+    'PT': '/static/assets/partidos/pt.png',
+    'MC': '/static/assets/partidos/mc.png',
+    'PRD': '/static/assets/partidos/prd.png',
+    'MORENA': '/static/assets/partidos/morena.png',
+    'OTRO': '/static/assets/partidos/otro.png',
+    'IND': '/static/assets/partidos/ind.png'
+  };
+  
+  return logos[siglas] || logos['OTRO'] || null;
+}
+
+function renderPartidoChip(row) {
+  if (!row.id_partido_actual && !row.partido_otro_texto) {
+    return '<span class="badge bg-secondary">Sin partido</span>';
+  }
+
+  const logoUrl = getPartidoLogo(row);
+
+  return `
+    <div class="partido-chip">
+      ${logoUrl ? `
+        <img src="${esc(logoUrl)}" alt="Logo partido"
+             class="partido-logo rounded"
+             onerror="this.style.display='none'; this.insertAdjacentHTML('afterend','<span class=\'badge bg-secondary\'>?</span>');"
+             loading="lazy">
+      ` : '<span class="badge bg-secondary">?</span>'}
+    </div>
+  `;
+}
+
+
+
 function openDetailPanel(row) {
   selectedRowData = row || null;
 
@@ -1268,6 +1338,13 @@ function openDetailPanel(row) {
       <div class="profile-info">
         <div class="detail-name">${esc(row.nombre_completo || row.nombre || "Sin nombre")}</div>
       </div>
+    </div>
+
+    <div class="detail-kv-row">
+      <span class="label">Partido político</span>
+      <span class="value partido-value">
+        ${renderPartidoChip(row)}
+      </span>
     </div>
 
     <div class="detail-block">
