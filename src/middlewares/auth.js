@@ -36,7 +36,8 @@ function requireAuth(req, res, next) {
       area: decoded.area || null,          // ✅ decoded.area   
       roles: decoded.roles || [],
       id_oficina: decoded.id_oficina ?? null,
-      scope: decoded.scope || null
+      scope: decoded.scope || null,
+      puede_verificar_final: decoded.puede_verificar_final === true
     };
 
     next();
