@@ -195,6 +195,9 @@ exports.listPersonasAdminGrid = async (req, res) => {
     const refNivel = ["municipal", "regional", "distrital", "estatal", "nacional"].includes(refNivelRaw)
       ? refNivelRaw
       : "";
+
+    const fechaDesde = String(req.query.fechaDesde || "").trim();
+    const fechaHasta = String(req.query.fechaHasta || "").trim();
       
     //filtro un municipio de trabajpo político y mas de un municipio de trabajo politico
     const q = (req.query.q || "").trim();
@@ -273,6 +276,16 @@ exports.listPersonasAdminGrid = async (req, res) => {
     if (["alto", "medio", "bajo"].includes(confiabilidad)) {
       params.push(confiabilidad);
       where.push(`LOWER(COALESCE(p.nivel_confiabilidad, '')) = $${params.length}`);
+    }
+
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      where.push(`p.created_at::date >= $${params.length}::date`);
+    }
+
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      where.push(`p.created_at::date <= $${params.length}::date`);
     }
 
     if (controversias === "1") {
@@ -576,7 +589,7 @@ exports.listPersonasAdminGrid = async (req, res) => {
         -- partido politico filtro 
         p.id_partido_actual,
         p.partido_otro_texto,
-        COALESCE(NULLIF(TRIM(p.partido_otro_texto), ''), cp.nombre) AS partido_nombre,
+        COALESCE(NULLIF(TRIM(p.partido_otro_texto), ''), cp.nombre) AS partido_nombre, cp.siglas,
 
         -- trazabilidad creador / editor
         p.creado_por, u_crea.nombre AS creado_por_nombre, u_crea.email AS creado_por_email,
@@ -6901,15 +6914,18 @@ exports.listCapturistasByOficina = async (req, res) => {
 exports.verificarPersona = async (req, res) => {
   const client = await pool.connect();
   try {
+    
     const id_persona = Number(req.params.id);
     if (!Number.isFinite(id_persona) || id_persona <= 0) {
       return res.status(400).json({ error: "id inválido" });
     }
 
+    const puedeVerificarFinal = req.user?.puede_verificar_final === true;
     const roles = req.user?.roles || [];
     const scope = req.user?.scope || null;
     const isSuperadmin = roles.includes("superadmin") || scope === "ALL";
     const isAnalista = roles.includes("analista");
+    
 
     // Solo analista/superadmin, y scope permitido
     if (!isSuperadmin && !isAnalista) return res.status(403).json({ error: "Prohibido" });
@@ -6936,6 +6952,7 @@ exports.verificarPersona = async (req, res) => {
       return res.status(404).json({ error: "Persona no encontrada" });
     }
 
+
     // Alcance: superadmin todo, AREA/OFFICE solo su oficina (igual que antes)
     if (!isSuperadmin) {
       const forced = Number(req.user.id_oficina || 0);
@@ -6947,6 +6964,11 @@ exports.verificarPersona = async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(403).json({ error: "No autorizado" });
       }
+    }
+    //permisos para verificar
+    if (scope === "ALL" && !puedeVerificarFinal) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "Este usuario no tiene permiso para verificación FINAL." });
     }
 
     // Pipeline: OFFICE requiere AREA, ALL requiere OFFICE
@@ -7003,15 +7025,21 @@ exports.desverificarPersona = async (req, res) => {
     if (!Number.isFinite(id_persona) || id_persona <= 0) {
       return res.status(400).json({ error: "id inválido" });
     }
-
+    const puedeVerificarFinal = req.user?.puede_verificar_final === true;
     const roles = req.user?.roles || [];
     const scope = req.user?.scope || null;
     const isSuperadmin = roles.includes("superadmin") || scope === "ALL";
     const isAnalista = roles.includes("analista");
+    
 
     if (!isSuperadmin && !isAnalista) return res.status(403).json({ error: "Prohibido" });
     if (!["AREA", "OFFICE", "ALL"].includes(scope)) {
       return res.status(403).json({ error: "Sin permiso de desverificación" });
+    }
+
+    if (scope === "ALL" && !puedeVerificarFinal) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "Este usuario no tiene permiso para retirar la verificación FINAL." });
     }
 
     await client.query("BEGIN");
