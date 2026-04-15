@@ -4328,6 +4328,1181 @@ exports.getPerfilPdf = async (req, res) => {
   }
 };
 
+//repote ejecutivo:
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function fmtDateTimeMX(v) {
+  if (!v) return "—";
+  try {
+    return new Date(v).toLocaleString("es-MX", {
+      timeZone: "America/Mexico_City",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return String(v);
+  }
+}
+
+function pct(n, total) {
+  if (!total) return "0%";
+  return `${((Number(n || 0) / Number(total || 0)) * 100).toFixed(1)}%`;
+}
+
+function buildReporteEjecutivoHtml({
+  user,
+  filtros,
+  resumen,
+  oficinas,
+  areas,
+  municipios,
+  multiMunicipioOficinas,
+  resumenTerritorial,
+  escalas
+}) {
+const total = Number(resumen.total_actores || 0);
+const dir = Number(resumen.verificados_direccion || 0);
+const coord = Number(resumen.verificados_coordinacion || 0);
+const fin = Number(resumen.verificados_final || 0);
+const pendFinal = Number(resumen.pendientes_final || 0);
+const controversias = Number(resumen.con_controversias || 0);
+const confAlta = Number(resumen.confiabilidad_alta || 0);
+
+const soloPrincipalTotal = Number(resumenTerritorial.solo_principal_total || 0);
+const multiMunicipioTotal = Number(resumenTerritorial.multi_municipio_total || 0);
+const sinMunicipioTotal = Number(resumenTerritorial.sin_municipio_total || 0);
+const principalMarcadoTotal = Number(resumenTerritorial.principal_marcado_total || 0);
+
+const maxMunicipio = Math.max(1, ...municipios.map(x => Number(x.total || 0)));
+const maxOficina = Math.max(1, ...oficinas.map(x => Number(x.total || 0)));
+const maxArea = Math.max(1, ...areas.map(x => Number(x.total || 0)));
+const maxEscala = Math.max(1, ...escalas.map(x => Number(x.total || 0)));
+
+const sinPrincipalTotal = Number(resumenTerritorial.sin_principal_total || 0);
+const conCoberturaSinPrincipal = Number(resumenTerritorial.con_cobertura_sin_principal || 0);
+
+  return `
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Reporte de actores políticos</title>
+  <style>
+    :root{
+      --primary:#7a1f2b;
+      --primary-2:#a33a4a;
+      --gold:#b89056;
+      --bg:#f6f7fb;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --ok:#16a34a;
+      --warn:#f59e0b;
+      --info:#2563eb;
+      --danger:#dc2626;
+      --soft:#eef2f7;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Arial, Helvetica, sans-serif;
+      color:var(--text);
+      background:#fff;
+    }
+    .page{
+      padding:24px 28px 28px;
+    }
+    .header{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:20px;
+      border-bottom:3px solid var(--primary);
+      padding-bottom:14px;
+      margin-bottom:18px;
+    }
+    .title{
+      font-size:24px;
+      font-weight:700;
+      color:var(--primary);
+      margin:0 0 4px 0;
+    }
+    .subtitle{
+      color:var(--muted);
+      font-size:12px;
+      margin:0;
+    }
+    .meta{
+      text-align:right;
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.5;
+    }
+    .section{
+      margin-top:18px;
+    }
+    .section-title{
+      font-size:15px;
+      font-weight:700;
+      color:var(--primary);
+      margin:0 0 10px 0;
+      padding-left:10px;
+      border-left:4px solid var(--gold);
+    }
+    .filters{
+      background:var(--bg);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px 14px;
+      font-size:12px;
+    }
+    .filters-grid{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap:8px 14px;
+    }
+    .f-item b{ color:#374151; }
+    .kpis{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap:12px;
+      margin-top:10px;
+    }
+    .kpi{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px 14px;
+      background:#fff;
+      box-shadow:0 3px 10px rgba(0,0,0,.04);
+    }
+    .kpi .label{
+      font-size:11px;
+      color:var(--muted);
+      margin-bottom:6px;
+    }
+    .kpi .value{
+      font-size:24px;
+      font-weight:700;
+      line-height:1;
+    }
+    .kpi .sub{
+      margin-top:6px;
+      font-size:11px;
+      color:var(--muted);
+    }
+    .kpi.primary .value{ color:var(--primary); }
+    .kpi.info .value{ color:var(--info); }
+    .kpi.ok .value{ color:var(--ok); }
+    .kpi.warn .value{ color:var(--warn); }
+    .two-col{
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap:16px;
+      align-items:start;
+    }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:11px;
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:12px;
+      overflow:hidden;
+    }
+    thead th{
+      background:#f8fafc;
+      color:#374151;
+      font-weight:700;
+      padding:8px 10px;
+      border-bottom:1px solid var(--line);
+      text-align:left;
+    }
+    tbody td{
+      padding:7px 10px;
+      border-bottom:1px solid #eef2f7;
+      vertical-align:top;
+    }
+    tbody tr:nth-child(even){
+      background:#fcfcfd;
+    }
+    .chart-card{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px 14px;
+      background:#fff;
+    }
+    .chart-title{
+      font-size:12px;
+      font-weight:700;
+      color:#374151;
+      margin-bottom:10px;
+    }
+    .bar-list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .bar-row{
+      display:grid;
+      grid-template-columns: 140px 1fr 46px;
+      gap:8px;
+      align-items:center;
+      font-size:11px;
+    }
+    .bar-label{
+      color:#374151;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .bar-track{
+      height:12px;
+      background:#edf2f7;
+      border-radius:999px;
+      overflow:hidden;
+      position:relative;
+    }
+    .bar-fill{
+      height:100%;
+      border-radius:999px;
+    }
+    .bar-fill.primary{ background:linear-gradient(90deg, var(--primary), var(--primary-2)); }
+    .bar-fill.info{ background:linear-gradient(90deg, #60a5fa, var(--info)); }
+    .bar-fill.ok{ background:linear-gradient(90deg, #4ade80, var(--ok)); }
+    .bar-fill.warn{ background:linear-gradient(90deg, #fbbf24, var(--warn)); }
+    .legend{
+      display:flex;
+      gap:14px;
+      flex-wrap:wrap;
+      font-size:11px;
+      color:var(--muted);
+      margin-top:8px;
+    }
+    .legend span::before{
+      content:"";
+      display:inline-block;
+      width:10px;
+      height:10px;
+      border-radius:999px;
+      margin-right:6px;
+      vertical-align:middle;
+    }
+    .lg-dir::before{ background:var(--warn); }
+    .lg-coord::before{ background:var(--info); }
+    .lg-final::before{ background:var(--ok); }
+    .footer{
+      margin-top:18px;
+      padding-top:10px;
+      border-top:1px solid var(--line);
+      font-size:10px;
+      color:var(--muted);
+      text-align:right;
+    }
+    .page-break{
+      page-break-before:always;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+  <!-- LOGO -->
+      <div class="me-3 d-flex align-items-center">
+        <img 
+          src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550" 
+          alt="Logo Gobierno del Estado de México"
+          class="navbar-logo"
+        >
+      </div>
+      <div class="meta">
+        <div><b>Generado por:</b> ${esc(user?.nombre || user?.email || "Usuario")}</div>
+        <div><b>Fecha de corte:</b> ${esc(fmtDateTimeMX(new Date()))}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Filtros aplicados</div>
+      <div class="filters">
+        <div class="filters-grid">
+          <div class="f-item"><b>Búsqueda:</b> ${esc(filtros.q || "Todos")}</div>
+          <div class="f-item"><b>Oficina:</b> ${esc(filtros.oficina || "Todas")}</div>
+          <div class="f-item"><b>Capturista:</b> ${esc(filtros.capturista || "Todos")}</div>
+          <div class="f-item"><b>Municipio:</b> ${esc(filtros.municipio || "Todos")}</div>
+          <div class="f-item"><b>Verificación:</b> ${esc(filtros.verificacion || "Todas")}</div>
+          <div class="f-item"><b>Partido:</b> ${esc(filtros.partido || "Todos")}</div>
+          <div class="f-item"><b>Confiabilidad:</b> ${esc(filtros.confiabilidad || "Todas")}</div>
+          <div class="f-item"><b>Influencia:</b> ${esc(filtros.liderazgo || "Todos")}</div>
+          <div class="f-item"><b>Controversias:</b> ${esc(filtros.controversias || "Todos")}</div>
+          <div class="f-item"><b>Referente:</b> ${esc(filtros.referente || "Todos")}</div>
+          <div class="f-item"><b>Fecha desde:</b> ${esc(filtros.fechaDesde || "—")}</div>
+          <div class="f-item"><b>Fecha hasta:</b> ${esc(filtros.fechaHasta || "—")}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Indicadores globales</div>
+      <div class="kpis">
+        <div class="kpi primary">
+          <div class="label">Total de actores registrados</div>
+          <div class="value">${total}</div>
+          <div class="sub">Universo filtrado</div>
+        </div>
+        <div class="kpi warn">
+          <div class="label">Verificación Dirección</div>
+          <div class="value">${dir}</div>
+          <div class="sub">${pct(dir, total)} del total</div>
+        </div>
+        <div class="kpi info">
+          <div class="label">Verificación Coordinación</div>
+          <div class="value">${coord}</div>
+          <div class="sub">${pct(coord, total)} del total</div>
+        </div>
+        <div class="kpi ok">
+          <div class="label">Verificación Final</div>
+          <div class="value">${fin}</div>
+          <div class="sub">${pct(fin, total)} del total</div>
+        </div>
+        <div class="kpi warn">
+          <div class="label">Pendientes de Final</div>
+          <div class="value">${pendFinal}</div>
+          <div class="sub">Listos para cierre institucional</div>
+        </div>
+        <div class="kpi primary">
+          <div class="label">Con controversias</div>
+          <div class="value">${controversias}</div>
+          <div class="sub">${pct(controversias, total)} del total</div>
+        </div>
+        <div class="kpi ok">
+          <div class="label">Confiabilidad alta</div>
+          <div class="value">${confAlta}</div>
+          <div class="sub">${pct(confAlta, total)} del total</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section two-col">
+      <div>
+        <div class="section-title">Desempeño por oficina</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Oficina</th>
+              <th>Total</th>
+              <th>Dirección</th>
+              <th>Coordinación</th>
+              <th>Final</th>
+              <th>% Final</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${oficinas.map(r => `
+              <tr>
+                <td>${esc(r.oficina || "Sin oficina")}</td>
+                <td>${Number(r.total || 0)}</td>
+                <td>${Number(r.direccion || 0)}</td>
+                <td>${Number(r.coordinacion || 0)}</td>
+                <td>${Number(r.final || 0)}</td>
+                <td>${pct(r.final, r.total)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Total de registros por oficina</div>
+        <div class="bar-list">
+          ${oficinas.slice(0, 8).map(r => `
+            <div class="bar-row">
+              <div class="bar-label">${esc(r.oficina || "Sin oficina")}</div>
+              <div class="bar-track">
+                <div class="bar-fill primary" style="width:${(Number(r.total || 0) / maxOficina) * 100}%"></div>
+              </div>
+              <div>${Number(r.total || 0)}</div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+
+    <div class="section page-break">
+      <div class="section-title">Seguimiento por área</div>
+      <div class="two-col">
+        <div>
+          <table>
+            <thead>
+              <tr>
+                <th>Área</th>
+                <th>Total</th>
+                <th>Dirección</th>
+                <th>Coordinación</th>
+                <th>Final</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${areas.map(r => `
+                <tr>
+                  <td>${esc(r.area || "Sin área")}</td>
+                  <td>${Number(r.total || 0)}</td>
+                  <td>${Number(r.direccion || 0)}</td>
+                  <td>${Number(r.coordinacion || 0)}</td>
+                  <td>${Number(r.final || 0)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">Top registros por área</div>
+          <div class="bar-list">
+            ${areas.slice(0, 10).map(r => `
+              <div class="bar-row">
+                <div class="bar-label">${esc(r.area || "Sin área")}</div>
+                <div class="bar-track">
+                  <div class="bar-fill info" style="width:${(Number(r.total || 0) / maxArea) * 100}%"></div>
+                </div>
+                <div>${Number(r.total || 0)}</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="section page-break">
+      <div class="section-title">Distribución territorial por municipio principal</div>
+      <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
+        La distribución territorial se basa en el municipio principal de operación de cada actor político.
+        En caso de no estar definido, se toma el municipio registrado en su información general.
+      </div>
+
+      <div class="kpis">
+        <div class="kpi primary">
+          <div class="label">Solo municipio principal</div>
+          <div class="value">${soloPrincipalTotal}</div>
+          <div class="sub">${pct(soloPrincipalTotal, total)} del total</div>
+        </div>
+        <div class="kpi info">
+          <div class="label">Multi municipio</div>
+          <div class="value">${multiMunicipioTotal}</div>
+          <div class="sub">${pct(multiMunicipioTotal, total)} del total</div>
+        </div>
+        <div class="kpi warn">
+          <div class="label">Sin municipio asignado</div>
+          <div class="value">${sinMunicipioTotal}</div>
+          <div class="sub">${pct(sinMunicipioTotal, total)} del total</div>
+        </div>
+        <div class="kpi info">
+          <div class="label">Con cobertura pero sin principal</div>
+          <div class="value">${conCoberturaSinPrincipal}</div>
+          <div class="sub">Registros a corregir en captura</div>
+        </div>
+        <div class="kpi ok">
+          <div class="label">Con principal marcado</div>
+          <div class="value">${principalMarcadoTotal}</div>
+          <div class="sub">${pct(principalMarcadoTotal, total)} del total</div>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-top:14px;">
+        <div>
+          <table>
+            <thead>
+              <tr>
+                <th>Municipio</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${municipios.map(r => `
+                <tr>
+                  <td>${esc(r.municipio || "—")}</td>
+                  <td>${Number(r.total || 0)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">Top municipios por concentración</div>
+          <div class="bar-list">
+            ${municipios.slice(0, 12).map(r => `
+              <div class="bar-row">
+                <div class="bar-label">${esc(r.municipio || "—")}</div>
+                <div class="bar-track">
+                  <div class="bar-fill ok" style="width:${(Number(r.total || 0) / maxMunicipio) * 100}%"></div>
+                </div>
+                <div>${Number(r.total || 0)}</div>
+              </div>
+            `).join("")}
+          </div>
+          <div style="margin-top:8px; font-size:10px; color:#6b7280; line-height:1.5;">
+            * Top 15 municipios según el municipio principal resuelto.<br>
+            La cobertura adicional multi-municipio se resume en el bloque inferior.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Cobertura territorial por oficina</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Oficina</th>
+            <th>Total</th>
+            <th>Solo principal</th>
+            <th>Multi municipio</th>
+            <th>Sin municipio</th>
+            <th>Principal marcado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${multiMunicipioOficinas.map(r => `
+            <tr>
+              <td>${esc(r.oficina || "Sin oficina")}</td>
+              <td>${Number(r.total || 0)}</td>
+              <td>${Number(r.solo_principal || 0)}</td>
+              <td>${Number(r.multi_municipio || 0)}</td>
+              <td>${Number(r.sin_municipio || 0)}</td>
+              <td>${Number(r.principal_marcado || 0)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Distribución por escala de influencia</div>
+      <div class="two-col">
+        <div>
+          <table>
+            <thead>
+              <tr>
+                <th>Escala</th>
+                <th>Total</th>
+                <th>%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${escalas.map(r => `
+                <tr>
+                  <td>${esc(r.escala || "Sin nivel")}</td>
+                  <td>${Number(r.total || 0)}</td>
+                  <td>${pct(r.total, total)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">Volumen por escala de influencia</div>
+          <div class="bar-list">
+            ${escalas.map(r => `
+              <div class="bar-row">
+                <div class="bar-label">${esc(r.escala || "Sin nivel")}</div>
+                <div class="bar-track">
+                  <div class="bar-fill warn" style="width:${(Number(r.total || 0) / maxEscala) * 100}%"></div>
+                </div>
+                <div>${Number(r.total || 0)}</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Reporte generado automáticamente · Sistema de Actores Políticos
+    </div>
+  </div>
+</body>
+</html>
+  `;
+}
+
+exports.reporteEjecutivo = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+
+    addFullFilter(params, where);
+
+    // filtros
+    const oficinaId = req.query.oficinaId ? Number(req.query.oficinaId) : null;
+    const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
+    const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
+    const q = (req.query.q || "").trim();
+
+    const partidoIdRaw = String(req.query.partidoId || "").trim();
+    const confiabilidad = (req.query.confiabilidad || "").trim().toLowerCase();
+    const liderazgo = (req.query.liderazgo || "").trim().toLowerCase();
+    const verifLevel = String(req.query.verifLevel || "").trim().toLowerCase();
+    const fechaDesde = String(req.query.fechaDesde || "").trim();
+    const fechaHasta = String(req.query.fechaHasta || "").trim();
+    const referente = (req.query.referente || "").trim();
+    const refMode = String(req.query.refMode || "").trim();
+    let oficinaNombreFiltro = "";
+
+
+    const controversias =
+      (req.query.controversias === "1" || req.query.controversias === "0")
+        ? req.query.controversias
+        : null;
+
+  
+    if (oficinaId) {
+      params.push(oficinaId);
+      where.push(`p.id_oficina = $${params.length}`);
+    }
+
+
+    if (oficinaId) {
+      const qOf = await client.query(
+        `SELECT nombre FROM oficinas WHERE id_oficina = $1 LIMIT 1`,
+        [oficinaId]
+      );
+      oficinaNombreFiltro = qOf.rows[0]?.nombre || String(oficinaId);
+    }
+
+    if (capturistaId) {
+      params.push(capturistaId);
+      where.push(`p.creado_por = $${params.length}`);
+    }
+
+    if (Number.isFinite(idMunTrabajo) && idMunTrabajo > 0) {
+      params.push(idMunTrabajo);
+      where.push(`p.municipio_trabajo_politico = $${params.length}`);
+    }
+
+    if (q) {
+      params.push(`%${q}%`);
+      const i = params.length;
+      where.push(`
+        (
+          COALESCE(p.nombre,'') ILIKE $${i}
+          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
+          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          OR COALESCE(p.curp,'') ILIKE $${i}
+          OR COALESCE(p.rfc,'') ILIKE $${i}
+          OR COALESCE(p.clave_elector,'') ILIKE $${i}
+        )
+      `);
+    }
+
+    if (partidoIdRaw === "__OTRO__") {
+      where.push(`COALESCE(TRIM(p.partido_otro_texto), '') <> ''`);
+    } else if (partidoIdRaw.toLowerCase() === "independiente") {
+      where.push(`
+        p.id_partido_actual IS NULL
+        AND COALESCE(TRIM(p.partido_otro_texto), '') = ''
+      `);
+    } else {
+      const partidoId = Number(partidoIdRaw);
+      if (Number.isFinite(partidoId) && partidoId > 0) {
+        params.push(partidoId);
+        where.push(`p.id_partido_actual = $${params.length}`);
+      }
+    }
+
+    if (["alto", "medio", "bajo"].includes(confiabilidad)) {
+      params.push(confiabilidad);
+      where.push(`LOWER(COALESCE(p.nivel_confiabilidad, '')) = $${params.length}`);
+    }
+
+    if (["municipal", "regional", "distrital", "estatal", "nacional"].includes(liderazgo)) {
+      params.push(liderazgo);
+      where.push(`LOWER(COALESCE(p.escala_influencia, '')) = $${params.length}`);
+    }
+
+    if (controversias === "1") {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (controversias === "0") {
+      where.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM controversias_persona cp
+          WHERE cp.id_persona = p.id_persona
+        )
+      `);
+    }
+
+    if (verifLevel === "final") {
+      where.push(`p.verificado_at IS NOT NULL`);
+    }
+
+    if (verifLevel === "office") {
+      where.push(`
+        p.verif_office_at IS NOT NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "area") {
+      where.push(`
+        p.verif_area_at IS NOT NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "sin_verificar") {
+      where.push(`
+        p.verif_area_at IS NULL
+        AND p.verif_office_at IS NULL
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "parcial") {
+      where.push(`
+        (
+          p.verif_area_at IS NOT NULL
+          OR p.verif_office_at IS NOT NULL
+        )
+        AND p.verificado_at IS NULL
+      `);
+    }
+
+    if (verifLevel === "cualquiera_verificado") {
+      where.push(`
+        (
+          p.verif_area_at IS NOT NULL
+          OR p.verif_office_at IS NOT NULL
+          OR p.verificado_at IS NOT NULL
+        )
+      `);
+    }
+
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      where.push(`p.created_at::date >= $${params.length}::date`);
+    }
+
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      where.push(`p.created_at::date <= $${params.length}::date`);
+    }
+
+    if (referente) {
+      const ref = referente.toLowerCase().trim();
+      params.push(ref);
+      const i = params.length;
+
+      if (refMode === "exact") {
+        where.push(`
+          EXISTS (
+            SELECT 1
+            FROM referentes_politicos rp
+            WHERE rp.id_persona = p.id_persona
+              AND rp.nombre_full = $${i}
+          )
+        `);
+      } else {
+        where.push(`
+          EXISTS (
+            SELECT 1
+            FROM referentes_politicos rp
+            WHERE rp.id_persona = p.id_persona
+              AND (
+                (length($${i}) < 6 AND rp.nombre_full LIKE ($${i} || '%'))
+                OR word_similarity(rp.nombre_full, $${i}) > 0.15
+                OR similarity(rp.nombre_full, $${i}) > 0.15
+              )
+          )
+        `);
+      }
+    }
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const baseTerritorialCTE = `
+      WITH personas_filtradas AS (
+        SELECT
+          p.id_persona,
+          p.id_oficina,
+          p.escala_influencia,
+          p.municipio_trabajo_politico,
+          p.verif_area_at,
+          p.verif_office_at,
+          p.verificado_at
+        FROM personas p
+        ${whereSQL}
+      ),
+      cobertura_resuelta AS (
+        SELECT
+          pf.id_persona,
+          pf.id_oficina,
+          pf.escala_influencia,
+
+          -- principal resuelto:
+          COALESCE(principal_pmt.id_municipio, pf.municipio_trabajo_politico) AS id_municipio_principal,
+
+          -- total municipios distintos considerando legacy + tabla hija
+          COALESCE(cov.total_municipios, 0) AS total_municipios,
+
+          -- ¿tiene una fila marcada como principal en personas_municipios_trabajo?
+          COALESCE(cov.tiene_principal_marcado, 0) AS tiene_principal_marcado,
+
+          CASE
+            WHEN COALESCE(cov.total_municipios, 0) > 1 THEN 1
+            ELSE 0
+          END AS es_multi_municipio,
+
+          CASE
+            WHEN COALESCE(cov.total_municipios, 0) = 0 THEN 1
+            ELSE 0
+          END AS sin_municipio,
+
+          pf.verif_area_at,
+          pf.verif_office_at,
+          pf.verificado_at
+        FROM personas_filtradas pf
+
+        LEFT JOIN LATERAL (
+          SELECT pmt.id_municipio
+          FROM personas_municipios_trabajo pmt
+          WHERE pmt.id_persona = pf.id_persona
+            AND pmt.es_principal = true
+          LIMIT 1
+        ) principal_pmt ON TRUE
+
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(DISTINCT x.id_municipio)::int AS total_municipios,
+            MAX(CASE WHEN x.es_principal THEN 1 ELSE 0 END)::int AS tiene_principal_marcado
+          FROM (
+            SELECT
+              pf.municipio_trabajo_politico AS id_municipio,
+              true AS es_principal
+            WHERE pf.municipio_trabajo_politico IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+              pmt.id_municipio,
+              pmt.es_principal
+            FROM personas_municipios_trabajo pmt
+            WHERE pmt.id_persona = pf.id_persona
+          ) x
+          WHERE x.id_municipio IS NOT NULL
+        ) cov ON TRUE
+      )
+    `;
+
+    // resumen global
+    const sqlResumen = `
+      SELECT
+        COUNT(*)::int AS total_actores,
+        COUNT(*) FILTER (WHERE p.verif_area_at IS NOT NULL)::int AS verificados_direccion,
+        COUNT(*) FILTER (WHERE p.verif_office_at IS NOT NULL)::int AS verificados_coordinacion,
+        COUNT(*) FILTER (WHERE p.verificado_at IS NOT NULL)::int AS verificados_final,
+        COUNT(*) FILTER (
+          WHERE p.verif_office_at IS NOT NULL
+            AND p.verificado_at IS NULL
+        )::int AS pendientes_final,
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1
+            FROM controversias_persona c
+            WHERE c.id_persona = p.id_persona
+          )
+        )::int AS con_controversias,
+        COUNT(*) FILTER (
+          WHERE COALESCE(lower(trim(p.nivel_confiabilidad)), '') = 'alto'
+        )::int AS confiabilidad_alta
+      FROM personas p
+      ${whereSQL}
+    `;
+
+    // por oficina
+    const sqlOficinas = `
+      SELECT
+        COALESCE(o.nombre, 'Sin oficina') AS oficina,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE p.verif_area_at IS NOT NULL)::int AS direccion,
+        COUNT(*) FILTER (WHERE p.verif_office_at IS NOT NULL)::int AS coordinacion,
+        COUNT(*) FILTER (WHERE p.verificado_at IS NOT NULL)::int AS final
+      FROM personas p
+      LEFT JOIN oficinas o ON o.id_oficina = p.id_oficina
+      ${whereSQL}
+      GROUP BY o.nombre
+      ORDER BY total DESC, oficina ASC
+    `;
+
+    // por área
+    const sqlAreas = `
+      WITH areas_base AS (
+        SELECT DISTINCT
+          INITCAP(TRIM(COALESCE(u.area, 'Sin área'))) AS area
+        FROM usuarios u
+        WHERE 1=1
+          ${oficinaId ? `AND u.id_oficina = ${Number(oficinaId)}` : ""}
+          AND COALESCE(TRIM(u.area), '') <> ''
+      ),
+      personas_filtradas AS (
+        SELECT
+          p.id_persona,
+          p.creado_por,
+          p.verif_area_at,
+          p.verif_office_at,
+          p.verificado_at
+        FROM personas p
+        ${whereSQL}
+      )
+      SELECT
+        ab.area,
+        COUNT(pf.id_persona)::int AS total,
+        COUNT(pf.id_persona) FILTER (
+          WHERE pf.verif_area_at IS NOT NULL
+        )::int AS direccion,
+        COUNT(pf.id_persona) FILTER (
+          WHERE pf.verif_office_at IS NOT NULL
+        )::int AS coordinacion,
+        COUNT(pf.id_persona) FILTER (
+          WHERE pf.verificado_at IS NOT NULL
+        )::int AS final
+      FROM areas_base ab
+      LEFT JOIN usuarios u
+        ON INITCAP(TRIM(COALESCE(u.area, 'Sin área'))) = ab.area
+        ${oficinaId ? `AND u.id_oficina = ${Number(oficinaId)}` : ""}
+      LEFT JOIN personas_filtradas pf
+        ON pf.creado_por = u.id_usuario
+      GROUP BY ab.area
+      ORDER BY total DESC, ab.area ASC
+    `;
+
+    const sqlMultiMunicipioOficina = `
+      ${baseTerritorialCTE}
+      SELECT
+        COALESCE(o.nombre, 'Sin oficina') AS oficina,
+        COUNT(*)::int AS total,
+
+        COUNT(*) FILTER (
+          WHERE cr.total_municipios = 1
+        )::int AS solo_principal,
+
+        COUNT(*) FILTER (
+          WHERE cr.total_municipios > 1
+        )::int AS multi_municipio,
+
+        COUNT(*) FILTER (
+          WHERE cr.sin_municipio = 1
+        )::int AS sin_municipio,
+
+        COUNT(*) FILTER (
+          WHERE cr.tiene_principal_marcado = 1
+        )::int AS principal_marcado
+
+      FROM cobertura_resuelta cr
+      LEFT JOIN oficinas o
+        ON o.id_oficina = cr.id_oficina
+      GROUP BY o.nombre
+      ORDER BY total DESC, oficina ASC
+    `;
+    
+  const sqlResumenTerritorial = `
+    ${baseTerritorialCTE}
+    SELECT
+      COUNT(*)::int AS total_registros,
+      COUNT(*) FILTER (WHERE total_municipios = 1)::int AS solo_principal_total,
+      COUNT(*) FILTER (WHERE total_municipios > 1)::int AS multi_municipio_total,
+      COUNT(*) FILTER (WHERE sin_municipio = 1)::int AS sin_municipio_total,
+      COUNT(*) FILTER (WHERE tiene_principal_marcado = 1)::int AS principal_marcado_total,
+      COUNT(*) FILTER (WHERE id_municipio_principal IS NULL)::int AS sin_principal_total,
+      COUNT(*) FILTER (
+        WHERE id_municipio_principal IS NULL
+          AND total_municipios > 0
+      )::int AS con_cobertura_sin_principal
+    FROM cobertura_resuelta
+  `;
+
+  const sqlEscalas = `
+    ${baseTerritorialCTE}
+    SELECT
+      t.escala,
+      COUNT(*)::int AS total
+    FROM (
+      SELECT
+        CASE
+          WHEN LOWER(COALESCE(cr.escala_influencia, '')) = 'municipal' THEN 'Municipal'
+          WHEN LOWER(COALESCE(cr.escala_influencia, '')) = 'regional' THEN 'Regional'
+          WHEN LOWER(COALESCE(cr.escala_influencia, '')) = 'distrital' THEN 'Distrital'
+          WHEN LOWER(COALESCE(cr.escala_influencia, '')) = 'estatal' THEN 'Estatal'
+          WHEN LOWER(COALESCE(cr.escala_influencia, '')) = 'nacional' THEN 'Nacional'
+          ELSE 'Sin nivel'
+        END AS escala
+      FROM cobertura_resuelta cr
+    ) t
+    GROUP BY t.escala
+    ORDER BY
+      CASE
+        WHEN t.escala = 'Municipal' THEN 1
+        WHEN t.escala = 'Regional' THEN 2
+        WHEN t.escala = 'Distrital' THEN 3
+        WHEN t.escala = 'Estatal' THEN 4
+        WHEN t.escala = 'Nacional' THEN 5
+        ELSE 6
+      END
+  `;
+
+    // top municipios
+    const sqlMunicipios = `
+      ${baseTerritorialCTE}
+      SELECT
+        COALESCE(m.nombre, 'Sin municipio principal') AS municipio,
+        COUNT(*)::int AS total
+      FROM cobertura_resuelta cr
+      LEFT JOIN municipios m
+        ON m.id_municipio = cr.id_municipio_principal
+      GROUP BY COALESCE(m.nombre, 'Sin municipio principal')
+      ORDER BY total DESC, municipio ASC
+      LIMIT 15
+    `;
+
+    const [
+      rResumen,
+      rOficinas,
+      rAreas,
+      rMunicipios,
+      rMultiMunicipio,
+      rResumenTerritorial,
+      rEscalas
+    ] = await Promise.all([
+      client.query(sqlResumen, params),
+      client.query(sqlOficinas, params),
+      client.query(sqlAreas, params),
+      client.query(sqlMunicipios, params),
+      client.query(sqlMultiMunicipioOficina, params),
+      client.query(sqlResumenTerritorial, params),
+      client.query(sqlEscalas, params)
+    ]);
+
+    const resumen = rResumen.rows[0] || {};
+    const oficinas = rOficinas.rows || [];
+    const areas = rAreas.rows || [];
+    const municipios = rMunicipios.rows || [];
+    const multiMunicipioOficinas = rMultiMunicipio.rows || [];
+    const resumenTerritorial = rResumenTerritorial.rows[0] || {};
+    const escalas = rEscalas.rows || [];
+
+    const filtros = {
+      q,
+      oficina: oficinaNombreFiltro || "Todas",
+      capturista: req.query.capturistaId || "",
+      municipio: req.query.municipio_trabajo || "",
+      verificacion: verifLevel || req.query.verificado || "",
+      partido: partidoIdRaw || "",
+      confiabilidad,
+      liderazgo,
+      controversias:
+        controversias === "1" ? "Con controversias" :
+        controversias === "0" ? "Sin controversias" : "",
+      referente,
+      fechaDesde,
+      fechaHasta
+    };
+
+    const html = buildReporteEjecutivoHtml({
+      user: req.user,
+      filtros,
+      resumen,
+      oficinas,
+      areas,
+      municipios,
+      multiMunicipioOficinas,
+      resumenTerritorial,
+      escalas
+    });
+
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+
+    const pdfRaw = await page.pdf({
+      format: "A4",
+      printBackground: true,
+
+      displayHeaderFooter: true,
+
+      margin: {
+        top: "15mm",
+        right: "10mm",
+        bottom: "20mm",
+        left: "10mm"
+      },
+
+      footerTemplate: `
+        <div style="
+          width:100%;
+          font-size:9px;
+          color:#6b7280;
+          padding:0 10mm;
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+        ">
+          <span>Sistema de Actores Políticos</span>
+          <span>Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
+        </div>
+      `,
+
+      headerTemplate: `
+        <div style="font-size:0;"></div>
+      `
+    });
+
+    await browser.close();
+
+    // ✅ Convertir explícitamente a Buffer real
+    const pdf = Buffer.from(pdfRaw);
+
+    console.log("PDF buffer length:", pdf.length);
+    console.log("PDF header:", pdf.slice(0, 5).toString());
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'inline; filename="reporte-ejecutivo.pdf"');
+    res.setHeader("Content-Length", pdf.length);
+
+    return res.end(pdf);
+
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al generar reporte ejecutivo",
+      detail: e.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
 
 // KPI completitud (superadmin: todo, analista: solo su oficina)
 // KPI COMPLETUD PRO - BASADO EN getPerfilCompleto
@@ -7107,6 +8282,308 @@ exports.desverificarPersona = async (req, res) => {
     await client.query("ROLLBACK");
     console.error(e);
     return res.status(500).json({ error: "Error al desverificar", detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+//observaciones
+exports.devolverPersonaFinal = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id_persona = Number(req.params.id);
+    const observacion = String(req.body?.observacion || "").trim();
+
+    if (!Number.isFinite(id_persona) || id_persona <= 0) {
+      return res.status(400).json({ error: "id inválido" });
+    }
+
+    if (!observacion) {
+      return res.status(400).json({ error: "La observación es obligatoria" });
+    }
+
+    const scope = req.user?.scope || null;
+    const puedeVerificarFinal = req.user?.puede_verificar_final === true;
+
+    if (scope !== "ALL" || !puedeVerificarFinal) {
+      return res.status(403).json({ error: "Sin permiso para devolución FINAL" });
+    }
+
+    await client.query("BEGIN");
+
+    const { rows } = await client.query(
+      `
+      SELECT
+        p.id_persona,
+        p.verif_area_at,
+        p.verif_office_at,
+        p.verificado_at
+      FROM personas p
+      WHERE p.id_persona = $1
+      FOR UPDATE
+      `,
+      [id_persona]
+    );
+
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Persona no encontrada" });
+    }
+
+    await client.query(
+      `
+      INSERT INTO personas_observaciones
+        (id_persona, nivel, observacion, creado_por)
+      VALUES
+        ($1, 'FINAL', $2, $3)
+      `,
+      [id_persona, observacion, req.user.id_usuario]
+    );
+
+    const { rows: upd } = await client.query(
+      `
+      UPDATE personas
+      SET
+        verificado_por = NULL,
+        verificado_at = NULL,
+        modificado_por = $2,
+        updated_at = now()
+      WHERE id_persona = $1
+      RETURNING
+        id_persona,
+        verif_area_por, verif_area_at,
+        verif_office_por, verif_office_at,
+        verificado_por, verificado_at
+      `,
+      [id_persona, req.user.id_usuario]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      message: "Observación enviada y verificación final retirada.",
+      persona: upd[0]
+    });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al devolver registro con observación",
+      detail: e.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+//observaciones atendidas
+exports.atenderObservacionPersona = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id_observacion = Number(req.params.idObservacion);
+    if (!Number.isFinite(id_observacion) || id_observacion <= 0) {
+      return res.status(400).json({ error: "idObservacion inválido" });
+    }
+
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+    addFullFilter(params, where);
+
+    params.push(id_observacion);
+    where.push(`po.id_observacion = $${params.length}`);
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    await client.query("BEGIN");
+
+    const sqlCheck = `
+      SELECT
+        po.id_observacion,
+        po.id_persona,
+        po.atendida
+      FROM personas_observaciones po
+      JOIN personas p ON p.id_persona = po.id_persona
+      ${whereSQL}
+      FOR UPDATE
+    `;
+
+    const { rows } = await client.query(sqlCheck, params);
+
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Observación no encontrada o sin acceso" });
+    }
+
+    if (rows[0].atendida === true) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "La observación ya fue atendida" });
+    }
+
+    const { rows: upd } = await client.query(
+      `
+      UPDATE personas_observaciones
+      SET
+        atendida = true,
+        atendida_at = now(),
+        atendida_por = $2
+      WHERE id_observacion = $1
+      RETURNING
+        id_observacion,
+        id_persona,
+        nivel,
+        observacion,
+        created_at,
+        atendida,
+        atendida_at,
+        atendida_por
+      `,
+      [id_observacion, req.user.id_usuario]
+    );
+
+    await client.query("COMMIT");
+    return res.json({ ok: true, observacion: upd[0] });
+
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al marcar observación como atendida",
+      detail: e.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+exports.kpiAlertasDashboard = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+    addFullFilter(params, where);
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sql = `
+      WITH base_personas AS (
+        SELECT p.id_persona
+        FROM personas p
+        ${whereSQL}
+      )
+      SELECT
+        (
+          SELECT COUNT(*)::int
+          FROM personas_observaciones po
+          JOIN base_personas bp ON bp.id_persona = po.id_persona
+          WHERE po.atendida = false
+        ) AS observaciones_pendientes,
+
+        (
+          SELECT COUNT(*)::int
+          FROM personas_observaciones po
+          JOIN base_personas bp ON bp.id_persona = po.id_persona
+          WHERE po.atendida = true
+            AND po.atendida_at::date = CURRENT_DATE
+        ) AS observaciones_atendidas_hoy,
+
+        (
+          SELECT COUNT(*)::int
+          FROM personas_observaciones po
+          JOIN base_personas bp ON bp.id_persona = po.id_persona
+          WHERE po.nivel = 'FINAL'
+            AND po.created_at >= now() - interval '7 days'
+        ) AS devoluciones_final_7d
+    `;
+
+    const { rows } = await client.query(sql, params);
+    return res.json({ ok: true, data: rows[0] || {} });
+
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Error KPI alertas", detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+
+//notificaciones
+exports.listNotificacionesDashboard = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+
+    addFullFilter(params, where);
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    params.push(req.user.id_usuario);
+    const idxUsuario = params.length;
+
+    const sql = `
+      SELECT
+        po.id_observacion AS id_evento,
+        po.id_persona,
+        po.nivel,
+        po.observacion AS detalle,
+        po.created_at AS fecha,
+        u.nombre AS usuario,
+        CASE
+          WHEN pnl.id_lectura IS NOT NULL THEN true
+          ELSE false
+        END AS leida
+      FROM personas_observaciones po
+      JOIN personas p ON p.id_persona = po.id_persona
+      LEFT JOIN usuarios u
+        ON u.id_usuario = po.creado_por
+      LEFT JOIN personas_notificaciones_lectura pnl
+        ON pnl.id_observacion = po.id_observacion
+       AND pnl.id_usuario = $${idxUsuario}
+      ${whereSQL}
+      ORDER BY po.created_at DESC, po.id_observacion DESC
+      LIMIT 30
+    `;
+
+    const { rows } = await client.query(sql, params);
+    return res.json({ ok: true, data: rows });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al obtener notificaciones",
+      detail: e.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+exports.marcarNotificacionLeida = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const idObservacion = Number(req.params.idObservacion);
+    if (!Number.isFinite(idObservacion) || idObservacion <= 0) {
+      return res.status(400).json({ error: "idObservacion inválido" });
+    }
+
+    await client.query(
+      `
+      INSERT INTO personas_notificaciones_lectura (id_observacion, id_usuario)
+      VALUES ($1, $2)
+      ON CONFLICT (id_observacion, id_usuario) DO NOTHING
+      `,
+      [idObservacion, req.user.id_usuario]
+    );
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al marcar notificación como leída",
+      detail: e.message
+    });
   } finally {
     client.release();
   }
