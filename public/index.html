@@ -557,14 +557,14 @@
                 </div>
               </div>
 
-              <!-- COLUMNA 3: Cobertura territorial (CONTENEDOR DESTACADO) -->
+              <!-- COLUMNA 3: Cobertura territorial -->
               <div class="col-lg-6 col-md-12">
                 <div class="form-group position-relative hover-shadow rounded p-3 h-100 border-start border-3 border-warning ps-3">
                   <div class="d-flex align-items-center mb-3 pb-1 border-bottom border-warning border-1 pb-2">
                     <i class="bi bi-geo-alt-fill me-2 text-warning fs-5"></i>
                     <h6 class="mb-0 fw-semibold text-institucional">Cobertura territorial</h6>
                   </div>
-                  
+
                   <div class="row g-2 mb-2">
                     <div class="col-6">
                       <label class="form-label text-institucional small mb-1">Nivel de influencia</label>
@@ -577,26 +577,35 @@
                         <option value="nacional">Nacional</option>
                       </select>
                     </div>
+
                     <div class="col-6">
-                      <label class="form-label text-institucional small mb-1">Trabajo político</label>
+                      <label class="form-label text-institucional small mb-1">Municipio principal de trabajo político</label>
                       <select class="form-select form-control-institucional form-select-sm" name="municipio_trabajo_politico" id="mun_trabajo">
                         <!-- Opciones por JS -->
                       </select>
                     </div>
                   </div>
 
-                  <!-- Cobertura -->
+                  <!-- Cobertura múltiple -->
                   <div id="wrapCoberturaTrabajo" class="mt-2 d-none">
                     <div class="d-flex align-items-center justify-content-between mb-2">
-                      <small class="text-muted">Cobertura municipios</small>
-                      <span class="badge text-bg-secondary" id="lblCoberturaCount">0 sel.</span>
+                      <small class="text-muted">Cobertura adicional de municipios</small>
+                      <span class="badge text-bg-secondary" id="lblCoberturaCount">0 seleccionados</span>
                     </div>
+
                     <div class="input-group input-group-sm mb-1">
-                      <input type="text" class="form-control" id="txtBuscarMunicipioCobertura" placeholder="Buscar...">
+                      <input type="text" class="form-control" id="txtBuscarMunicipioCobertura" placeholder="Buscar municipio...">
                       <button class="btn btn-outline-secondary" id="btnCoberturaAll" type="button">Todos</button>
                       <button class="btn btn-outline-secondary" id="btnCoberturaNone" type="button">Limpiar</button>
                     </div>
-                    <div id="listaCoberturaMunicipios" class="border rounded p-2 bg-white" style="max-height:100px; overflow:auto;"></div>
+
+                    <div id="listaCoberturaMunicipios" class="border rounded p-2 bg-white" style="max-height:140px; overflow:auto;"></div>
+
+                    <div class="mt-2">
+                      <small class="text-muted">
+                        El municipio principal se incluye automáticamente dentro de la cobertura.
+                      </small>
+                    </div>
                   </div>
 
                   <div class="form-check mt-2 pt-1">
@@ -1575,7 +1584,6 @@ const PARENTESCOS_FAMILIARES = [
   { value: 'cuñada', label: 'Cuñada' },
   { value: 'sobrino', label: 'Sobrino' },
   { value: 'sobrina', label: 'Sobrina' }
-  
 ];
 //constante roles_empresa
 const ROLES_EMPRESA = [
@@ -1660,13 +1668,32 @@ const ROLES_EMPRESA = [
   let editingId = null;
   let fotoUrlActual = null;
 
-  function showAlert(type, msg) {
-    const box = $('#alertBox');
-    box.className = `alert alert-${type}`;
-    box.textContent = msg;
-    box.classList.remove('d-none');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+function showAlert(a, b) {
+  const box = $('#alertBox');
+
+  const tipos = ["success", "warning", "danger", "info"];
+
+  let type;
+  let msg;
+
+  // Soporta ambos formatos:
+  // showAlert("warning", "mensaje")
+  // showAlert("mensaje", "warning")
+  if (tipos.includes(String(a).toLowerCase())) {
+    type = a;
+    msg = b;
+  } else {
+    msg = a;
+    type = b || "warning";
   }
+
+  box.className = `alert alert-${type}`;
+  box.textContent = msg;
+  box.classList.remove('d-none');
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
   function hideAlert(){ $('#alertBox').classList.add('d-none'); }
 
   async function apiGet(path) {
@@ -1872,6 +1899,14 @@ async function onDeletePersona(id_persona) {
     setVal('municipio_residencia_real', p.municipio_residencia_real);
     setVal('municipio_trabajo_politico', p.municipio_trabajo_politico);
 
+    // ✅ Rehidratar cobertura de municipios trabajo
+    const cov = Array.isArray(payload.municipios_trabajo) ? payload.municipios_trabajo : [];
+    const ids = cov
+      .map(x => Number(x.id_municipio))
+      .filter(n => Number.isFinite(n) && n > 0);
+
+    window.__setCoberturaTrabajoIds?.(ids);
+
       // ===============================
       // MUNICIPIOS: EdoMéx vs Fuera (CORREGIDO a tu BD)
       // ===============================
@@ -1949,12 +1984,6 @@ async function onDeletePersona(id_persona) {
     setVal('ine_seccion', ine.seccion_electoral);
     setVal('ine_df', ine.distrito_federal);
     setVal('ine_dl', ine.distrito_local);
-
-    // ✅ Rehidratar cobertura de municipios trabajo (si viene del payload)
-    const cov = Array.isArray(payload.municipios_trabajo) ? payload.municipios_trabajo : [];
-    const ids = cov.map(x => x.id_municipio);
-
-    window.__setCoberturaTrabajoIds?.(ids);
 
     //nivel de confiabilidad
     const nc = (payload.persona?.nivel_confiabilidad || "").toLowerCase();
@@ -3818,6 +3847,77 @@ function refreshHijosParejasSelects() {
       nivel_confiabilidad: (fd.get("nivel_confiabilidad") || "").toString().trim().toLowerCase() || null,
     };
 
+
+    // ===============================
+    // COBERTURA TERRITORIAL
+    // Municipal = 1 municipio
+    // Regional / Distrital / Estatal / Nacional = múltiples
+    // siempre con principal obligatorio
+    // ===============================
+    const escala = (persona.escala_influencia || "").toLowerCase().trim();
+    const principalId = toIntOrNull(persona.municipio_trabajo_politico);
+
+    if (validate && chkMunTrabajoIgual && !final_munLegal) {
+      showAlert?.(
+        "No se puede usar 'Igual a residencia legal' porque la residencia legal no tiene un municipio válido en EdoMéx.",
+        "warning"
+      );
+      return null;
+    }
+
+    // 👇 esta variable debe existir ANTES de usarse
+    const multiEnabled = ["regional", "distrital", "estatal", "nacional"].includes(escala);
+
+    if (validate) {
+      const okCobertura = window.__validateCoberturaTrabajo?.({ silent: true });
+      if (!okCobertura) {
+        window.__validateCoberturaTrabajo?.({ silent: false });
+        return null;
+      }
+    }
+
+    const coberturaIdsRaw = window.__getCoberturaTrabajoIds?.() || [];
+    const coberturaIds = [
+      ...new Set(
+        coberturaIdsRaw
+          .map(x => Number(x))
+          .filter(n => Number.isFinite(n) && n > 0)
+      )
+    ];
+
+    let municipios_trabajo = [];
+
+    if (multiEnabled) {
+      const finalIds = new Set(coberturaIds);
+
+      // el principal siempre debe formar parte de la cobertura
+      if (principalId) finalIds.add(principalId);
+
+      municipios_trabajo = Array.from(finalIds).map(id => ({
+        id_municipio: id,
+        es_principal: id === principalId
+      }));
+    } else {
+      // municipal: solo el principal
+      municipios_trabajo = principalId
+        ? [{ id_municipio: principalId, es_principal: true }]
+        : [];
+    }
+
+    if (validate) {
+      const principales = municipios_trabajo.filter(x => x.es_principal === true);
+
+      if (!principalId) {
+        showAlert?.("Debes seleccionar el municipio principal de trabajo político.", "warning");
+        return null;
+      }
+
+      if (principales.length !== 1) {
+        showAlert?.("Debe existir exactamente un municipio principal.", "warning");
+        return null;
+      }
+    }
+
     function validarLenField(formEl, fieldName, len, label) {
       const el = formEl.querySelector(`[name="${fieldName}"]`);
       if (!el) return true;
@@ -4480,11 +4580,7 @@ function refreshHijosParejasSelects() {
     });
 
     // ✅ Cobertura municipios trabajo (1:N)
-    const coberturaIds = (typeof window.__getCoberturaTrabajoIds === "function")
-      ? window.__getCoberturaTrabajoIds()
-      : [];
 
-    const municipios_trabajo = coberturaIds.map(id_municipio => ({ id_municipio }));
 
     return {
       persona,
@@ -4615,6 +4711,21 @@ function refreshPreview() {
 // ✅ Reset switch parejas
     const chkSinParejas = document.getElementById('chkSinParejas');
     if (chkSinParejas) chkSinParejas.checked = false;
+     // ✅ Reset cobertura territorial
+    const selEscala = document.getElementById("escala_influencia");
+    const selMunTrabajo = document.getElementById("mun_trabajo");
+    const chkMunTrabajoIgual = document.getElementById("chkMunTrabajoIgual");
+
+    if (selEscala) selEscala.value = "";
+    if (selMunTrabajo) selMunTrabajo.value = "";
+    if (chkMunTrabajoIgual) chkMunTrabajoIgual.checked = false;
+
+    // limpia el estado interno del panel multi-municipio
+    window.__resetCoberturaTrabajo?.();
+
+    // dispara sincronización visual
+    selEscala?.dispatchEvent(new Event("change", { bubbles: true }));
+    selMunTrabajo?.dispatchEvent(new Event("change", { bubbles: true }));
 
     toggleParejas?.(); // esto va a seed 1 pareja
 
@@ -4950,114 +5061,244 @@ function initValidacionDuplicados() {
       }
     }
     // ================== COBERTURA MUNICIPIOS (TRABAJO POLÍTICO) ==================
-function initCoberturaMunicipiosUI(municipios) {
-  const selEscala = document.querySelector('[name="escala_influencia"]');
-  const selPrincipal = document.getElementById("mun_trabajo");
+    function initCoberturaMunicipiosUI(municipios) {
+      const selEscala = document.getElementById("escala_influencia");
+      const selPrincipal = document.getElementById("mun_trabajo");
 
-  const wrap = document.getElementById("wrapCoberturaTrabajo");
-  const list = document.getElementById("listaCoberturaMunicipios");
-  const txt = document.getElementById("txtBuscarMunicipioCobertura");
-  const btnAll = document.getElementById("btnCoberturaAll");
-  const btnNone = document.getElementById("btnCoberturaNone");
-  const lblCount = document.getElementById("lblCoberturaCount");
+      const wrap = document.getElementById("wrapCoberturaTrabajo");
+      const list = document.getElementById("listaCoberturaMunicipios");
+      const txt = document.getElementById("txtBuscarMunicipioCobertura");
+      const btnAll = document.getElementById("btnCoberturaAll");
+      const btnNone = document.getElementById("btnCoberturaNone");
+      const lblCount = document.getElementById("lblCoberturaCount");
 
-  if (!wrap || !list) return;
+      if (!wrap || !list || !selEscala || !selPrincipal) return;
 
-  const selected = new Set();
+      const selected = new Set();
 
-  function refreshCount() {
-    if (lblCount) lblCount.textContent = `${selected.size} seleccionados`;
-  }
+      function getEscala() {
+        return (selEscala.value || "").toLowerCase().trim();
+      }
 
-  function renderList(filter = "") {
-    const q = (filter || "").toLowerCase();
-    const items = municipios.filter(m => (m.nombre || "").toLowerCase().includes(q));
+      function getPrincipalId() {
+        const n = Number(selPrincipal.value);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
 
-    list.innerHTML = items.map(m => {
-      const checked = selected.has(m.id_municipio) ? "checked" : "";
-      return `
-        <div class="form-check">
-          <input class="form-check-input covChk" type="checkbox" value="${m.id_municipio}" id="cov_${m.id_municipio}" ${checked}>
-          <label class="form-check-label" for="cov_${m.id_municipio}">${m.nombre}</label>
-        </div>
-      `;
-    }).join("");
+      function isMultiEscala() {
+        return ["regional", "distrital", "estatal", "nacional"].includes(getEscala());
+      }
 
-    list.querySelectorAll(".covChk").forEach(chk => {
-      chk.addEventListener("change", () => {
-        const id = Number(chk.value);
-        if (chk.checked) selected.add(id);
-        else selected.delete(id);
+      function ensurePrincipalInside() {
+        const principalId = getPrincipalId();
+        if (principalId) selected.add(principalId);
+      }
+
+      function refreshCount() {
+        if (!lblCount) return;
+
+        const principalId = getPrincipalId();
+        const principalObj = municipios.find(m => Number(m.id_municipio) === Number(principalId));
+
+        if (!selected.size) {
+          lblCount.textContent = "0 seleccionados";
+          return;
+        }
+
+        lblCount.textContent = principalObj
+          ? `${selected.size} seleccionados · principal: ${principalObj.nombre}`
+          : `${selected.size} seleccionados`;
+      }
+
+      function renderList(filter = "") {
+        const q = (filter || "").toLowerCase().trim();
+        const principalId = getPrincipalId();
+
+        const items = municipios.filter(m =>
+          (m.nombre || "").toLowerCase().includes(q)
+        );
+
+        list.innerHTML = items.map(m => {
+          const id = Number(m.id_municipio);
+          const checked = selected.has(id) ? "checked" : "";
+          const isPrincipal = principalId === id;
+          const disabled = isPrincipal ? "disabled" : "";
+
+          return `
+            <div class="form-check mb-1">
+              <input
+                class="form-check-input covChk"
+                type="checkbox"
+                value="${id}"
+                id="cov_${id}"
+                ${checked}
+                ${disabled}
+              >
+              <label class="form-check-label" for="cov_${id}">
+                ${m.nombre}
+                ${isPrincipal ? '<span class="badge text-bg-warning ms-1">Principal</span>' : ''}
+              </label>
+            </div>
+          `;
+        }).join("");
+
+        list.querySelectorAll(".covChk").forEach(chk => {
+          chk.addEventListener("change", () => {
+            const id = Number(chk.value);
+            const principalId = getPrincipalId();
+
+            if (id === principalId) {
+              chk.checked = true;
+              selected.add(id);
+              refreshCount();
+              return;
+            }
+
+            if (chk.checked) selected.add(id);
+            else selected.delete(id);
+
+            refreshCount();
+          });
+        });
+
         refreshCount();
+      }
+
+      // 👇 esta SOLO muestra/oculta, NO limpia selected
+      function syncVisibility() {
+        const multi = isMultiEscala();
+        wrap.classList.toggle("d-none", !multi);
+
+        if (!multi) {
+          // si no es multi, deja solo principal internamente
+          const principalId = getPrincipalId();
+          selected.clear();
+          if (principalId) selected.add(principalId);
+        } else {
+          ensurePrincipalInside();
+        }
+
+        renderList(txt?.value || "");
+      }
+
+      // 👇 reset total para cuando guardas o limpias formulario
+      function resetCobertura() {
+        selected.clear();
+        if (txt) txt.value = "";
+        if (lblCount) lblCount.textContent = "0 seleccionados";
+        wrap.classList.add("d-none");
+        if (list) list.innerHTML = "";
+      }
+
+      txt?.addEventListener("input", () => renderList(txt.value));
+
+      btnAll?.addEventListener("click", () => {
+        if (!isMultiEscala()) return;
+        municipios.forEach(m => selected.add(Number(m.id_municipio)));
+        ensurePrincipalInside();
+        renderList(txt?.value || "");
       });
-    });
 
-    refreshCount();
-  }
+      btnNone?.addEventListener("click", () => {
+        selected.clear();
+        ensurePrincipalInside();
+        renderList(txt?.value || "");
+      });
 
-  function shouldEnableMulti() {
-    const escala = (selEscala?.value || "").toLowerCase();
-    return ["regional", "distrital"].includes(escala);
-  }
+      selEscala?.addEventListener("change", () => {
+        syncVisibility();
+      });
 
-  function ensurePrincipalInside() {
-    const principal = Number(selPrincipal?.value);
-    if (Number.isFinite(principal) && principal > 0) selected.add(principal);
-  }
+      selPrincipal?.addEventListener("change", () => {
+        ensurePrincipalInside();
+        syncVisibility();
+      });
 
-  function showOrHide() {
-    const enable = shouldEnableMulti();
-    wrap.classList.toggle("d-none", !enable);
+      window.__getCoberturaTrabajoIds = () => Array.from(selected);
 
-    if (!enable) {
-      selected.clear();
-      renderList(txt?.value || "");
-      return;
+      window.__setCoberturaTrabajoIds = (ids = []) => {
+        selected.clear();
+
+        ids.forEach(id => {
+          const n = Number(id);
+          if (Number.isFinite(n) && n > 0) selected.add(n);
+        });
+
+        ensurePrincipalInside();
+        syncVisibility();
+      };
+
+      window.__resetCoberturaTrabajo = function () {
+        selected.clear();
+
+        if (txt) txt.value = "";
+        if (lblCount) lblCount.textContent = "0 seleccionados";
+        if (list) list.innerHTML = "";
+
+        wrap?.classList.add("d-none");
+      };
+
+    window.__validateCoberturaTrabajo = ({ silent = false } = {}) => {
+      const escala = getEscala();
+      const principalId = getPrincipalId();
+
+      if (!escala) {
+        if (!silent) {
+          showAlert?.(
+            "⚠️ Cobertura territorial: selecciona el nivel de influencia.",
+            "warning"
+          );
+        }
+        return false;
+      }
+
+      if (!principalId) {
+        if (!silent) {
+          showAlert?.(
+            "⚠️ Cobertura territorial: debes seleccionar el municipio principal de trabajo político.",
+            "warning"
+          );
+        }
+        return false;
+      }
+
+      if (isMultiEscala()) {
+        if (!selected.has(principalId)) {
+          if (!silent) {
+            showAlert?.(
+              "⚠️ Cobertura territorial: el municipio principal debe estar incluido en la cobertura.",
+              "warning"
+            );
+          }
+          return false;
+        }
+
+        if (selected.size < 2) {
+          if (!silent) {
+            showAlert?.(
+              `⚠️ Cobertura territorial: para nivel ${escala}, selecciona al menos 2 municipios (incluyendo el principal).`,
+              "warning"
+            );
+          }
+          return false;
+        }
+      } else {
+        if (selected.size !== 1 || !selected.has(principalId)) {
+          if (!silent) {
+            showAlert?.(
+              "⚠️ Cobertura territorial: para nivel municipal solo debe existir un municipio de trabajo político.",
+              "warning"
+            );
+          }
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+      resetCobertura();
     }
-
-    ensurePrincipalInside();
-    renderList(txt?.value || "");
-  }
-
-  // Buscar
-  txt?.addEventListener("input", () => renderList(txt.value));
-
-  // Todos / Limpiar
-  btnAll?.addEventListener("click", () => {
-    municipios.forEach(m => selected.add(m.id_municipio));
-    renderList(txt?.value || "");
-  });
-
-  btnNone?.addEventListener("click", () => {
-    selected.clear();
-    ensurePrincipalInside();
-    renderList(txt?.value || "");
-  });
-
-  // cambios de escala / principal
-  selEscala?.addEventListener("change", showOrHide);
-  selPrincipal?.addEventListener("change", () => {
-    if (!wrap.classList.contains("d-none")) {
-      ensurePrincipalInside();
-      renderList(txt?.value || "");
-    }
-  });
-
-  // Exponer para build/apply
-  window.__getCoberturaTrabajoIds = () => Array.from(selected);
-  window.__setCoberturaTrabajoIds = (ids = []) => {
-    selected.clear();
-    ids.forEach(id => {
-      const n = Number(id);
-      if (Number.isFinite(n) && n > 0) selected.add(n);
-    });
-    showOrHide();
-  };
-
-  // init
-  renderList("");
-  showOrHide();
-}
 //togle ocultar equipos y refrentes
 function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
   const chk = document.getElementById(chkId);
@@ -5920,96 +6161,96 @@ function initGrupoPostulacionMulti() {
       });
 
       // submit
+      // 🔒 Variables globales para anti-doble clic
+      let isSubmitting = false;
+      let submitBtn = null;
+
       $('#personaForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        hideAlert();
-
-        const payload = buildPayload({ validate: true });
-        if (!payload) return; // 👈 importantísimo para que no reviente si buildPayload regresa null
-        //validacion otro este marcado en temas
-        const temaOtroSel = (payload.temas_interes || []).find(t => t.otro_texto !== undefined);
-        if (temaOtroSel && !temaOtroSel.otro_texto) {
-          document.getElementById('temaOtroTexto')?.classList.add('is-invalid');
-          return showAlert('warning', 'Si seleccionas “Otro”, captura la descripción del tema.');
-        }
-
-          // ✅ VALIDACIÓN: eventos de movilización (evitar incompletos)
-        for (const ev of (payload.capacidad_movilizacion_eventos || [])) {
-          const incompleto = !ev.nombre_evento || !ev.fecha_evento || ev.asistencia == null;
-          if (incompleto) {
-            return showAlert('warning', 'En cada evento de movilización captura: Nombre, Fecha y Asistencia.');
-          }
-          if (Number(ev.asistencia) < 0) {
-            return showAlert('warning', 'La asistencia no puede ser negativa.');
-          }
-        }
-
-        // ✅ Sin controversias públicas (mutuo excluyente)
-        const chkSin = document.getElementById('chkSinControversias')?.checked ?? false;
-
-        // Asegura que viaje en persona
-        payload.persona.sin_controversias_publicas = chkSin;
-
-        // Si está marcado, forzamos controversias vacías
-        if (chkSin) payload.controversias = [];
-
-        // ============================
-        // VALIDACION FORMACION ACADEMICA
-        // ============================
-        const fa0 = (payload.formacion_academica || [])[0];
-
-        if (fa0 && (fa0.nivel === 'Educación Superior' || fa0.nivel === 'Posgrado')) {
-          if (!fa0.grado_obtenido || !fa0.institucion) {
-            showAlert(
-              'warning',
-              'Para Educación Superior o Posgrado captura el grado obtenido y la institución.'
-            );
-            return; // ⛔ NO envía al backend
-          }
-          if (fa0.titulado === null) {
-            return showAlert('warning', 'Indica si la persona está titulada.');
-          }
-        }
-        // ============================
-        if (!payload.persona.nombre) return showAlert('warning', 'El nombre es obligatorio.');
-        // Nota: si no tienes usuarios, deja creado_por null.
-
-        const idPartido = payload.persona.id_partido_actual;
-        if (idPartido) {
-          const p = (partidosCatalog || []).find(x => Number(x.id_partido) === Number(idPartido));
-          const esOtro = (p?.nombre || '').toLowerCase() === 'otro' || (p?.siglas || '').toUpperCase() === 'OTRO';
-
-          if (esOtro && !payload.persona.partido_otro_texto) {
-            document.getElementById('partidoOtroTexto')?.classList.add('is-invalid');
-            return showAlert('warning', 'Si seleccionas “Otro”, captura el nombre del partido.');
-          }
-        }
-        //validacion de datod duplicados
-        // 🔁 Re-checar duplicados justo antes de guardar (con exclude_id en edición)
-        if (typeof checkDuplicadoNow === "function") {
-          await checkDuplicadoNow(editingId);  // <- implementamos abajo
-        }
-        const dup = window.__dupCheck || [];
-        const hayBloqueante = dup.some(x =>
-          ["curp","rfc","clave_elector"].includes(x.match_type)
-        );
-
-        if (hayBloqueante) {
-          showAlert("danger", "No se puede guardar: se detectó un duplicado (CURP/RFC/Clave de elector).");
-          return;
+        // ✅ ANTI-DOBLE CLIC
+        if (isSubmitting) return;
+        
+        submitBtn = document.querySelector('#personaForm button[type="submit"]');
+        isSubmitting = true;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
         }
 
         try {
+          e.preventDefault();
+          hideAlert();
+
+          const payload = buildPayload({ validate: true });
+          if (!payload) return;
+
+          // validacion otro este marcado en temas
+          const temaOtroSel = (payload.temas_interes || []).find(t => t.otro_texto !== undefined);
+          if (temaOtroSel && !temaOtroSel.otro_texto) {
+            document.getElementById('temaOtroTexto')?.classList.add('is-invalid');
+            return showAlert('warning', 'Si seleccionas "Otro", captura la descripción del tema.');
+          }
+
+          // ✅ VALIDACIÓN: eventos de movilización (evitar incompletos)
+          for (const ev of (payload.capacidad_movilizacion_eventos || [])) {
+            const incompleto = !ev.nombre_evento || !ev.fecha_evento || ev.asistencia == null;
+            if (incompleto) {
+              return showAlert('warning', 'En cada evento de movilización captura: Nombre, Fecha y Asistencia.');
+            }
+            if (Number(ev.asistencia) < 0) {
+              return showAlert('warning', 'La asistencia no puede ser negativa.');
+            }
+          }
+
+          // ✅ Sin controversias públicas (mutuo excluyente)
+          const chkSin = document.getElementById('chkSinControversias')?.checked ?? false;
+          payload.persona.sin_controversias_publicas = chkSin;
+          if (chkSin) payload.controversias = [];
+
+          // ============================
+          // VALIDACION FORMACION ACADEMICA
+          // ============================
+          const fa0 = (payload.formacion_academica || [])[0];
+          if (fa0 && (fa0.nivel === 'Educación Superior' || fa0.nivel === 'Posgrado')) {
+            if (!fa0.grado_obtenido || !fa0.institucion) {
+              showAlert('warning', 'Para Educación Superior o Posgrado captura el grado obtenido y la institución.');
+              return;
+            }
+            if (fa0.titulado === null) {
+              return showAlert('warning', 'Indica si la persona está titulada.');
+            }
+          }
+
+          if (!payload.persona.nombre) return showAlert('warning', 'El nombre es obligatorio.');
+
+          const idPartido = payload.persona.id_partido_actual;
+          if (idPartido) {
+            const p = (partidosCatalog || []).find(x => Number(x.id_partido) === Number(idPartido));
+            const esOtro = (p?.nombre || '').toLowerCase() === 'otro' || (p?.siglas || '').toUpperCase() === 'OTRO';
+            if (esOtro && !payload.persona.partido_otro_texto) {
+              document.getElementById('partidoOtroTexto')?.classList.add('is-invalid');
+              return showAlert('warning', 'Si seleccionas "Otro", captura el nombre del partido.');
+            }
+          }
+
+          // validacion de datos duplicados
+          if (typeof checkDuplicadoNow === "function") {
+            await checkDuplicadoNow(editingId);
+          }
+          const dup = window.__dupCheck || [];
+          const hayBloqueante = dup.some(x => ["curp","rfc","clave_elector"].includes(x.match_type));
+
+          if (hayBloqueante) {
+            showAlert("danger", "No se puede guardar: se detectó un duplicado (CURP/RFC/Clave de elector).");
+            return;
+          }
+
           const isEdit = !!editingId;
           const url = isEdit ? `/personas/${editingId}` : `/personas`;
           const resp = isEdit ? await apiPut(url, payload) : await apiPost(url, payload);
 
           const idGuardado = isEdit ? editingId : resp.id_persona;
-          
-          // ✅ PALOMITA SUAVE + mensaje
           showSuccessCheckmark(idGuardado, isEdit);
 
-          // Resto del código igual...
           if (borradorActualId) {
             try {
               await apiPut(`/borradores/${borradorActualId}`, { estatus: 'enviado' });
@@ -6024,6 +6265,13 @@ function initGrupoPostulacionMulti() {
         } catch (err) {
           console.error(err);
           showAlert('danger', 'Error al guardar: ' + (err.message || err));
+        } finally {
+          // ✅ RESET ANTI-DOBLE CLIC (siempre se ejecuta)
+          isSubmitting = false;
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Guardar todo';
+          }
         }
       });
       
