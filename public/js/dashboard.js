@@ -23,6 +23,8 @@ const COBERTURA_URL = "/api/analista/municipios/cobertura";
 const MUNICIPIOS_JSON_URL = "/data/municipios.json";
 const KPI_RESUMEN_EJECUTIVO_URL = "/api/personas/admin/kpis/resumen-ejecutivo";
 
+const KPI_ALERTAS_URL = "/api/personas/dashboard/kpi/alertas";
+
   /* =========================
      STATE
      ========================= */
@@ -65,6 +67,35 @@ const gridState = {
   /* =========================
      HELPERS
      ========================= */
+  async function fetchBlob(url, options = {}) {
+    const token = localStorage.getItem("token");
+    const headers = {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`
+    };
+
+    const res = await fetch(url, { ...options, headers });
+
+    if (res.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      location.href = "/";
+      throw new Error("Sesión expirada");
+    }
+
+    if (!res.ok) {
+      let msg = "Error de servidor";
+      try {
+        const err = await res.json();
+        msg = err?.error || err?.detail || msg;
+      } catch {
+        // ignore
+      }
+      throw new Error(msg);
+    }
+
+    return res.blob();
+  }
 
   function canVerifyFinal() {
     const user = getCurrentUser();
@@ -90,7 +121,24 @@ const gridState = {
     hour: "2-digit",
     minute: "2-digit"
   });
+  }
+
+function fmtDT(v) {
+  if (!v) return "—";
+  try {
+    return new Date(v).toLocaleString("es-MX", {
+      timeZone: "America/Mexico_City",
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return v;
+  }
 }
+
 function getChartBaseOptions(extra = {}) {
   return {
     responsive: true,
@@ -354,6 +402,7 @@ function buildGridQuery(extra = {}) {
     const debouncedReferentes = debounce(() => {
       loadReferentesDashboard().catch(console.error);
     }, 250);
+    
 
     $("fltReferente")?.addEventListener("focus", () => {
       loadReferentesDashboard().catch(console.error);
@@ -379,6 +428,7 @@ function buildGridQuery(extra = {}) {
       $("dashboardSidebar")?.classList.toggle("open");
     });
 
+
     $("btnRefreshDashboard")?.addEventListener("click", () => {
       loadAllDashboardData();
     });
@@ -395,10 +445,18 @@ function buildGridQuery(extra = {}) {
       modal.show();
     });
 
-    $("btnReporteEjecutivo")?.addEventListener("click", () => {
-      updateAlert("El reporte ejecutivo aún lo conectamos al endpoint final.", "secondary");
+    $("btnReporteEjecutivo")?.addEventListener("click", async () => {
+      try {
+        const qs = buildGridQuery();
+        const blob = await fetchBlob(`/api/personas/reportes/ejecutivo?${qs.toString()}`);
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      } catch (err) {
+        updateAlert(err.message || "No se pudo generar el reporte ejecutivo.", "danger");
+      }
     });
-
+    
     $("btnExportExcel")?.addEventListener("click", () => exportGrid("xlsx"));
     $("btnExportCsv")?.addEventListener("click", () => exportGrid("csv"));
     $("btnExportPdf")?.addEventListener("click", () => updateAlert("La exportación PDF ejecutiva la conectamos en el siguiente paso.", "secondary"));
@@ -411,7 +469,19 @@ function buildGridQuery(extra = {}) {
       if (!selectedRowData) return;
       bootstrap.Modal.getOrCreateInstance($("modalVerificacionFinal")).show();
     });
-//listener
+
+    $("modalObservacionFinal")?.addEventListener("hidden.bs.modal", () => {
+      if ($("txtObservacionFinal")) {
+        $("txtObservacionFinal").value = "";
+      }
+    });
+
+    $("modalObservacionFinal")?.addEventListener("show.bs.modal", () => {
+      if ($("txtObservacionFinal")) {
+        $("txtObservacionFinal").value = "";
+      }
+    });
+    //listener
     $("btnAbrirDesverificarFinal")?.addEventListener("click", () => {
       if (!selectedRowData?.id_persona) {
         updateAlert("Selecciona un registro antes de retirar la verificación.", "warning");
@@ -464,15 +534,43 @@ function buildGridQuery(extra = {}) {
       }
     });
 
-    $("btnConfirmarDevolucion")?.addEventListener("click", async () => {
-      if (!selectedRowData) return;
+    $("btnConfirmarDevolucion")?.addEventListener("click", async (e) => {
+      e.preventDefault();
+
+      if (!selectedRowData?.id_persona) return;
+
       const obs = $("txtObservacionFinal")?.value?.trim();
       if (!obs) {
         updateAlert("Escribe una observación antes de devolver.", "warning");
         return;
       }
-      updateAlert(`Pendiente conectar devolución FINAL para ID ${selectedRowData.id_persona}.`, "secondary");
-      bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).hide();
+
+      try {
+        await fetchJson(`/api/personas/analista/personas/${selectedRowData.id_persona}/devolver-final`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ observacion: obs })
+        });
+
+        updateAlert("Observación enviada correctamente. El registro regresó de FINAL.", "success");
+
+        if ($("txtObservacionFinal")) {
+          $("txtObservacionFinal").value = "";
+        }
+
+        bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).hide();
+
+        reloadGrid();
+        loadSummaryKpis().catch(console.error);
+        renderAlertSummary().catch(console.error);
+        updateGridInfoExtra?.();
+
+      } catch (err) {
+        console.error("Error devolución final:", err);
+        updateAlert(err.message || "No se pudo enviar la observación.", "danger");
+      }
     });
 
     const debouncedApply = debounce(applyFiltersAndReload, 350);
@@ -505,6 +603,16 @@ function buildGridQuery(extra = {}) {
       if (!selectedRowData?.id_persona) return;
       generarPDFPersona(selectedRowData.id_persona).catch(err => updateAlert(err.message, "danger"));
     });
+
+    $("btnInboxNotificaciones")?.addEventListener("click", async () => {
+      const rows = await loadNotificaciones();
+
+      renderNotificaciones(rows);
+      updateBadgeNotificaciones(rows);
+
+      bootstrap.Modal.getOrCreateInstance($("modalNotificaciones")).show();
+    });
+    
   }
 
   function clearFilters() {
@@ -550,7 +658,7 @@ function buildGridQuery(extra = {}) {
     reloadGrid();
     loadSummaryKpis().catch(console.error);
     loadAndPaintFilteredMunicipiosDashboard().catch(console.error);
-    renderAlertSummary();
+    renderAlertSummary().catch(console.error);
     updateGridInfoExtra();
   }
 
@@ -782,6 +890,40 @@ async function loadAndPaintFilteredMunicipiosDashboard() {
   /* =========================
      FILTROS CATÁLOGOS
      ========================= */
+function updateBadgeNotificaciones(rows = []) {
+  const badge = $("badgeNotificaciones");
+  if (!badge) return;
+
+  const pendientes = rows.filter(r => !r.leida);
+
+  if (pendientes.length > 0) {
+    badge.textContent = pendientes.length;
+    badge.classList.remove("d-none");
+  } else {
+    badge.classList.add("d-none");
+  }
+}
+
+async function loadNotificaciones() {
+  try {
+    const resp = await fetchJson("/api/personas/dashboard/notificaciones");
+    return resp?.data || [];
+  } catch (e) {
+    console.error("Error notificaciones:", e);
+    return [];
+  }
+}
+
+async function loadAlertSummaryData() {
+  try {
+    const qs = buildGridQuery();
+    const resp = await fetchJson(`${KPI_ALERTAS_URL}?${qs.toString()}`);
+    return resp?.data || {};
+  } catch (e) {
+    console.error("Error cargando alertas dashboard:", e);
+    return {};
+  }
+}
 
   async function loadOficinasFiltro() {
     const oficinas = await fetchJson(OFICINAS_URL);
@@ -1580,6 +1722,74 @@ function openDetailPanel(row) {
     `;
   }
 
+function renderNotificaciones(rows = []) {
+  const el = $("notificacionesContainer");
+  if (!el) return;
+
+  const leidas = rows.filter(r => r.leida).length;
+  const noLeidas = rows.length - leidas;
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="text-muted">No hay notificaciones recientes.</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="notification-stats">
+      <div class="stats-row">
+        <div class="stat-item ${noLeidas ? 'stat-unread' : 'stat-read'}">
+          <i class="bi bi-bell"></i> ${noLeidas} Nueva${noLeidas !== 1 ? 's' : ''}
+        </div>
+        <div class="stat-item stat-read">
+          <i class="bi bi-check-circle"></i> ${leidas} Leída${leidas !== 1 ? 's' : ''}
+        </div>
+        <div class="stat-item stat-total">
+          <i class="bi bi-list-ul"></i> Total: ${rows.length}
+        </div>
+      </div>
+    </div>
+  ` + rows.map(r => `
+    <div class="notification-item ${r.leida ? "is-read" : "is-unread"}"
+         data-id="${r.id_evento}" data-persona="${r.id_persona}">
+      
+      <span class="notification-badge ${r.leida ? "is-read" : "is-unread"}" title="${r.leida ? 'Leída' : 'Nueva'}">
+        <i class="bi ${r.leida ? 'bi-check-lg' : 'bi-bell-fill'}"></i>
+        ${r.leida ? 'Leída' : 'Nueva'}
+      </span>
+      
+      <div class="notification-info">
+        <div class="notification-username" title="${esc(r.usuario || "Sistema")}">
+          ${esc(r.usuario || "Sistema")}
+        </div>
+        <div class="notification-date">${esc(fmtDT(r.fecha))}</div>
+      </div>
+      
+      <div class="notification-content" title="${esc(r.detalle || "—")}">
+        ${esc(r.detalle || "—")}
+      </div>
+      
+      <div class="notification-meta">
+        #${r.id_persona}
+      </div>
+    </div>
+  `).join("");
+
+  el.querySelectorAll(".notification-item").forEach(item => {
+    item.addEventListener("click", async () => {
+      const idObservacion = Number(item.dataset.id);
+      if (!Number.isFinite(idObservacion)) return;
+      try {
+        await fetchJson(`/api/personas/dashboard/notificaciones/${idObservacion}/leida`, { method: "POST" });
+        item.classList.remove("is-unread");
+        item.classList.add("is-read");
+        updateBadgeNotificaciones(rows);
+      } catch (e) {
+        console.error("No se pudo marcar como leída:", e);
+      }
+    });
+  });
+}
+
   /* =========================
      KPIS Y CHARTS
      ========================= */
@@ -1825,53 +2035,78 @@ function renderChartOficinas(rows) {
   });
 }
 
-  function renderAlertSummary() {
-    const c = $("alertsContainer");
-    if (!c) return;
+async function renderAlertSummary() {
+  const c = $("alertsContainer");
+  if (!c) return;
 
-    const alertas = [];
+  const alertas = [];
+  const stats = await loadAlertSummaryData();
 
-    if (gridState.solo_pendientes_final) {
-      alertas.push({
-        cls: "is-warning",
-        title: "Vista enfocada en pendientes FINAL",
-        text: "La bandeja muestra registros que requieren cierre institucional."
-      });
-    }
-
-    if (gridState.controversias === "1") {
-      alertas.push({
-        cls: "is-danger",
-        title: "Filtro de controversias activo",
-        text: "Se priorizan perfiles con seguimiento sensible."
-      });
-    }
-
-    if (gridState.oficina) {
-      alertas.push({
-        cls: "is-info",
-        title: "Segmentación por oficina",
-        text: "El tablero está acotado a una oficina específica."
-      });
-    }
-
-    if (!alertas.length) {
-      c.innerHTML = `
-        <div class="alert-item">
-          <div class="alert-item-title">Sin alertas cargadas</div>
-          <div class="alert-item-text text-muted">Aquí aparecerán incidencias, focos de atención y prioridades.</div>
-        </div>
-      `;
-      return;
-    }
-
-    c.innerHTML = alertas.map(a => `
-      <div class="alert-item ${a.cls}">
-        <div class="alert-item-title">${esc(a.title)}</div>
-        <div class="alert-item-text">${esc(a.text)}</div>
-      </div>
-    `).join("");
+  if (Number(stats.observaciones_pendientes || 0) > 0) {
+    alertas.push({
+      cls: "is-danger",
+      title: `${stats.observaciones_pendientes} observación(es) pendiente(s)`,
+      text: "Hay registros devueltos que aún requieren atención."
+    });
   }
+
+  if (Number(stats.devoluciones_final_7d || 0) > 0) {
+    alertas.push({
+      cls: "is-warning",
+      title: `${stats.devoluciones_final_7d} devolución(es) FINAL en los últimos 7 días`,
+      text: "Se detectaron devoluciones recientes en el cierre institucional."
+    });
+  }
+
+  if (Number(stats.observaciones_atendidas_hoy || 0) > 0) {
+    alertas.push({
+      cls: "is-info",
+      title: `${stats.observaciones_atendidas_hoy} observación(es) atendida(s) hoy`,
+      text: "Hubo seguimiento reciente a observaciones operativas."
+    });
+  }
+
+  if (gridState.solo_pendientes_final) {
+    alertas.push({
+      cls: "is-warning",
+      title: "Vista enfocada en pendientes FINAL",
+      text: "La bandeja muestra registros que requieren cierre institucional."
+    });
+  }
+
+  if (gridState.controversias === "1") {
+    alertas.push({
+      cls: "is-danger",
+      title: "Filtro de controversias activo",
+      text: "Se priorizan perfiles con seguimiento sensible."
+    });
+  }
+
+  if (gridState.oficinaId) {
+    alertas.push({
+      cls: "is-info",
+      title: "Segmentación por oficina",
+      text: "El tablero está acotado a una oficina específica."
+    });
+  }
+
+  if (!alertas.length) {
+    c.innerHTML = `
+      <div class="alert-item">
+        <div class="alert-item-title">Sin alertas cargadas</div>
+        <div class="alert-item-text text-muted">Aquí aparecerán incidencias, focos de atención y prioridades.</div>
+      </div>
+    `;
+    return;
+  }
+
+  c.innerHTML = alertas.map(a => `
+    <div class="alert-item ${a.cls}">
+      <div class="alert-item-title">${esc(a.title)}</div>
+      <div class="alert-item-text">${esc(a.text)}</div>
+    </div>
+  `).join("");
+}
 
   /* =========================
      PDF PERSONA
@@ -1939,6 +2174,9 @@ function renderChartOficinas(rows) {
     loadInfluenciaFiltro();
     //loadReferentesDashboard().catch(console.error);
     await loadAllDashboardData();
+
+    const rows = await loadNotificaciones();
+    updateBadgeNotificaciones(rows);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
