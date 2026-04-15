@@ -17,6 +17,37 @@ router.post('/analista/personas/:id/desverificar',
   ctrl.desverificarPersona
 );
 
+router.post('/analista/personas/:id/devolver-final',
+  requireAuth,
+  requireRole('analista', 'superadmin'),
+  requireOffice,
+  ctrl.devolverPersonaFinal
+);
+
+router.post('/analista/personas/observaciones/:idObservacion/atender',
+  requireAuth,
+  requireRole('analista', 'superadmin'),
+  requireOffice,
+  ctrl.atenderObservacionPersona
+);
+
+router.get('/dashboard/kpi/alertas',
+  requireAuth,
+  applySmartFilters,
+  ctrl.kpiAlertasDashboard
+);
+
+router.get('/dashboard/notificaciones',
+  requireAuth,
+  applySmartFilters,
+  ctrl.listNotificacionesDashboard
+);
+
+router.post('/dashboard/notificaciones/:idObservacion/leida',
+  requireAuth,
+  ctrl.marcarNotificacionLeida
+);
+
 router.get('/admin/resumen-por-usuario', requireAuth, requireRole('superadmin'), ctrl.resumenPersonasPorUsuario);
 
 router.get("/admin/grid", [
@@ -59,6 +90,8 @@ router.get(
   ctrl.listCapturistasByOficina
 );
 
+
+
 router.get('/admin/kpis/completitud', requireAuth, requireRole('superadmin','analista'), applySmartFilters, ctrl.kpiCompletitud);
 router.get('/admin/kpis/municipios', requireAuth, requireRole('superadmin','analista'), applySmartFilters,  ctrl.kpiMunicipios);
 
@@ -71,6 +104,12 @@ router.get(
   requireRole('superadmin','analista'),
   applySmartFilters,
   ctrl.kpiResumenEjecutivo
+);
+
+router.get('/reportes/ejecutivo',
+  requireAuth,
+  applySmartFilters,
+  ctrl.reporteEjecutivo
 );
 
 router.post(
