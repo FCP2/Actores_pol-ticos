@@ -1430,3 +1430,291 @@ canvas{
 .leaflet-container path {
   outline: none !important;
 }
+
+/*notificaiones*/
+/* =========================
+   NOTIFICACIONES / INBOX
+   ========================= */
+
+#btnInboxNotificaciones {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+#badgeNotificaciones {
+  min-width: 20px;
+  height: 20px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#notificacionesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.notification-item {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 0.9rem;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.notification-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.notification-item.is-unread {
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 4px solid #f59e0b;
+}
+
+.notification-item.is-read {
+  background: #f8fafc;
+  border-left: 4px solid #cbd5e1;
+  opacity: 0.9;
+}
+
+.notification-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.notification-body {
+  font-size: 0.95rem;
+  color: #1f2937;
+  margin-bottom: 0.35rem;
+}
+
+.notification-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-right: 0.5rem;
+}
+
+.notification-badge.is-unread {
+  background: #f59e0b;
+  color: #111827;
+}
+
+.notification-badge.is-read {
+  background: #94a3b8;
+  color: white;
+}
+
+/*css modal notificaicones*/
+/* ===================== MODAL NOTIFICACIONES - BADGES Y NOMBRES VISIBLES ===================== */
+#modalNotificaciones .modal-header {
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  color: white;
+  border-bottom: none;
+  padding: 12px 18px;
+}
+
+.notification-stats {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.stat-read { background: #d4edda; color: #155724; }
+.stat-unread { background: #fff3cd; color: #856404; }
+.stat-total { background: #e2e3e5; color: #495057; }
+
+/* NOTIFICACIONES COMPACTAS 45px */
+.notification-item {
+  background: #ffffff;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 0.5px 2px rgba(0,0,0,0.06);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  gap: 8px;  /* REDUCIDO gap para más espacio */
+  font-size: 0.87rem;
+  overflow: hidden;
+}
+
+.notification-info {
+  flex: 1.2;  /* AUMENTADO de 1 a 1.2 */
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.notification-username {
+  font-weight: 700;
+  color: #2c3e50;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;  /* AUMENTADO de 160px a 220px */
+  line-height: 1.2;
+}
+
+.notification-content {
+  flex: 1.8;  /* REDUCIDO ligeramente de 2 a 1.8 */
+  font-size: 0.86rem;
+  color: #34495e;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.notification-item:hover {
+  border-color: #3498db;
+  box-shadow: 0 3px 8px rgba(52,152,219,0.12);
+}
+
+.notification-item.is-unread {
+  background: #fff8e1;
+  border-left: 4px solid #f39c12;
+}
+
+.notification-item.is-read {
+  background: #f8f9fa;
+  border-left: 3px solid #95a5a6;
+}
+
+/* BADGES GRANDES Y VISIBLES */
+.notification-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  min-width: 48px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.notification-badge.is-read {
+  background: #6c757d;
+  color: white;
+}
+
+.notification-badge.is-unread {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  color: white;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.notification-badge i {
+  font-size: 0.75rem;
+}
+
+
+.notification-date {
+  font-size: 0.72rem;
+  color: #7f8c8d;
+  white-space: nowrap;
+}
+
+
+.notification-meta {
+  font-size: 0.75rem;
+  color: #95a5a6;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-left: 8px;
+  border-left: 1px solid #e9ecef;
+}
+
+/* Tooltip para textos largos */
+.notification-username[title],
+.notification-content[title] {
+  position: relative;
+}
+
+.notification-username[title]:hover::after,
+.notification-content[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2c3e50;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* Vacío */
+#notificacionesContainer .text-muted {
+  text-align: center;
+  padding: 40px 16px;
+  color: #95a5a6;
+}
+
+#notificacionesContainer .text-muted::before {
+  content: '\f0f3';
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 12px;
+  color: #bdc3c7;
+}
+
