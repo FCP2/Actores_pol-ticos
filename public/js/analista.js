@@ -2373,16 +2373,8 @@ async function generarPDFPersona(idPersona){
   if (!res.ok) { alert("No se pudo generar el PDF"); return; }
 
   const blob = await res.blob();
-  const disposition = res.headers.get("Content-Disposition") || "";
-  const filenameMatch = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `perfil_${idPersona}.pdf`;
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  window.open(url, "_blank", "noopener,noreferrer");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 // KPI COMPLETUD - FUNCIONALIDAD IGUAL, SOLO MEJORADO VISUAL
