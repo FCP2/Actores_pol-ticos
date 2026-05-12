@@ -28,7 +28,16 @@ router.post('/analista/personas/observaciones/:idObservacion/atender',
   requireAuth,
   requireRole('analista', 'superadmin'),
   requireOffice,
+  applySmartFilters,
   ctrl.atenderObservacionPersona
+);
+
+router.get('/analista/personas/:id/observaciones',
+  requireAuth,
+  requireRole('capturista', 'analista', 'superadmin'),
+  requireOffice,
+  applySmartFilters,
+  ctrl.listObservacionesPersona
 );
 
 router.get('/dashboard/kpi/alertas',
