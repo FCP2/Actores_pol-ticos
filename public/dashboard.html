@@ -8,17 +8,19 @@
   <!-- Bootstrap -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-  
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
+
   <!-- CSS propio -->
   <link rel="stylesheet" href="/static/css/dashboard.css" />
 </head>
+
 <body class="dashboard-superadmin-body">
+
   <script>
-    // Guard Dashboard - SOLO superadmin
+    /* Guard Dashboard — solo superadmin */
     (async function guardDashboard() {
       const token = localStorage.getItem("token");
       if (!token) return window.location.href = "/";
@@ -38,9 +40,8 @@
         const user = data?.user || {};
         const roles = user.roles || [];
 
-        // 🚫 Solo superadmin aquí
         if (!roles.includes("superadmin")) {
-          return roles.includes("analista") 
+          return roles.includes("analista")
             ? window.location.href = "/analista"
             : window.location.href = "/captura";
         }
@@ -53,52 +54,62 @@
         window.location.href = "/";
       }
     })();
-    </script>
+  </script>
 
-      <!-- NAVBAR -->
-  <nav class="navbar navbar-expand-lg shadow-sm mb-2" 
-      style="background:#ffffff; border-bottom:3px solid #8b2136;">
-
-    <div class="container-fluid d-flex align-items-center">
+  <!-- NAVBAR -->
+  <nav class="navbar navbar-expand-lg navbar-improved shadow-sm mb-2">
+    <div class="container-fluid d-flex align-items-center gap-3">
 
       <!-- LOGO -->
-      <div class="me-3 d-flex align-items-center">
-        <img 
-          src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550" 
-          alt="Logo Gobierno del Estado de México"
-          class="navbar-logo"
-        >
-      </div>
-      <!-- ESPACIADOR -->
-      <div class="ms-auto"></div>
+      <img
+        src="/static/img/logo.png"
+        onerror="this.src='https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550'"
+        alt="Logo Gobierno del Estado de México"
+        class="navbar-logo"
+      >
 
+      <!-- ESPACIADOR -->
+      <div class="flex-grow-1"></div>
+
+      <!-- CAMPANA -->
       <div class="position-relative">
-        <button class="btn btn-light position-relative" id="btnInboxNotificaciones" type="button">
+        <button
+          class="btn btn-light position-relative"
+          id="btnInboxNotificaciones"
+          type="button"
+          aria-label="Abrir bandeja de notificaciones"
+        >
           <i class="bi bi-bell fs-5"></i>
-          <span id="badgeNotificaciones"
-                class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">
+          <span
+            id="badgeNotificaciones"
+            class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none"
+            aria-label="Notificaciones sin leer"
+          >
             0
           </span>
         </button>
       </div>
 
       <!-- USUARIO -->
-        <div class="ms-auto d-flex align-items-center gap-3">
-          <div class="text-end">
-            <span class="me-3 text-muted small">
-              <i class="bi bi-person-circle"></i> Sesión activa
-            </span>
-            <div class="fw-semibold text-black" id="lblUsuario">Usuario</div>
-            <div class="small text-white-50" id="lblRol">Rol</div>
+      <div class="navbar-user-info">
+        <div class="navbar-user-meta">
+          <div class="user-label">
+            <i class="bi bi-person-circle me-1"></i>Sesión activa
           </div>
-          <button type="button" class="btn btn-outline-danger btn-sm" id="btnLogout">Salir</button>
+          <div class="user-name" id="lblUsuario">Usuario</div>
+          <div class="small text-muted" id="lblRol">Rol</div>
         </div>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btnLogout">
+          <i class="bi bi-box-arrow-right me-1"></i>Salir
+        </button>
+      </div>
+
     </div>
   </nav>
 
   <div class="dashboard-shell">
 
-    <!-- ===================== SIDEBAR (opcional si ya la usas) ===================== -->
+    <!-- SIDEBAR -->
     <aside class="dashboard-sidebar" id="dashboardSidebar">
       <div class="sidebar-brand">
         <div class="sidebar-logo">
@@ -109,8 +120,8 @@
         </div>
       </div>
 
-      <nav class="sidebar-nav">
-        <a href="#" class="sidebar-link active">
+      <nav class="sidebar-nav" aria-label="Navegación principal">
+        <a href="#" class="sidebar-link active" aria-current="page">
           <i class="bi bi-grid-1x2-fill"></i>
           <span>Resumen Ejecutivo</span>
         </a>
@@ -137,13 +148,17 @@
       </nav>
     </aside>
 
-    <!-- ===================== MAIN ===================== -->
+    <!-- MAIN -->
     <main class="dashboard-main">
 
-      <!-- ===================== TOPBAR ===================== -->
+      <!-- TOPBAR -->
       <header class="topbar">
         <div class="topbar-left">
-          <button class="btn btn-light d-lg-none" id="btnToggleSidebar">
+          <button
+            class="btn btn-light d-lg-none"
+            id="btnToggleSidebar"
+            aria-label="Abrir o cerrar menú lateral"
+          >
             <i class="bi bi-list"></i>
           </button>
 
@@ -175,7 +190,7 @@
         </div>
       </header>
 
-      <!-- ===================== FILTROS GLOBALES ===================== -->
+      <!-- FILTROS GLOBALES -->
       <section class="filters-panel card shadow-sm mb-4">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-3">
@@ -202,26 +217,26 @@
           <!-- Filtros base -->
           <div class="row g-3">
             <div class="col-md-4 col-xl-3">
-              <label class="form-label">Búsqueda general</label>
+              <label class="form-label" for="fltSearch">Búsqueda general</label>
               <input type="text" class="form-control" id="fltSearch" placeholder="Nombre, alias, cargo, partido...">
             </div>
 
             <div class="col-md-4 col-xl-2">
-              <label class="form-label">Oficina</label>
+              <label class="form-label" for="filtroOficina">Oficina</label>
               <select class="form-select" id="filtroOficina">
                 <option value="">Todas</option>
               </select>
             </div>
 
             <div class="col-md-4 col-xl-2">
-              <label class="form-label">Municipio</label>
+              <label class="form-label" for="selMunicipio">Municipio</label>
               <select class="form-select" id="selMunicipio">
                 <option value="">Todos</option>
               </select>
             </div>
 
             <div class="col-md-4 col-xl-2">
-              <label class="form-label">Verificación</label>
+              <label class="form-label" for="fltVerificacion">Verificación</label>
               <select id="fltVerificacion" class="form-select">
                 <option value="">Todas</option>
                 <option value="sin_verificar">Sin verificar</option>
@@ -237,28 +252,28 @@
           <div class="advanced-filters mt-3 d-none" id="advancedFilters">
             <div class="row g-3">
               <div class="col-md-4 col-xl-2">
-                <label class="form-label">Partido</label>
+                <label class="form-label" for="fltPartido">Partido</label>
                 <select class="form-select" id="fltPartido">
                   <option value="">Todos</option>
                 </select>
               </div>
 
               <div class="col-md-4 col-xl-2">
-                <label class="form-label">Confiabilidad</label>
+                <label class="form-label" for="fltConfiabilidad">Confiabilidad</label>
                 <select class="form-select" id="fltConfiabilidad">
                   <option value="">Todas</option>
                 </select>
               </div>
 
               <div class="col-md-4 col-xl-2">
-                <label class="form-label">Influencia</label>
+                <label class="form-label" for="fltLiderazgo">Influencia</label>
                 <select class="form-select" id="fltLiderazgo">
                   <option value="">Todos</option>
                 </select>
               </div>
 
               <div class="col-md-4 col-xl-2">
-                <label class="form-label">Controversias</label>
+                <label class="form-label" for="fltControversias">Controversias</label>
                 <select class="form-select" id="fltControversias">
                   <option value="">Todos</option>
                   <option value="1">Con controversias</option>
@@ -267,7 +282,7 @@
               </div>
 
               <div class="col-md-4 col-xl-3">
-                <label class="form-label">Referente político</label>
+                <label class="form-label" for="fltReferente">Referente político</label>
                 <input
                   type="text"
                   class="form-control"
@@ -278,53 +293,14 @@
                 >
                 <datalist id="lstReferentesDashboard"></datalist>
               </div>
-<!--
-              <div class="col-md-4 col-xl-2">
-                <label class="form-label">Empresas</label>
-                <select class="form-select" id="fltEmpresas">
-                  <option value="">Todos</option>
-                  <option value="1">Con empresas</option>
-                  <option value="0">Sin empresas</option>
-                </select>
-              </div>
 
               <div class="col-md-4 col-xl-2">
-                <label class="form-label">Elección contendida</label>
-                <select class="form-select" id="fltElecciones">
-                  <option value="">Todos</option>
-                  <option value="1">Sí</option>
-                  <option value="0">No</option>
-                </select>
-              </div>
-
-              <div class="col-md-4 col-xl-2">
-                <label class="form-label">Capturista</label>
-                <select class="form-select" id="fltCapturista">
-                  <option value="">Todos</option>
-                </select>
-              </div>
-
-              <div class="col-md-4 col-xl-2">
-                <label class="form-label">Analista</label>
-                <select class="form-select" id="fltAnalista">
-                  <option value="">Todos</option>
-                </select>
-              </div>
-
-              <div class="col-md-4 col-xl-2">
-                <label class="form-label">Verificador final</label>
-                <select class="form-select" id="fltVerificadorFinal">
-                  <option value="">Todos</option>
-                </select>
-              </div>-->
-
-              <div class="col-md-4 col-xl-2">
-                <label class="form-label">Fecha captura desde</label>
+                <label class="form-label" for="fltFechaDesde">Fecha captura desde</label>
                 <input type="date" class="form-control" id="fltFechaDesde">
               </div>
 
               <div class="col-md-4 col-xl-2">
-                <label class="form-label">Fecha captura hasta</label>
+                <label class="form-label" for="fltFechaHasta">Fecha captura hasta</label>
                 <input type="date" class="form-control" id="fltFechaHasta">
               </div>
 
@@ -341,7 +317,7 @@
         </div>
       </section>
 
-      <!-- ===================== KPIs ===================== -->
+      <!-- KPIs -->
       <section class="kpi-section mb-4">
         <div class="row g-3">
           <div class="col-6 col-md-4 col-xl-2">
@@ -355,44 +331,44 @@
           </div>
 
           <div class="col-6 col-md-4 col-xl-2">
-                <div class="card kpi-card h-100">
-                  <div class="card-body">
-                    <div class="kpi-label">Verificados Dirección</div>
-                    <div class="kpi-value" id="kpiDireccion">0</div>
-                    <div class="kpi-meta" id="kpiDireccionMeta">Primer nivel</div>
-                  </div>
-                </div>
+            <div class="card kpi-card h-100">
+              <div class="card-body">
+                <div class="kpi-label">Verificados Dirección</div>
+                <div class="kpi-value" id="kpiDireccion">0</div>
+                <div class="kpi-meta" id="kpiDireccionMeta">Primer nivel</div>
               </div>
+            </div>
+          </div>
 
-              <div class="col-6 col-md-4 col-xl-2">
-                <div class="card kpi-card h-100">
-                  <div class="card-body">
-                    <div class="kpi-label">Verificados Coordinación</div>
-                    <div class="kpi-value" id="kpiCoordinacion">0</div>
-                    <div class="kpi-meta" id="kpiCoordinacionMeta">Segundo nivel</div>
-                  </div>
-                </div>
+          <div class="col-6 col-md-4 col-xl-2">
+            <div class="card kpi-card h-100">
+              <div class="card-body">
+                <div class="kpi-label">Verificados Coordinación</div>
+                <div class="kpi-value" id="kpiCoordinacion">0</div>
+                <div class="kpi-meta" id="kpiCoordinacionMeta">Segundo nivel</div>
               </div>
+            </div>
+          </div>
 
-              <div class="col-6 col-md-4 col-xl-2">
-                <div class="card kpi-card h-100">
-                  <div class="card-body">
-                    <div class="kpi-label">Verificados Ofi. Subsecretario</div>
-                    <div class="kpi-value" id="kpiFinal">0</div>
-                    <div class="kpi-meta" id="kpiFinalMeta">Cierre institucional</div>
-                  </div>
-                </div>
+          <div class="col-6 col-md-4 col-xl-2">
+            <div class="card kpi-card h-100">
+              <div class="card-body">
+                <div class="kpi-label">Verificados Ofi. Subsecretario</div>
+                <div class="kpi-value" id="kpiFinal">0</div>
+                <div class="kpi-meta" id="kpiFinalMeta">Cierre institucional</div>
               </div>
+            </div>
+          </div>
 
-              <div class="col-6 col-md-4 col-xl-2">
-                <div class="card kpi-card h-100">
-                  <div class="card-body">
-                    <div class="kpi-label">Pendientes FINAL</div>
-                    <div class="kpi-value" id="kpiPendientesFinal">0</div>
-                    <div class="kpi-meta" id="kpiPendientesFinalMeta">Requieren revisión</div>
-                  </div>
-                </div>
+          <div class="col-6 col-md-4 col-xl-2">
+            <div class="card kpi-card h-100">
+              <div class="card-body">
+                <div class="kpi-label">Pendientes FINAL</div>
+                <div class="kpi-value" id="kpiPendientesFinal">0</div>
+                <div class="kpi-meta" id="kpiPendientesFinalMeta">Requieren revisión</div>
               </div>
+            </div>
+          </div>
 
           <div class="col-6 col-md-4 col-xl-2">
             <div class="card kpi-card h-100">
@@ -425,7 +401,8 @@
           </div>
         </div>
       </section>
-       <!-- ===================== BANDEJA MAESTRA ===================== -->
+
+      <!-- BANDEJA MAESTRA -->
       <section class="master-table-section mb-5">
         <div class="card dashboard-card">
           <div class="card-header dashboard-card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
@@ -452,7 +429,7 @@
         </div>
       </section>
 
-      <!-- ===================== ZONA CENTRAL ===================== -->
+      <!-- ZONA CENTRAL -->
       <section class="main-analytics-section mb-4">
         <div class="row g-4">
 
@@ -466,14 +443,18 @@
                 </div>
 
                 <div class="d-flex gap-2">
-                  <select class="form-select form-select-sm" id="mapLayerSelect" style="width: 220px;">
+                  <select class="form-select form-select-sm" id="mapLayerSelect" style="width:220px;">
                     <option value="cobertura">Cobertura de registros</option>
                     <option value="verificacion">Nivel de verificación</option>
                     <option value="confiabilidad">Confiabilidad</option>
                     <option value="controversias">Controversias</option>
                     <option value="influencia">Influencia</option>
                   </select>
-                  <button class="btn btn-outline-secondary btn-sm" id="btnResetMap">
+                  <button
+                    class="btn btn-outline-secondary btn-sm"
+                    id="btnResetMap"
+                    aria-label="Restablecer vista del mapa"
+                  >
                     <i class="bi bi-arrow-counterclockwise"></i>
                   </button>
                 </div>
@@ -500,7 +481,9 @@
                 <div id="alertsContainer" class="alerts-list">
                   <div class="alert-item">
                     <div class="alert-item-title">Sin alertas cargadas</div>
-                    <div class="alert-item-text text-muted">Aquí aparecerán incidencias, focos de atención y prioridades.</div>
+                    <div class="alert-item-text text-muted">
+                      Aquí aparecerán incidencias, focos de atención y prioridades.
+                    </div>
                   </div>
                 </div>
               </div>
@@ -549,14 +532,18 @@
     </main>
   </div>
 
-  <!-- ===================== PANEL LATERAL DE DETALLE ===================== -->
-  <aside class="detail-panel" id="detailPanel">
+  <!-- PANEL LATERAL DE DETALLE -->
+  <aside class="detail-panel" id="detailPanel" aria-label="Ficha ejecutiva del actor">
     <div class="detail-panel-header">
       <div>
         <h3 class="mb-0">Ficha ejecutiva</h3>
         <small class="text-muted">Resumen analítico del actor</small>
       </div>
-      <button class="btn btn-light btn-sm" id="btnCloseDetailPanel">
+      <button
+        class="btn btn-light btn-sm"
+        id="btnCloseDetailPanel"
+        aria-label="Cerrar ficha ejecutiva"
+      >
         <i class="bi bi-x-lg"></i>
       </button>
     </div>
@@ -564,6 +551,7 @@
     <div class="detail-panel-body" id="detailPanelBody">
       <div class="text-muted">Selecciona un actor para visualizar su resumen.</div>
     </div>
+
     <div class="detail-panel-footer">
       <div class="d-grid gap-2">
         <button class="btn btn-outline-secondary" id="btnVerTrazabilidad">
@@ -585,36 +573,46 @@
     </div>
   </aside>
 
-  <!-- ===================== BACKDROP PANEL ===================== -->
+  <!-- BACKDROP PANEL -->
   <div class="detail-panel-backdrop d-none" id="detailPanelBackdrop"></div>
 
-  <!-- ===================== MODAL EXPORTAR ===================== -->
-  <div class="modal fade" id="modalExportar" tabindex="-1" aria-hidden="true">
+  <!-- MODAL EXPORTAR -->
+  <div class="modal fade" id="modalExportar" tabindex="-1" aria-labelledby="modalExportarLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Exportar información</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-header modal-header-brand">
+          <h5 class="modal-title" id="modalExportarLabel">
+            <i class="bi bi-download me-2"></i>Exportar información
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           <p class="text-muted">Selecciona el tipo de exportación.</p>
           <div class="d-grid gap-2">
-            <button class="btn btn-outline-primary" id="btnExportExcel">Exportar Excel</button>
-            <button class="btn btn-outline-danger" id="btnExportPdf">Exportar PDF ejecutivo</button>
-            <button class="btn btn-outline-secondary" id="btnExportCsv">Exportar CSV</button>
+            <button class="btn btn-outline-primary" id="btnExportExcel">
+              <i class="bi bi-file-earmark-excel me-2"></i>Exportar Excel
+            </button>
+            <button class="btn btn-outline-danger" id="btnExportPdf">
+              <i class="bi bi-file-earmark-pdf me-2"></i>Exportar PDF ejecutivo
+            </button>
+            <button class="btn btn-outline-secondary" id="btnExportCsv">
+              <i class="bi bi-filetype-csv me-2"></i>Exportar CSV
+            </button>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-    <!-- ===================== MODAL control e historial ===================== -->
-  <div class="modal fade" id="modalTrazabilidad" tabindex="-1" aria-hidden="true">
+  <!-- MODAL CONTROL E HISTORIAL -->
+  <div class="modal fade" id="modalTrazabilidad" tabindex="-1" aria-labelledby="modalTrazabilidadLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Control de historial</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-header modal-header-brand">
+          <h5 class="modal-title" id="modalTrazabilidadLabel">
+            <i class="bi bi-clock-history me-2"></i>Control de historial
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           <div id="trazabilidadHeader" class="mb-3"></div>
@@ -627,18 +625,24 @@
     </div>
   </div>
 
-
-  <!-- ===================== MODAL OBSERVACIÓN ===================== -->
-  <div class="modal fade" id="modalObservacionFinal" tabindex="-1" aria-hidden="true">
+  <!-- MODAL OBSERVACIÓN -->
+  <div class="modal fade" id="modalObservacionFinal" tabindex="-1" aria-labelledby="modalObservacionLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Devolver con observación</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-header modal-header-brand">
+          <h5 class="modal-title" id="modalObservacionLabel">
+            <i class="bi bi-arrow-counterclockwise me-2"></i>Devolver con observación
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
-          <label class="form-label">Observación</label>
-          <textarea class="form-control" id="txtObservacionFinal" rows="5" placeholder="Describe el motivo de devolución..."></textarea>
+          <label class="form-label" for="txtObservacionFinal">Observación</label>
+          <textarea
+            class="form-control"
+            id="txtObservacionFinal"
+            rows="5"
+            placeholder="Describe el motivo de devolución..."
+          ></textarea>
         </div>
         <div class="modal-footer">
           <button class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
@@ -647,31 +651,33 @@
       </div>
     </div>
   </div>
-<!-- ===================== MODAL NOTIFICACIONES ===================== -->
-<div class="modal fade" id="modalNotificaciones" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      
-      <div class="modal-header">
-        <h5 class="modal-title">Notificaciones recientes</h5>
-        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
 
-      <div class="modal-body" id="notificacionesContainer">
-        <div class="text-muted">Cargando...</div>
+  <!-- MODAL NOTIFICACIONES -->
+  <div class="modal fade" id="modalNotificaciones" tabindex="-1" aria-labelledby="modalNotificacionesLabel">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header modal-header-brand">
+          <h5 class="modal-title" id="modalNotificacionesLabel">
+            <i class="bi bi-bell me-2"></i>Notificaciones recientes
+          </h5>
+          <button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="notificacionesContainer">
+          <div class="text-muted">Cargando...</div>
+        </div>
       </div>
-
     </div>
   </div>
-</div>
 
-  <!-- ===================== MODAL VERIFICACIÓN FINAL ===================== -->
-  <div class="modal fade" id="modalVerificacionFinal" tabindex="-1" aria-hidden="true">
+  <!-- MODAL VERIFICACIÓN FINAL -->
+  <div class="modal fade" id="modalVerificacionFinal" tabindex="-1" aria-labelledby="modalVerificacionFinalLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Confirmar verificación FINAL</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-header modal-header-brand">
+          <h5 class="modal-title" id="modalVerificacionFinalLabel">
+            <i class="bi bi-patch-check-fill me-2"></i>Confirmar verificación FINAL
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           <p>Estás por aprobar el cierre institucional del registro seleccionado.</p>
@@ -690,13 +696,15 @@
     </div>
   </div>
 
-  <!-- modal desverifiacion final-->
-  <div class="modal fade" id="modalDesverificarFinal" tabindex="-1" aria-hidden="true">
+  <!-- MODAL DESVERIFICACIÓN FINAL -->
+  <div class="modal fade" id="modalDesverificarFinal" tabindex="-1" aria-labelledby="modalDesverificarFinalLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Retirar verificación FINAL</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-header modal-header-brand">
+          <h5 class="modal-title" id="modalDesverificarFinalLabel">
+            <i class="bi bi-x-circle me-2"></i>Retirar verificación FINAL
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           <p>Estás por retirar la verificación FINAL del registro seleccionado.</p>
@@ -714,29 +722,22 @@
       </div>
     </div>
   </div>
+
   <!-- Vendor -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/wellknown@0.5.0/wellknown.js"></script>
-
-  <!-- ✅ TU API HELPERS (ANTES de dashboard.js) -->
-  <script src="/static/js/api.js"></script>
-
-  <!-- (si tienes otros helpers) -->
-  <script src="/static/js/map.js"></script>
-
-
-  <!-- ✅ Tabulator (si lo usas) -->
   <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-  <!-- ✅ DASHBOARD AL FINAL -->
+  <!-- Librerías que dashboard.js usa — deben ir ANTES -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- App -->
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/map.js"></script>
   <script src="/static/js/persona.shared.js"></script>
   <script src="/static/js/dashboard.js"></script>
-
-  <!--PDF-->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!--chart.js-->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 </body>
 </html>
