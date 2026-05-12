@@ -58,4 +58,9 @@ app.get('/api-status', (req, res) => {
   res.send('API funcionando correctamente 🚀');
 });
 
+// Health check (Render)
+app.get('/health', (req, res) => {
+  res.status(200).send('ok');
+});
+
 module.exports = app;
