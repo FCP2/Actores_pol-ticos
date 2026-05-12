@@ -2736,6 +2736,8 @@ exports.resumenPersonasPorUsuario = async (req, res) => {
 
 //pdf 
 const puppeteer = require("puppeteer");
+const fs = require("fs");
+const path = require("path");
 
 // ===================== helpers =====================
 
@@ -2762,6 +2764,52 @@ async function imageUrlToDataUri(url) {
   return `data:${ct};base64,${b64}`;
 }
 
+const partidoIconCache = new Map();
+const partidoIconDir = path.join(__dirname, "..", "..", "public", "assets", "partidos");
+
+function normalizePartidoKey(v) {
+  return String(v || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function partidoAssetKey(siglas, nombre) {
+  const raw = [siglas, nombre].filter(Boolean).join(" ");
+  const key = normalizePartidoKey(raw);
+
+  if (!key) return "";
+  if (/\b(morena|movimiento regeneracion nacional)\b/.test(key)) return "morena";
+  if (/\bpan\b|accion nacional/.test(key)) return "pan";
+  if (/\bpri\b|revolucionario institucional/.test(key)) return "pri";
+  if (/\bprd\b|revolucion democratica/.test(key)) return "prd";
+  if (/\bpt\b|partido del trabajo/.test(key)) return "pt";
+  if (/\bpvem\b|verde ecologista|partido verde/.test(key)) return "pvem";
+  if (/\bmc\b|movimiento ciudadano/.test(key)) return "mc";
+
+  return "";
+}
+
+function partidoIconDataUri(siglas, nombre) {
+  const assetKey = partidoAssetKey(siglas, nombre);
+  if (!assetKey) return "";
+  if (partidoIconCache.has(assetKey)) return partidoIconCache.get(assetKey);
+
+  const filePath = path.join(partidoIconDir, `${assetKey}.png`);
+  try {
+    const b64 = fs.readFileSync(filePath).toString("base64");
+    const dataUri = `data:image/png;base64,${b64}`;
+    partidoIconCache.set(assetKey, dataUri);
+    return dataUri;
+  } catch (e) {
+    console.warn("Icono de partido no disponible para PDF:", assetKey, e.message);
+    partidoIconCache.set(assetKey, "");
+    return "";
+  }
+}
+
 function esc(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -2785,6 +2833,27 @@ function fmtDate(v) {
 
 function joinFullName(p) {
   return [p.nombre, p.apellido_paterno, p.apellido_materno].filter(Boolean).join(" ");
+}
+
+function sanitizePdfFilenamePart(v) {
+  return String(v || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_{2,}/g, "_")
+    .slice(0, 80);
+}
+
+function buildPerfilPdfFilename(p) {
+  const id = sanitizePdfFilenamePart(p.id_persona) || "perfil";
+  const nombre = sanitizePdfFilenamePart(joinFullName(p)) || "sin_nombre";
+  const municipioPrincipal = asArray(p.municipios_trabajo)
+    .find(m => m?.es_principal === true || m?.es_principal === "true" || m?.es_principal === 1)
+    ?.municipio;
+  const municipio = sanitizePdfFilenamePart(municipioPrincipal);
+
+  return `${[id, nombre, municipio].filter(Boolean).join("_")}.pdf`;
 }
 
 function badge(text, cls = "") {
@@ -2856,9 +2925,9 @@ function parseLiderazgoTipos(tipos) {
 
 function confiabilidadInfo(nivel) {
   const v = String(nivel ?? "").trim().toLowerCase();
-  if (v === "alto")  return { label: "Confiabilidad: Alta",  cls: "ok" };
-  if (v === "medio") return { label: "Confiabilidad: Media", cls: "warn" };
-  if (v === "bajo")  return { label: "Confiabilidad: Baja",  cls: "bad" };
+  if (v === "alto")  return { label: "Alto (Confiable)", cls: "ok" };
+  if (v === "medio") return { label: "Medio (Parcial)", cls: "warn" };
+  if (v === "bajo")  return { label: "Bajo (Por confirmar)", cls: "bad" };
   if (v) return { label: `Confiabilidad: ${titleCaseEs(v)}`, cls: "mut" };
   return null;
 }
@@ -2936,31 +3005,43 @@ function buildPerfilHtml(p) {
 
   const bannerDecorativo = ""; // aquí puedes insertar un dataURL generado con canvas si luego quieres
 
-  function renderSection(title, content, extraClass = "") {
-    if (!content || !String(content).trim()) return "";
-    return `
-      <section class="section ${extraClass}">
-        <div class="section-title">${esc(title)}</div>
-        <div class="section-body">
-          ${content}
+function renderSection(title, content, extraClass = "") {
+  if (!content || !String(content).trim()) return "";
+  return `
+    <section class="section ${extraClass}">
+      <div class="section-head keep-together">
+        <div class="timeline-axis">
+          <div class="timeline-dot"></div>
+          <div class="timeline-horizontal-line"></div>
         </div>
-      </section>
-    `;
-  }
-
-  function renderListSection(title, items, renderItem, opts = {}) {
-    const arr = Array.isArray(items) ? items : [];
-    if (!arr.length) return "";
-
-    const body = arr.map(it => `
-      <div class="item avoid-break">
-        ${renderItem(it)}
+        
+        <div class="section-title-container">
+          <div class="section-title">${esc(title)}</div>
+        </div>
       </div>
-    `).join("");
 
-    return renderSection(title, body, opts.long ? "section-long" : "");
-  }
+      <div class="section-body">
+        ${content}
+      </div>
+    </section>
+  `;
+}
 
+function renderListSection(title, items, renderItem, opts = {}) {
+  const arr = Array.isArray(items) ? items : [];
+  if (!arr.length) return "";
+
+  // Agregamos avoid-break a cada item individual de la lista
+  const itemClass = opts.long ? "item" : "item avoid-break";
+  const itemStyle = opts.long ? "margin-bottom: 6px;" : "margin-bottom: 6px; break-inside: avoid; page-break-inside: avoid;";
+  const body = arr.map(it => `
+    <div class="${itemClass}" style="${itemStyle}">
+      ${renderItem(it)}
+    </div>
+  `).join("");
+
+  return renderSection(title, body, opts.long ? "section-long" : "");
+}
   const htmlDatosGenerales = `
     <div class="kv">
       <div class="k">CURP</div><div class="v mono">${esc(p.curp || "—")}</div>
@@ -2982,6 +3063,37 @@ function buildPerfilHtml(p) {
     </div>
   `;
 
+  const partidoActualNombre = p.partido_actual || "";
+  const partidoActualSiglas = p.partido_actual_siglas || "";
+  const partidoOtroTexto = p.partido_otro_texto || "";
+  const partidoActualDisplay = [partidoActualSiglas, partidoActualNombre]
+    .filter(Boolean)
+    .join(" - ");
+  const partidoActualIcon = partidoIconDataUri(partidoActualSiglas, partidoActualNombre);
+
+  const htmlPartidoActual = `
+    <div class="kv">
+      <div class="k">Partido</div><div class="v">${esc(partidoActualDisplay || partidoOtroTexto || "â€”")}</div>
+      <div class="k">Siglas</div><div class="v">${esc(partidoActualSiglas || "â€”")}</div>
+      ${partidoOtroTexto ? `<div class="k">Otro partido</div><div class="v">${esc(partidoOtroTexto)}</div>` : ``}
+    </div>
+  `;
+
+  const htmlPartidoActualLogo = `
+    <div class="partido-card">
+      <div class="partido-logo-box">
+        ${partidoActualIcon
+          ? `<img class="partido-logo" src="${escAttr(partidoActualIcon)}" alt="${escAttr(partidoActualSiglas || partidoActualNombre || "Partido político")}"/>`
+          : `<div class="partido-logo-empty">${esc(partidoActualSiglas || "SP")}</div>`}
+      </div>
+      <div class="partido-info">
+        <div class="k">Partido político actual</div>
+        <div class="partido-name">${esc(partidoActualDisplay || partidoOtroTexto || "Sin registro")}</div>
+        ${partidoOtroTexto ? `<div class="m">Otro partido: ${esc(partidoOtroTexto)}</div>` : ``}
+      </div>
+    </div>
+  `;
+
   const htmlLiderazgo = li ? `
     <div class="kv">
       <div class="k">Nivel</div><div class="v">${esc(liNivel || "—")}</div>
@@ -2991,6 +3103,7 @@ function buildPerfilHtml(p) {
       ${li?.tipo_otro_texto ? `<div class="k">Otro</div><div class="v">${esc(li.tipo_otro_texto)}</div>` : ``}
     </div>
   ` : "";
+
 
   const htmlControversias = p.sin_controversias_publicas === true
     ? `
@@ -3016,432 +3129,416 @@ function buildPerfilHtml(p) {
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Perfil - ${esc(nombreCompleto)}</title>
-  <style>
-    @page {
-      size: A4;
-      margin: 12mm;
+<style>
+  /* 1. CONFIGURACIÓN DE PÁGINA Y VARIABLES */
+  @page { 
+    size: A4; 
+    margin: 0mm 0mm 20mm 0mm; 
+    @bottom-right {
+      content: "Pág. " counter(page) " de " counter(pages);
+      font-family: 'Arial', sans-serif;
+      font-size: 9pt;
+      color: #8b2136;
+      padding-right: 40px;
+      padding-bottom: 20px;
     }
-
-    :root {
-      --prim:#8b2136;
-      --prim-2:#6f1b2b;
-      --sec:#b89056;
-      --mut:#6b7280;
-      --bg:#f8fafc;
-      --line:#e5e7eb;
-      --soft:#f3f4f6;
-      --ok:#16a34a;
-      --warn:#f59e0b;
-      --bad:#dc2626;
-      --text:#1f2937;
-      --title:#111827;
-    }
-
-    * { box-sizing: border-box; }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-      color: var(--text);
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 11px;
-      line-height: 1.38;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-
-    body {
-      padding: 0;
-      background: #fff;
-    }
-
-    .sheet {
-      width: 100%;
-    }
-
-    .hero-banner {
-      width: 100%;
-      margin-bottom: 10px;
-      border-radius: 14px;
-      overflow: hidden;
-    }
-
-    .hero-banner img {
-      display: block;
-      width: 100%;
-      height: 56px;
-      object-fit: cover;
-    }
-
-    .top {
-      display: grid;
-      grid-template-columns: 118px 1fr;
-      gap: 16px;
-      align-items: stretch;
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      overflow: hidden;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.05);
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .top-side {
-      background: linear-gradient(180deg, var(--prim) 0%, var(--prim-2) 100%);
-      padding: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 150px;
-    }
-
-    .photo {
-      width: 92px;
-      height: 118px;
-      border-radius: 12px;
-      border: 3px solid rgba(255,255,255,.88);
-      background: #f3f4f6;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: rgba(255,255,255,.9);
-      font-size: 11px;
-      text-align: center;
-    }
-
-    .photo img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .title {
-      padding: 14px 16px;
-      min-width: 0;
-    }
-
-    .eyebrow {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: .7px;
-      color: var(--prim);
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-
-    .h1 {
-      font-size: 22px;
-      margin: 0;
-      color: var(--prim);
-      font-weight: 800;
-      line-height: 1.15;
-    }
-
-    .sub {
-      margin-top: 6px;
-      color: var(--mut);
-      font-size: 13px;
-    }
-
-    .badges {
-      margin-top: 10px;
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 4px 9px;
-      border-radius: 999px;
-      background: #f3f4f6;
-      border: 1px solid var(--line);
-      vertical-align: middle;
-      white-space: nowrap;
-    }
-
-    .badge.ok   { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
-    .badge.warn { background: #fef3c7; color: #92400e; border-color: #fde68a; }
-    .badge.bad  { background: #fee2e2; color: #7f1d1d; border-color: #fecaca; }
-    .badge.prim { background: #fce7f3; color: #9d174d; border-color: #fbcfe8; }
-    .badge.sec  { background: #fef3c7; color: #78350f; border-color: #fde68a; }
-    .badge.mut  { background: #f3f4f6; color: #374151; border-color: #e5e7eb; }
-
-    .badge.morena { background:#fef2f2; color:#7f1d1d; border-color:#fecaca; }
-    .badge.pan    { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
-    .badge.pri    { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
-    .badge.pvem   { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
-    .badge.pt     { background:#fee2e2; color:#7f1d1d; border-color:#fecaca; }
-    .badge.mc     { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
-    .badge.prd    { background:#fef9c3; color:#78350f; border-color:#fde68a; }
-    .badge.otro   { background:#f3f4f6; color:#374151; border-color:#e5e7eb; }
-    .badge.ind    { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
-
-    .section {
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      overflow: hidden;
-      margin-top: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.04);
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .section-long {
-      break-inside: auto;
-      page-break-inside: auto;
-    }
-
-    .section-title {
-      font-size: 12px;
-      font-weight: 800;
-      color: var(--prim);
-      text-transform: uppercase;
-      letter-spacing: .4px;
-      padding: 8px 12px;
-      background: #f3f4f6;
-      border-bottom: 1px solid var(--line);
-      break-after: avoid;
-      page-break-after: avoid;
-    }
-
-    .section-body {
-      padding: 12px;
-    }
-
-    .kv {
-      display: grid;
-      grid-template-columns: 160px 1fr;
-      gap: 9px 14px;
-      font-size: 11px;
-    }
-
-    .k {
-      font-weight: 700;
-      color: var(--mut);
-    }
-
-    .v {
-      color: var(--title);
-    }
-
-    .mono {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-    }
-
-    .item {
-      background: #f9fafb;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 11px;
-      margin-bottom: 8px;
-    }
-
-    .item:last-child {
-      margin-bottom: 0;
-    }
-
-    .t {
-      font-weight: 800;
-      margin-bottom: 4px;
-      color: #111827;
-    }
-
-    .m {
-      font-size: 10.5px;
-      color: var(--mut);
-      line-height: 1.35;
-      margin-top: 2px;
-    }
-
-    .muted {
-      color: var(--mut);
-      font-weight: 500;
-    }
-
-    .photos {
-      margin-top: 8px;
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .photos img {
-      height: 48px;
-      width: auto;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      object-fit: cover;
-    }
-
-    .kids {
-      margin-top: 8px;
-      border-top: 1px dashed var(--line);
-      padding-top: 6px;
-    }
-
-    .kid-line {
-      margin: 4px 0;
-    }
-
-    .kid-icon {
-      margin-right: 4px;
-    }
-
-    .kid-role {
-      font-weight: 700;
-      color: #374151;
-    }
-
-    .kid-name {
-      font-weight: 600;
-      color: #111827;
-    }
-
-    .kid-meta {
-      color: var(--mut);
-    }
-
-    .summary-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 12px;
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .mini-card {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #fff;
-      padding: 10px 12px;
-      min-height: 100%;
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .mini-title {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color: var(--mut);
-      font-weight: 800;
-      margin-bottom: 7px;
-    }
-
-    .avoid-break {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .page-break {
-      break-before: page;
-      page-break-before: always;
-    }
-
-    .foot {
-      margin-top: 12px;
-      color: var(--mut);
-      font-size: 9.5px;
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      border-top: 1px solid var(--line);
-      padding-top: 8px;
-    }
-
-
-    .municipios-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.municipio-card {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #f9fafb;
-  padding: 9px 10px;
-  min-height: 54px;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-
-.municipio-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.municipio-name {
-  font-size: 11px;
-  font-weight: 700;
-  color: #111827;
-  line-height: 1.25;
-}
-
-.municipio-badge {
-  flex: 0 0 auto;
-}
-
-.municipio-notas {
-  margin-top: 5px;
-  font-size: 10px;
-  color: var(--mut);
-  line-height: 1.3;
-}
-
-@media print {
-  .municipios-grid {
-    grid-template-columns: repeat(3, 1fr);
   }
-}
 
+  :root {
+    --gob-guinda: #8b2136;
+    --gob-oro: #b89056;
+    --gob-oro-claro: #d4c19c;
+    --linea-tiempo: #d4c19c;
+    --text-dark: #4a4a4a;
+  }
 
-.temas-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
+  body {
+    font-family: 'Montserrat', sans-serif;
+    margin: 0;
+    padding: 0;
+    color: var(--text-dark);
+    background-color: #fff;
+    font-size: 12px;
+    line-height: 1.2;
+  }
 
-.tema-card {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #f9fafb;
-  padding: 8px 10px;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
+  * {
+    box-sizing: border-box;
+  }
 
-.tema-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #111827;
-  line-height: 1.25;
-}
+  img {
+    display: block;
+    max-width: 100%;
+  }
 
-.tema-nota {
-  margin-top: 4px;
-  font-size: 10px;
-  color: var(--mut);
-  line-height: 1.3;
-}
-  </style>
+  .sheet {
+    position: relative;
+    padding: 0px 40px 0px 100px;
+  }
+
+  .sheet::before {
+    content: "";
+    position: fixed; 
+    top: 0;
+    left: 60px;
+    width: 35px;
+    height: 100%;
+    background-color: var(--gob-oro-claro);
+    opacity: 0.6;
+    z-index: -1;
+  }
+
+  /* 2. BANNER */
+  .header-logos-banner {
+    background-color: var(--gob-guinda);
+    height: 55px;
+    margin: 0mm -40px 30px -100px; 
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding-right: 30px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .header-logos-banner img {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+  }
+
+  /* 4. SECCIONES Y CONTROL DE SALTO (MODIFICADO) */
+  .section {
+    position: relative;
+    margin-bottom: 18px;
+    /* Evita que la sección se parta justo en el título */
+    break-inside: auto; 
+  }
+
+  .section:not(.section-long) {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Contenedor sugerido para envolver Título + Primer bloque de datos */
+  .keep-together {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    display: block;
+  }
+
+  .section-head {
+    break-after: avoid;
+    page-break-after: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    position: relative;
+    height: 30px;
+    /* No permite que el título sea lo último de la página */
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .timeline-axis {
+    position: relative;
+    height: 20px; 
+    display: flex;
+    align-items: center;
+    margin-left: -100px; 
+    width: calc(100% + 100px);
+  }
+
+  .timeline-dot {
+    width: 18px;
+    height: 18px;
+    background-color: #fff;
+    border: 2px solid #B89056; 
+    border-radius: 50%;
+    z-index: 10;
+    position: absolute;
+    left: 59px; 
+  }
+
+  .timeline-horizontal-line {
+    position: absolute;
+    left: 68px; 
+    right: 0;
+    height: 1.5px;
+    background-color: #B89056;
+    z-index: 5;
+  }
+
+  .section-title {
+    font-family: 'Arial Black', sans-serif;
+    font-size: 11px;
+    color: #8B2136;
+    text-transform: uppercase;
+    font-weight: bold;
+    /* Alineado con el cuerpo */
+    margin-left: 120px;
+    margin-top: 5px;
+  }
+
+  .section-body {
+    margin-left: 120px;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.32;
+    text-align: justify;
+    break-before: avoid;
+    page-break-before: avoid;
+    /* Ayuda a que si empieza, intente no dejar líneas sueltas */
+    orphans: 3;
+    widows: 3;
+  }
+
+  .section-long .section-body,
+  .section-long .item {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  /* 5. DATOS Y FOTOS */
+  .top {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 16px;
+  }
+
+  .perfil-header-container {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-height: 150px;
+  }
+
+  .header-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .name-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .h1 {
+    margin: 0 0 6px 0;
+    font-family: Arial, sans-serif;
+    font-size: 22px;
+    line-height: 1.08;
+    font-weight: 800;
+    letter-spacing: 0;
+    word-break: break-word;
+    flex: 1;
+  }
+
+  .confiabilidad-badge {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 5px 9px;
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    border: 1px solid #d1d5db;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+
+  .confiabilidad-badge.ok {
+    color: #166534;
+    background: #dcfce7;
+    border-color: #86efac;
+  }
+
+  .confiabilidad-badge.warn {
+    color: #854d0e;
+    background: #fef3c7;
+    border-color: #facc15;
+  }
+
+  .confiabilidad-badge.bad {
+    color: #991b1b;
+    background: #fee2e2;
+    border-color: #fca5a5;
+  }
+
+  .confiabilidad-badge.mut {
+    color: #4b5563;
+    background: #f3f4f6;
+    border-color: #d1d5db;
+  }
+
+  .sub {
+    color: #6b7280;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 5px;
+    /* Evita que un bloque de datos (K/V) se parta a la mitad */
+    break-inside: avoid;
+  }
+
+  .k { font-size: 9px; color: #888; text-transform: uppercase; margin-bottom: 1px; }
+  .v { border-bottom: 1px solid #eee; padding-bottom: 1px; min-height: 13px; margin-bottom: 3px; font-weight: 500; text-align: justify; }
+
+  .partido-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .partido-logo-box {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 5px;
+  }
+
+  .partido-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .partido-logo-empty {
+    color: #8B2136;
+    font-size: 13px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .partido-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .partido-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: #4a4a4a;
+    line-height: 1.2;
+    text-align: left;
+  }
+
+  .photo-frame {
+    width: 110px; height: 140px;
+    border: 2px solid var(--gob-oro);
+    border-radius: 4px;
+    background-color: #f3f4f6;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+    /* No separar la foto del header */
+    break-inside: avoid;
+  }
+
+  .photo-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+  }
+
+  .no-photo {
+    color: #9ca3af;
+    font-size: 10px;
+    letter-spacing: 0;
+    text-align: center;
+  }
+
+  .photos-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 10px;
+    row-gap: 4px;
+    margin-top: 8px;
+    width: 100%;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .photo-item {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: 112px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    background: #f8fafc;
+    overflow: hidden;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center center;
+  }
+
+  .item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .t {
+    margin-bottom: 2px;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .m {
+    margin-bottom: 1px;
+    color: #6b7280;
+    text-align: justify;
+  }
+
+  .section-long .item {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  /* Tablas */
+  table.trayectoria { width: 100%; border-collapse: collapse; }
+  table tr { break-inside: avoid; }
+  .force-page-break { break-before: page; }
+</style>
 </head>
 <body>
   <div class="sheet">
+
+  <!-- Franja de logotipos superior -->
+  <div class="header-logos-banner">
+    <img src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550" />
+  </div>
 
     ${bannerDecorativo ? `
       <div class="hero-banner avoid-break">
@@ -3450,29 +3547,23 @@ function buildPerfilHtml(p) {
     ` : ""}
 
     <div class="top">
-      <div class="top-side">
-        <div class="photo">
-          ${foto ? `<img src="${escAttr(foto)}" alt="foto"/>` : `Sin foto`}
+      <div class="perfil-header-container">
+        <div class="photo-frame">
+          ${foto ? `<img src="${escAttr(foto)}" />` : `<div class="no-photo">SIN FOTO</div>`}
         </div>
-      </div>
-
-      <div class="title">
-        <div class="eyebrow">Ficha de actor político</div>
-        <h1 class="h1">${esc(nombreCompleto)}</h1>
-        <div class="sub">• ${esc(municipioTop)}</div>
-
-        <div class="badges">
-          ${confi ? badge(confi.label, confi.cls) : ""}
-          ${escalaInfl ? badge(`Influencia: ${escalaInfl}`, "mut") : ""}
-          ${partido ? badge(partido, partidoColors[partido] || "mut") : ""}
-          ${badge(p.ideologia_politica, "mut")}
-          ${badge(p.tema_interes_central, "sec")}
-          ${flags}
+        
+        <div class="header-info">
+          <div class="name-row">
+            <h1 class="h1" style="color: var(--gob-guinda);">${esc(nombreCompleto)}</h1>
+            ${confi ? `<div class="confiabilidad-badge ${escAttr(confi.cls)}">${esc(confi.label)}</div>` : ""}
+          </div>
+          <div class="sub">${esc(municipioTop)}</div>
         </div>
       </div>
     </div>
     ${renderSection("Datos generales", htmlDatosGenerales)}
     ${renderSection("INE", htmlINE)}
+    ${renderSection("Partido político actual", htmlPartidoActualLogo)}
 
     ${municipiosTrabajo.length ? renderSection("Municipios de trabajo", `
       <div class="municipios-grid">
@@ -3647,8 +3738,11 @@ function buildPerfilHtml(p) {
       <div class="m">${esc([e.fecha_evento, (e.asistencia != null ? ("Asistencia: " + e.asistencia) : null), e.lugar_evento].filter(Boolean).join(" • ") || "")}</div>
       ${
         Array.isArray(e.fotos) && e.fotos.length
-          ? `<div class="photos">
-              ${e.fotos.slice(0,6).map(u => `<img src="${escAttr(u)}" alt="foto evento"/>`).join("")}
+          ? `<div class="photos-grid">
+              ${e.fotos.slice(0, 6).map(u => `
+                <div class="photo-item">
+                  <img src="${escAttr(u)}" alt="foto evento"/>
+                </div>`).join("")}
             </div>`
           : ``
       }
@@ -4318,7 +4412,7 @@ exports.getPerfilPdf = async (req, res) => {
     res.status(200);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", String(pdfBuf.length));
-    res.setHeader("Content-Disposition", `inline; filename="perfil_${id}.pdf"`);
+    res.setHeader("Content-Disposition", `inline; filename="${buildPerfilPdfFilename(perfil)}"`);
     return res.end(pdfBuf);
   } catch (e) {
     console.error(e);
@@ -4446,9 +4540,6 @@ const conCoberturaSinPrincipal = Number(resumenTerritorial.con_cobertura_sin_pri
       font-size:11px;
       color:var(--muted);
       line-height:1.5;
-    }
-    .section{
-      margin-top:18px;
     }
     .section-title{
       font-size:15px;
@@ -8287,6 +8378,61 @@ exports.desverificarPersona = async (req, res) => {
   }
 };
 //observaciones
+exports.listObservacionesPersona = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id_persona = Number(req.params.id);
+    if (!Number.isFinite(id_persona) || id_persona <= 0) {
+      return res.status(400).json({ error: "id invalido" });
+    }
+
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where = [];
+    addFullFilter(params, where);
+
+    params.push(id_persona);
+    where.push(`p.id_persona = $${params.length}`);
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const { rows } = await client.query(
+      `
+      SELECT
+        po.id_observacion,
+        po.id_persona,
+        po.nivel,
+        po.observacion,
+        po.creado_por,
+        po.created_at,
+        po.atendida,
+        po.atendida_at,
+        po.atendida_por,
+        u_crea.nombre AS creado_por_nombre,
+        u_crea.cargo AS creado_por_cargo,
+        u_atiende.nombre AS atendida_por_nombre
+      FROM personas_observaciones po
+      JOIN personas p ON p.id_persona = po.id_persona
+      LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
+      LEFT JOIN usuarios u_atiende ON u_atiende.id_usuario = po.atendida_por
+      ${whereSQL}
+      ORDER BY po.atendida ASC, po.created_at DESC, po.id_observacion DESC
+      `,
+      params
+    );
+
+    return res.json({ ok: true, data: rows });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      error: "Error al obtener observaciones",
+      detail: e.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
 exports.devolverPersonaFinal = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -8518,10 +8664,19 @@ exports.listNotificacionesDashboard = async (req, res) => {
 
     addFullFilter(params, where);
 
-    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
     params.push(req.user.id_usuario);
     const idxUsuario = params.length;
+
+    where.push(`
+      po.creado_por <> $${idxUsuario}
+      AND $${idxUsuario} IN (
+        p.creado_por,
+        p.verif_area_por,
+        p.verif_office_por
+      )
+    `);
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const sql = `
       SELECT
