@@ -1717,4 +1717,201 @@ canvas{
   margin-bottom: 12px;
   color: #bdc3c7;
 }
+ /* NAVBAR — limpia y bien centrada */
+    .navbar-improved {
+      background: #ffffff;
+      border-bottom: 3px solid #8b2136;
+      padding: .55rem 1.25rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    }
 
+    .navbar-logo {
+      height: 48px;
+      width: auto;
+      object-fit: contain;
+    }
+
+    /* SIDEBAR — acento vino con hover más visible */
+    .dashboard-sidebar {
+      background: linear-gradient(180deg, #5f1722 0%, #7a1f2b 50%, #4c111a 100%);
+    }
+
+    .sidebar-link {
+      border-left: 3px solid transparent;
+      transition: background 200ms ease, border-left-color 200ms ease;
+    }
+
+    .sidebar-link:hover {
+      background: rgba(255,255,255,.12);
+      border-left-color: rgba(255,255,255,.5);
+    }
+
+    .sidebar-link.active {
+      background: rgba(255,255,255,.18);
+      border-left: 3px solid #fff;
+    }
+
+    /* KPI CARDS — borde superior de color + icono de fondo */
+    .kpi-card {
+      border-top: 4px solid var(--primary, #7a1f2b) !important;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::after {
+      content: "";
+      position: absolute;
+      bottom: -16px;
+      right: -16px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(122,31,43,.05);
+    }
+
+    .kpi-card:nth-child(2) { border-top-color: #0d6efd !important; }
+    .kpi-card:nth-child(2) .kpi-value { color: #0d6efd; }
+
+    .kpi-card:nth-child(3) { border-top-color: #198754 !important; }
+    .kpi-card:nth-child(3) .kpi-value { color: #198754; }
+
+    .kpi-card:nth-child(4) { border-top-color: #6f42c1 !important; }
+    .kpi-card:nth-child(4) .kpi-value { color: #6f42c1; }
+
+    .kpi-card:nth-child(5) { border-top-color: #d97706 !important; }
+    .kpi-card:nth-child(5) .kpi-value { color: #d97706; }
+
+    .kpi-card:nth-child(6) { border-top-color: #c0392b !important; }
+    .kpi-card:nth-child(6) .kpi-value { color: #c0392b; }
+
+    .kpi-card:nth-child(7) { border-top-color: #0891b2 !important; }
+    .kpi-card:nth-child(7) .kpi-value { color: #0891b2; }
+
+    .kpi-card:nth-child(8) { border-top-color: #059669 !important; }
+    .kpi-card:nth-child(8) .kpi-value { color: #059669; }
+
+    /* TOPBAR — sombra más pronunciada */
+    .topbar {
+      box-shadow: 0 4px 18px rgba(16,24,40,.08) !important;
+    }
+
+    /* FILTERS PANEL — borde izquierdo de acento */
+    .filters-panel {
+      border-left: 4px solid #8b2136 !important;
+    }
+
+    /* CARD HEADERS — franja de color sutil en la parte superior */
+    .dashboard-card-header {
+      border-top: 3px solid #8b2136;
+      padding-top: .9rem !important;
+    }
+
+    /* BOTONES DE ACCION TOPBAR */
+    #btnRefreshDashboard,
+    #btnExportar {
+      border-radius: 10px;
+      font-size: .88rem;
+    }
+
+    #btnReporteEjecutivo {
+      border-radius: 10px;
+      font-size: .88rem;
+      background: linear-gradient(135deg, #8b2136 0%, #6f1929 100%);
+      border: none;
+      box-shadow: 0 4px 14px rgba(139,33,54,.3);
+    }
+
+    #btnReporteEjecutivo:hover {
+      background: linear-gradient(135deg, #7a1f2b 0%, #5f1722 100%);
+      box-shadow: 0 6px 20px rgba(139,33,54,.4);
+    }
+
+    /* MODALES — header con color de marca */
+    .modal-header-brand {
+      background: linear-gradient(135deg, #7a1f2b 0%, #5f1722 100%);
+      color: #fff;
+      border-bottom: none;
+    }
+
+    .modal-header-brand .btn-close {
+      filter: invert(1) grayscale(1);
+    }
+
+    .modal-header-brand .modal-title {
+      color: #fff;
+    }
+
+    /* ALERTA ESTRATEGICA — mejora visual de lista */
+    .alerts-list {
+      gap: .7rem !important;
+    }
+
+    .alert-item {
+      border-radius: 12px !important;
+    }
+
+    /* BELL BUTTON */
+    #btnInboxNotificaciones {
+      transition: transform 200ms ease, box-shadow 200ms ease;
+    }
+
+    #btnInboxNotificaciones:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 16px rgba(0,0,0,.12);
+    }
+
+    /* LOGOUT */
+    #btnLogout {
+      border-radius: 10px;
+      font-size: .85rem;
+    }
+
+    /* USUARIO INFO en navbar */
+    .navbar-user-info {
+      display: flex;
+      align-items: center;
+      gap: .85rem;
+    }
+
+    .navbar-user-meta {
+      line-height: 1.25;
+      text-align: right;
+    }
+
+    .navbar-user-meta .user-label {
+      font-size: .78rem;
+      color: #6b7280;
+    }
+
+    .navbar-user-meta .user-name {
+      font-size: .92rem;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    /* DETAIL PANEL FOOTER — botones mejor separados */
+    .detail-panel-footer .btn {
+      font-size: .88rem;
+    }
+
+    /* BADGE count en campana */
+    #badgeNotificaciones {
+      font-size: 10px;
+      min-width: 18px;
+      height: 18px;
+    }
+
+    /* SECCION ANALYTICS — mayor separación visual */
+    .main-analytics-section .dashboard-card {
+      transition: box-shadow 220ms ease;
+    }
+
+    .main-analytics-section .dashboard-card:hover {
+      box-shadow: 0 12px 32px rgba(16,24,40,.10) !important;
+    }
+
+    /* MAPA — borde más elegante */
+    .dashboard-map {
+      border: 1px solid #dde2e8 !important;
+      box-shadow: inset 0 1px 4px rgba(0,0,0,.04);
+    }
