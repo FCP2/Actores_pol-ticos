@@ -76,6 +76,11 @@
           </button>
 
           <!-- Botón Salir -->
+          <button type="button" class="btn btn-outline-warning btn-sm position-relative" id="btnNotificacionesCaptura" data-bs-toggle="modal" data-bs-target="#modalNotificacionesCaptura">
+            <i class="bi bi-bell me-1"></i> Observaciones
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="badgeNotificacionesCaptura">0</span>
+          </button>
+
           <button type="button" class="btn btn-outline-danger btn-sm" id="btnLogout">
             Salir
           </button>
@@ -88,6 +93,22 @@
 
 <div class="container my-4">
   <div id="alertBox" class="alert d-none" role="alert"></div>
+
+  <div class="modal fade" id="modalNotificacionesCaptura" tabindex="-1" aria-labelledby="modalNotificacionesCapturaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalNotificacionesCapturaLabel">
+            <i class="bi bi-bell me-2"></i>Observaciones recibidas
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="notificacionesCapturaContainer">
+          <div class="text-muted">Cargando...</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="row g-4">
     <div class="col-12 col-lg-10 mx-auto">
@@ -1378,7 +1399,7 @@
       </form>
     </div>
 
-    <!-- ================== PREVIEW ================== 
+    <!-- ================== PREVIEW ================== -->
     <div class="col-lg-4">
       <div class="card">
         <div class="card-body">
@@ -1387,7 +1408,7 @@
           <pre id="payloadPreview" class="bg-light p-3 rounded" style="max-height: 75vh; overflow:auto; font-size: 12px;"></pre>
         </div>
       </div>
-    </div>-->
+    </div>
 
   </div>
 </div>
@@ -1759,19 +1780,25 @@ function showAlert(a, b) {
     return m?.nombre || null;
   }
 //editar persona cargar datos
-    function cancelEditing() {
-      // deja tu estado de edición limpio
-      editingId = null;
+    function activateEditing(id_persona) {
+      editingId = id_persona ? Number(id_persona) : null;
+      window.editingId = editingId;
 
-      // deshabilita botones
       const btnSalir = document.getElementById('btnSalirEdicion');
       const btnEliminar = document.getElementById('btnEliminarPersona');
-      if (btnSalir) btnSalir.disabled = true;
-      if (btnEliminar) btnEliminar.disabled = true;
+      if (btnSalir) btnSalir.disabled = !editingId;
+      if (btnEliminar) btnEliminar.disabled = !editingId;
 
-      // opcional: reset del submit
       const btnSubmit = document.getElementById('btnSubmitPersona');
-      if (btnSubmit) btnSubmit.textContent = 'Guardar';
+      if (btnSubmit) btnSubmit.textContent = editingId ? 'Guardar cambios' : 'Guardar';
+
+      const hid = document.getElementById('id_persona');
+      if (hid) hid.value = editingId ? String(editingId) : '';
+    }
+
+    function cancelEditing() {
+      // deja tu estado de edición limpio
+      activateEditing(null);
 
       // limpia formulario
       if (typeof clearAll === 'function') clearAll();
@@ -1781,7 +1808,7 @@ function showAlert(a, b) {
   try {
     const payload = await apiGet(`/personas/${id_persona}/payload`);
     applyPayloadToForm(payload);     // 👈 tu función actual
-    setEditing(id_persona);          // 👈 activa modo edición
+    activateEditing(id_persona);          // 👈 activa modo edición
     showAlert("info", `Editando registro #${id_persona}`);
   } catch (e) {
     console.error(e);
@@ -1843,6 +1870,101 @@ async function onDeletePersona(id_persona) {
     if (!res.ok) throw new Error((data.error || 'Error') + (data.detail ? ' | ' + data.detail : ''));
     return data;
   }
+
+  function escHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function fmtFecha(value) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString("es-MX", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function actualizarBadgeNotificacionesCaptura(rows = []) {
+    const badge = document.getElementById("badgeNotificacionesCaptura");
+    if (!badge) return;
+    const pendientes = rows.filter(r => !r.leida).length;
+    badge.textContent = String(pendientes);
+    badge.classList.toggle("d-none", pendientes === 0);
+  }
+
+  function renderNotificacionesCaptura(rows = []) {
+    const cont = document.getElementById("notificacionesCapturaContainer");
+    if (!cont) return;
+
+    actualizarBadgeNotificacionesCaptura(rows);
+
+    if (!rows.length) {
+      cont.innerHTML = `<div class="text-muted">No tienes observaciones recientes.</div>`;
+      return;
+    }
+
+    cont.innerHTML = rows.map(r => `
+      <div class="border rounded p-3 mb-2 ${r.leida ? "bg-light" : "border-warning bg-warning-subtle"}">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+          <div>
+            <div class="fw-semibold">
+              Registro #${escHtml(r.id_persona)}
+              <span class="badge ${r.leida ? "bg-secondary" : "bg-danger"} ms-2">${r.leida ? "Leida" : "Nueva"}</span>
+            </div>
+            <div class="small text-muted">
+              ${escHtml(r.nivel || "FINAL")} · ${escHtml(r.usuario || "Sistema")} · ${escHtml(fmtFecha(r.fecha))}
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary" data-action="abrir-observacion" data-id-persona="${escHtml(r.id_persona)}">
+            Abrir
+          </button>
+        </div>
+        <div>${escHtml(r.detalle || "")}</div>
+      </div>
+    `).join("");
+
+    cont.querySelectorAll('[data-action="abrir-observacion"]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const idPersona = Number(btn.dataset.idPersona);
+        if (!Number.isFinite(idPersona) || idPersona <= 0) return;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("modalNotificacionesCaptura")).hide();
+        await onEditPersona(idPersona);
+      });
+    });
+  }
+
+  async function cargarNotificacionesCaptura() {
+    try {
+      const resp = await apiGet("/personas/dashboard/notificaciones");
+      const rows = resp?.data || [];
+      renderNotificacionesCaptura(rows);
+      return rows;
+    } catch (e) {
+      console.warn("No pude cargar observaciones:", e?.message || e);
+      const cont = document.getElementById("notificacionesCapturaContainer");
+      if (cont) cont.innerHTML = `<div class="text-danger">No se pudieron cargar las observaciones.</div>`;
+      return [];
+    }
+  }
+
+  document.getElementById("modalNotificacionesCaptura")?.addEventListener("shown.bs.modal", async () => {
+    const rows = await cargarNotificacionesCaptura();
+    await Promise.all(rows.filter(r => !r.leida).map(r =>
+      apiPost(`/personas/dashboard/notificaciones/${r.id_evento}/leida`, {}).catch(() => null)
+    ));
+    if (rows.some(r => !r.leida)) {
+      await cargarNotificacionesCaptura();
+    }
+  });
 
   async function cargarListaBorradores() {
     const sel = document.getElementById('selBorradores');
@@ -3685,8 +3807,8 @@ function refreshHijosParejasSelects() {
       return ids;
     }
     //validacion campos field
-    // ✅ Regex: letras + espacios + guion + apóstrofe
-    const SOLO_LETRAS_RE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]*$/;
+    // Letras Unicode: acepta español con acentos y ñ, espacios, guion y apostrofe.
+    const SOLO_LETRAS_RE = /^[\p{L}][\p{L}\s'’-]*$/u;
 
     function validarSoloLetrasField(formEl, fieldName, obligatorio = false, mode = "submit") {
       const el = formEl.querySelector(`[name="${fieldName}"]`);
@@ -4868,17 +4990,19 @@ function initValidacionDuplicados() {
         return;
       }
 
-      // ✅ Filtrar PROPIO registro
-      const otherResults = results.filter(r => 
-        !excludeId || r.id_persona != excludeId
-      );
+      const otherResults = results
+        .map(r => ({
+          ...r,
+          candidates: (r.candidates || []).filter(c => !excludeId || Number(c.id_persona) !== Number(excludeId))
+        }))
+        .filter(r => (r.candidates || []).length);
 
       // CRÍTICOS: alerta fuerte
       const criticals = otherResults.filter(r => strongTypes.has(r.match_type));
       if (criticals.length) {
         console.log("🚨 DUPLICADO CRÍTICO:", criticals);
         showAlert?.("warning", 
-          `⚠️ DUPLICADO (${criticals[0].match_type.toUpperCase()}). Revisa antes de guardar.`
+          `DUPLICADO (${criticals[0].match_type.toUpperCase()}). Revisa antes de guardar.`
         );
         return;
       }
@@ -5480,6 +5604,7 @@ function initGrupoPostulacionMulti() {
 
       try {
         await initNavByRole();
+        await cargarNotificacionesCaptura();
         municipiosCache = await apiGet('/municipios');
         redesCatalog = await apiGet('/catalogos/redes');
         controversiasCatalog = await apiGet('/catalogos/controversias');
@@ -5732,22 +5857,7 @@ function initGrupoPostulacionMulti() {
       //editar,eliminar persona
 
       function setEditing(id_persona) {
-        editingId = Number(id_persona);
-
-        // habilitar botones del offcanvas
-        const btnSalir = document.getElementById('btnSalirEdicion');
-        const btnEliminar = document.getElementById('btnEliminarPersona');
-
-        if (btnSalir) btnSalir.disabled = false;
-        if (btnEliminar) btnEliminar.disabled = false;
-
-        // cambia texto del botón principal (si existe)
-        const btnSubmit = document.getElementById('btnSubmitPersona');
-        if (btnSubmit) btnSubmit.textContent = 'Guardar cambios';
-
-        // guarda id si usas hidden
-        const hid = document.getElementById('id_persona');
-        if (hid) hid.value = String(editingId);
+        activateEditing(id_persona);
       }
 
     async function buscarPersonas(q) {
@@ -5929,7 +6039,7 @@ function initGrupoPostulacionMulti() {
         try {
           const payload = await apiGet(`/personas/${p.id_persona}/payload`);
           applyPayloadToForm(payload);
-          setEditing(p.id_persona);
+          activateEditing(p.id_persona);
           showAlert("info", `Modo edición: #${p.id_persona}`);
         } catch (e) {
           console.error(e);
@@ -6233,10 +6343,15 @@ function initGrupoPostulacionMulti() {
           }
 
           // validacion de datos duplicados
-          if (typeof checkDuplicadoNow === "function") {
-            await checkDuplicadoNow(editingId);
-          }
-          const dup = window.__dupCheck || [];
+          const dupRaw = typeof checkDuplicadoNow === "function"
+            ? await checkDuplicadoNow(editingId)
+            : [];
+          const dup = (dupRaw || [])
+            .map(r => ({
+              ...r,
+              candidates: (r.candidates || []).filter(c => !editingId || Number(c.id_persona) !== Number(editingId))
+            }))
+            .filter(r => (r.candidates || []).length);
           const hayBloqueante = dup.some(x => ["curp","rfc","clave_elector"].includes(x.match_type));
 
           if (hayBloqueante) {
@@ -6259,7 +6374,7 @@ function initGrupoPostulacionMulti() {
             await cargarListaBorradores();
           }
 
-          if (isEdit) setEditing(null);
+          if (isEdit) activateEditing(null);
           clearAll();
 
         } catch (err) {
@@ -6328,3 +6443,4 @@ function initGrupoPostulacionMulti() {
 
 </body>
 </html>
+
