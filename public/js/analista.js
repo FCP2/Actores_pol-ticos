@@ -780,6 +780,13 @@ async function loadReferentesSelect(){
       renderTrazabilidad(selectedData);
       updateVerifButtons(selectedData);
 
+      if (data.id_persona) {
+        await loadPersonaMunicipiosTrabajo(data.id_persona);
+
+        const observaciones = await loadPersonaObservaciones(data.id_persona);
+        renderObservacionesPanel(observaciones);
+      }
+
       const multi = document.getElementById("fMultiMunicipio")?.value;
       if (multi === "1" && data.id_persona) {
         await loadPersonaMunicipiosTrabajo(data.id_persona);
@@ -1213,6 +1220,104 @@ async function onDesverificar() {
 
     if (btn) btn.classList.remove("d-none");
   }
+  //cargar observaciones
+  async function loadPersonaObservaciones(idPersona) {
+  try {
+    const resp = await apiGet(`/personas/analista/personas/${idPersona}/observaciones`);
+    return resp?.data || [];
+  } catch (e) {
+    console.error("Error cargando observaciones:", e);
+    return [];
+  }
+}
+
+function renderObservacionesPanel(rows = []) {
+  const el = document.getElementById("panelObservacionesPersona");
+  if (!el) return;
+
+  if (!Array.isArray(rows) || !rows.length) {
+    el.innerHTML = `
+      <div class="text-muted">
+        Sin observaciones registradas para este expediente.
+      </div>
+    `;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="observaciones-wrap">
+      ${rows.map(r => `
+        <div class="border rounded-3 p-3 mb-2 bg-light">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <div>
+              <div class="fw-semibold">
+                ${esc(r.nivel || "—")}
+                ${
+                  r.atendida
+                    ? '<span class="badge bg-success ms-2">Atendida</span>'
+                    : '<span class="badge bg-warning text-dark ms-2">Pendiente</span>'
+                }
+              </div>
+              <div class="small text-muted">
+                ${esc(r.creado_por_nombre || "—")}
+                ${r.creado_por_cargo ? ` · ${esc(r.creado_por_cargo)}` : ""}
+              </div>
+            </div>
+            <div class="small text-muted">${esc(fmtDT(r.created_at))}</div>
+          </div>
+
+          <div class="mb-2">
+            ${esc(r.observacion || "—")}
+          </div>
+
+          ${
+            r.atendida
+              ? `<div class="small text-success">
+                   Atendida ${r.atendida_at ? `el ${esc(fmtDT(r.atendida_at))}` : ""}
+                   ${r.atendida_por_nombre ? `por ${esc(r.atendida_por_nombre)}` : ""}
+                 </div>`
+              : `
+                <div class="mt-2">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-success"
+                    data-action="atender-observacion"
+                    data-id="${r.id_observacion}">
+                    Marcar como atendida
+                  </button>
+                </div>
+              `
+          }
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+  el.querySelectorAll('[data-action="atender-observacion"]').forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const idObservacion = Number(btn.dataset.id);
+      if (!Number.isFinite(idObservacion) || !selectedData?.id_persona) return;
+
+      try {
+        btn.disabled = true;
+
+        await apiFetch(`/personas/analista/personas/observaciones/${idObservacion}/atender`, {
+          method: "POST"
+        });
+
+        updateAlert("Observación marcada como atendida.", "success");
+
+        const observaciones = await loadPersonaObservaciones(selectedData.id_persona);
+        renderObservacionesPanel(observaciones);
+
+      } catch (e) {
+        console.error("Error atendiendo observación:", e);
+        updateAlert(e.message || "No se pudo marcar la observación como atendida.", "danger");
+        btn.disabled = false;
+      }
+    });
+  });
+}
 
   async function init() {
     try { await initUserHeader(); } catch (e) { console.warn(e); }
@@ -2263,18 +2368,21 @@ async function generarPDFPersona(idPersona){
     headers: { Authorization: `Bearer ${token}` }
   });
 
-  const blob = await res.blob();
-  // lee los primeros bytes para ver si empieza con %PDF
-  const ab = await blob.slice(0, 20).arrayBuffer();
-  const head = new TextDecoder().decode(ab);
-
-
   if (res.status === 401) { localStorage.clear(); location.href='/'; return; }
   if (res.status === 403) { alert("No tienes permisos."); return; }
   if (!res.ok) { alert("No se pudo generar el PDF"); return; }
 
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const filenameMatch = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `perfil_${idPersona}.pdf`;
   const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener,noreferrer");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 // KPI COMPLETUD - FUNCIONALIDAD IGUAL, SOLO MEJORADO VISUAL
