@@ -57,8 +57,20 @@ function applySmartFilters(req, res, next) {
       where.push(`p.creado_por = $${params.length}`);
     },
 
+    // Solo filtra por scope (sin restringir registros ocultos)
+    // Usar en notificaciones donde el registro puede estar oculto pero la notif debe llegar
+    addScopeFilter: (params, where) => {
+      if (isSuperadmin || scope === "ALL") return;
+      if (scope === "OFFICE") return req.smartFilters.addOfficeFilter(params, where);
+      if (scope === "AREA")   return req.smartFilters.addAreaCreatorFilter(params, where);
+      return req.smartFilters.addSelfFilter(params, where);
+    },
+
     addFullFilter: (params, where) => {
       if (isSuperadmin || scope === "ALL") return;
+
+      // usuarios sin privilegio superadmin nunca ven registros ocultos
+      where.push(`p.oculto = false`);
 
       if (scope === "OFFICE") return req.smartFilters.addOfficeFilter(params, where);
       if (scope === "AREA")   return req.smartFilters.addAreaCreatorFilter(params, where);
