@@ -254,6 +254,27 @@
                       <option value="Concubinato(a)">Concubinato(a)</option>
                     </select>
                   </div>
+                                <!-- Edad -->
+                  <div class="col-md-4">
+                    <div class="form-group position-relative hover-shadow rounded p-3 h-100">
+                      <label class="form-label text-institucional mb-2">
+                        <i class="bi bi-hash me-1"></i>Edad
+                      </label>
+
+                      <input
+                        type="number"
+                        class="form-control form-control-institucional"
+                        name="edad"
+                        min="18"
+                        max="120"
+                        placeholder="Ej. 45"
+                      >
+
+                      <div class="form-text text-muted">
+                        Edad aproximada del actor político
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1399,7 +1420,7 @@
       </form>
     </div>
 
-    <!-- ================== PREVIEW ================== 
+    <!-- ================== PREVIEW ================== -->
     <div class="col-lg-4">
       <div class="card">
         <div class="card-body">
@@ -1408,7 +1429,7 @@
           <pre id="payloadPreview" class="bg-light p-3 rounded" style="max-height: 75vh; overflow:auto; font-size: 12px;"></pre>
         </div>
       </div>
-    </div>-->
+    </div>
 
   </div>
 </div>
@@ -1453,6 +1474,22 @@
 
       const anio = currentYear() - edad;
       anioEl.value = String(anio);
+    }
+
+    function getPartidosOptionsHtml() {
+      const base = document.getElementById("selPartidoActual");
+
+      const opts = base
+        ? Array.from(base.options)
+            .filter(o => o.value !== "")
+            .map(o => `<option value="${o.value}">${o.textContent}</option>`)
+            .join("")
+        : "";
+
+      return `
+        <option value="">Seleccione</option>
+        ${opts}
+      `;
     }
 
     // Delegación: funciona para nuevos bloques añadidos con "+"
@@ -2014,6 +2051,7 @@ async function onDeletePersona(id_persona) {
     setVal('clave_elector', p.clave_elector);
     setVal('estado_civil', p.estado_civil);
     setVal('escala_influencia', p.escala_influencia);
+    setVal('edad', p.edad);
     setVal('ha_contendido_eleccion', p.ha_contendido_eleccion === null ? '' : String(p.ha_contendido_eleccion));
     document.getElementById('sin_sp').checked = !!p.sin_servicio_publico;
 
@@ -2274,18 +2312,52 @@ async function onDeletePersona(id_persona) {
       const inpCargo  = $('input[name="cargo"]');
       const inpInst   = $('input[name="institucion"]');
 
+      const selPartido = $('select[name="id_partido_politico"]');
+      const wrapOtro   = $('.wrap-otro-partido-familiar');
+      const inpOtro    = $('input[name="otro_partido_texto"]');
+
       if (inpNombre) inpNombre.value = it.nombre || '';
       if (inpCargo)  inpCargo.value  = it.cargo || '';
       if (inpInst)   inpInst.value   = it.institucion || '';
 
       if (selPar) {
         const v = (it.parentesco || '').trim();
-
-        // ✅ setea si existe la opción; si no, deja vacío (o pon "otro" si lo manejas)
         const hasOption = Array.from(selPar.options).some(o => o.value === v);
         selPar.value = hasOption ? v : '';
       }
+
+      if (selPartido) {
+
+        const optionOtro = Array.from(selPartido.options)
+          .find(o => o.textContent.trim().toLowerCase() === "otro");
+
+        if (it.otro_partido_texto && optionOtro) {
+
+          // ✅ Caso: OTRO
+          selPartido.value = optionOtro.value;
+
+          wrapOtro?.classList.remove("d-none");
+
+          if (inpOtro) {
+            inpOtro.value = it.otro_partido_texto || "";
+          }
+
+        } else {
+
+          // ✅ Caso: partido normal
+          selPartido.value = it.id_partido_politico
+            ? String(it.id_partido_politico)
+            : "";
+
+          wrapOtro?.classList.add("d-none");
+
+          if (inpOtro) {
+            inpOtro.value = "";
+          }
+        }
+      }
     });
+    
     // ✅ Sync switch "Sin familiares" con el payload
     const fam = payload.familiares || [];
     const chk = document.getElementById('chkSinFamiliares');
@@ -3550,10 +3622,11 @@ function refreshHijosParejasSelects() {
       div.className = 'list-item';
       div.innerHTML = `
         <div class="row g-2 align-items-end">
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label">Nombre Completo</label>
             <input class="form-control" name="nombre" placeholder="Ej. Juan Pérez Cruz">
           </div>
+
           <div class="col-md-2">
             <label class="form-label">Parentesco</label>
             <select class="form-control form-select" name="parentesco">
@@ -3563,23 +3636,51 @@ function refreshHijosParejasSelects() {
               ).join('')}
             </select>
           </div>
-          <div class="col-md-3">
+
+          <div class="col-md-2">
             <label class="form-label">Cargo</label>
             <input class="form-control" name="cargo" placeholder="Ej. Diputado">
           </div>
+
           <div class="col-md-2">
             <label class="form-label">Institución</label>
             <input class="form-control" name="institucion" placeholder="Ej. Congreso">
           </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Partido político</label>
+            <select class="form-control form-select" name="id_partido_politico">
+              ${getPartidosOptionsHtml()}
+            </select>
+          </div>
+
           <div class="col-md-1 text-end">
             <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
           </div>
+
+          <div class="col-md-4 wrap-otro-partido-familiar d-none">
+            <label class="form-label">Otro partido</label>
+            <input class="form-control" name="otro_partido_texto" placeholder="Especifique partido">
+          </div>
         </div>
       `;
-      
-      // ✅ Evento del botón X (igual que tenías)
+
+      const selPartido = div.querySelector('select[name="id_partido_politico"]');
+      const wrapOtro = div.querySelector('.wrap-otro-partido-familiar');
+      const inputOtro = div.querySelector('input[name="otro_partido_texto"]');
+
+      selPartido?.addEventListener("change", () => {
+        const texto = selPartido.selectedOptions?.[0]?.textContent?.trim()?.toLowerCase() || "";
+        const isOtro = texto === "otro";
+        wrapOtro?.classList.toggle("d-none", !isOtro);
+
+        if (!isOtro && inputOtro) {
+          inputOtro.value = "";
+        }
+      });
+
       div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
-      
+
       return div;
     }
 
@@ -3943,6 +4044,7 @@ function refreshHijosParejasSelects() {
       clave_elector: (fd.get('clave_elector') || '').toString().trim() || null,
       estado_civil: (fd.get('estado_civil') || '').toString().trim() || null,
       escala_influencia: (fd.get('escala_influencia') || '').toString().trim() || null,
+      edad: (fd.get('edad') || '').toString().trim() || null,
       sin_servicio_publico: document.getElementById('sin_sp')?.checked ?? false,
       ha_contendido_eleccion: toBoolOrNull(fd.get('ha_contendido_eleccion')),
       partido_otro_texto: (fd.get('partido_otro_texto') || '').toString().trim() || null,
@@ -4534,19 +4636,35 @@ function refreshHijosParejasSelects() {
     const datosINEFinal = (datos_ine.seccion_electoral || datos_ine.distrito_federal || datos_ine.distrito_local) ? datos_ine : null;
     //familiares container
     const familiares = [];
+
     document.querySelectorAll('#familiaresContainer .list-item').forEach(item => {
-      const nombre = item.querySelector('input[name="nombre"]').value.trim();
-      const parentesco = item.querySelector('select[name="parentesco"]').value.trim(); // ✅ Ahora es select
-      const cargo = item.querySelector('input[name="cargo"]').value.trim();
-      const institucion = item.querySelector('input[name="institucion"]').value.trim();
-      
-      // ✅ Validación: requiere nombre + parentesco
-      if (nombre && parentesco) { // Solo si tiene lo esencial
+      const nombre = item.querySelector('input[name="nombre"]')?.value.trim() || "";
+      const parentesco = item.querySelector('select[name="parentesco"]')?.value.trim() || "";
+      const cargo = item.querySelector('input[name="cargo"]')?.value.trim() || "";
+      const institucion = item.querySelector('input[name="institucion"]')?.value.trim() || "";
+
+      const selPartido = item.querySelector('select[name="id_partido_politico"]');
+      const partidoRaw = selPartido?.value || "";
+      const partidoTexto = selPartido?.selectedOptions?.[0]?.textContent?.trim()?.toLowerCase() || "";
+      const esOtro = partidoTexto === "otro";
+      const otroPartido = item.querySelector('input[name="otro_partido_texto"]')?.value.trim() || "";
+
+      const idPartido = esOtro
+        ? null
+        : (Number(partidoRaw || 0) || null);
+
+      const otro_partido_texto = esOtro
+        ? (otroPartido || null)
+        : null;
+
+      if (nombre && parentesco) {
         familiares.push({
           nombre: nombre || null,
           parentesco: parentesco || null,
           cargo: cargo || null,
-          institucion: institucion || null
+          institucion: institucion || null,
+          id_partido_politico: idPartido,
+          otro_partido_texto
         });
       }
     });
@@ -5408,6 +5526,10 @@ function initValidacionDuplicados() {
         }
       } else {
         if (selected.size !== 1 || !selected.has(principalId)) {
+          selected.clear();
+          selected.add(principalId);
+        }
+        if (selected.size !== 1 || !selected.has(principalId)) {
           if (!silent) {
             showAlert?.(
               "⚠️ Cobertura territorial: para nivel municipal solo debe existir un municipio de trabajo político.",
@@ -5654,6 +5776,7 @@ function initGrupoPostulacionMulti() {
           if (checked) {
             selectTarget.value = munLegal?.value || "";
             selectTarget.disabled = true;
+            selectTarget.dispatchEvent(new Event("change", { bubbles: true }));
           } else {
             selectTarget.disabled = false;
           }
@@ -5676,6 +5799,7 @@ function initGrupoPostulacionMulti() {
           // Trabajo igual
           if (chkMunTrabajoIgual?.checked && munTrabajo) {
             munTrabajo.value = munLegal.value;
+            munTrabajo.dispatchEvent(new Event("change", { bubbles: true }));
           }
 
           refreshPreview?.();
