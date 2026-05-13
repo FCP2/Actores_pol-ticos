@@ -80,6 +80,8 @@ exports.personasPorMunicipio = async (req, res) => {
     const params = [oficinaId, idMun];
     const where = [`p.id_oficina = $1`, `p.municipio_trabajo_politico = $2`];
 
+    if (!isSuperadmin) where.push(`p.oculto = false`);
+
     if (ver === "1") where.push(`p.verificado_at IS NOT NULL`);
     if (ver === "0") where.push(`p.verificado_at IS NULL`);
 
