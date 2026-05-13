@@ -1252,6 +1252,7 @@ function renderObservacionesPanel(rows = []) {
             <div>
               <div class="fw-semibold">
                 ${esc(r.nivel || "—")}
+                ${r.dirigido_a ? `<span class="badge text-bg-light border ms-2">Para: ${esc(r.dirigido_a)}</span>` : ""}
                 ${
                   r.atendida
                     ? '<span class="badge bg-success ms-2">Atendida</span>'
@@ -1319,6 +1320,52 @@ function renderObservacionesPanel(rows = []) {
   });
 }
 
+async function renderObservacionesInboxAnalista() {
+  const el = document.getElementById("panelObservacionesPersona");
+  if (!el || selectedData?.id_persona) return;
+
+  try {
+    const resp = await apiGet("/personas/dashboard/notificaciones");
+    const rows = Array.isArray(resp?.data) ? resp.data.filter(r => !r.leida).slice(0, 6) : [];
+    if (!rows.length) return;
+
+    el.innerHTML = `
+      <div class="mb-2 fw-semibold">Observaciones pendientes para tu nivel</div>
+      <div class="list-group">
+        ${rows.map(r => {
+          const esOculto = r.nivel === "OCULTO";
+          const nombreLabel = r.nombre_completo || `Registro #${r.id_persona}`;
+          return `
+          <div class="list-group-item ${esOculto ? "list-group-item-danger" : "list-group-item-action"}"
+            ${!esOculto ? `data-persona="${esc(r.id_persona)}" style="cursor:pointer"` : `title="El registro está bajo revisión del área final"`}>
+            <div class="d-flex justify-content-between gap-2">
+              <span class="fw-semibold">
+                ${esOculto ? `<i class="bi bi-eye-slash me-1"></i>` : ""}
+                ${esc(nombreLabel)}
+              </span>
+              <span class="badge ${esOculto ? "bg-danger" : "text-bg-light border"}">${esOculto ? "OCULTO" : esc(r.dirigido_a || "—")}</span>
+            </div>
+            <div class="small text-muted">${esc(r.usuario || "Sistema")} · ${esc(fmtDT(r.fecha))}</div>
+            <div class="small">${esc(r.detalle || "—")}</div>
+          </div>
+        `}).join("")}
+      </div>
+    `;
+
+    el.querySelectorAll("[data-persona]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = Number(btn.dataset.persona);
+        if (!Number.isFinite(id)) return;
+        await openPerfilModal(id);
+        const observaciones = await loadPersonaObservaciones(id);
+        renderObservacionesPanel(observaciones);
+      });
+    });
+  } catch (e) {
+    console.warn("No se pudieron cargar observaciones pendientes:", e);
+  }
+}
+
   async function init() {
     try { await initUserHeader(); } catch (e) { console.warn(e); }
     // 1) GRID Y EVENTOS PRIMERO
@@ -1328,6 +1375,7 @@ function renderObservacionesPanel(rows = []) {
     await loadCapturistasFiltro();
     await loadKpiCompletitud();
     await loadSessionUser();
+    await renderObservacionesInboxAnalista();
     setupReferenteAutocomplete();
     loadReferentesSelect();
 
