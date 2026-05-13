@@ -37,6 +37,7 @@ const KPI_ALERTAS_URL = "/api/personas/dashboard/kpi/alertas";
 
   let personasGrid = null;
   let selectedRowData = null;
+  let _modoOcultar = false; // true = modal usado para ocultar, false = devolver
 
   let chartVerificacion = null;
   let chartMunicipios = null;
@@ -433,6 +434,10 @@ function buildGridQuery(extra = {}) {
       loadAllDashboardData();
     });
 
+    $("btnIrCaptura")?.addEventListener("click", () => {
+      location.href = "/captura";
+    });
+
     $("btnToggleAdvancedFilters")?.addEventListener("click", () => {
       $("advancedFilters")?.classList.toggle("d-none");
     });
@@ -471,15 +476,11 @@ function buildGridQuery(extra = {}) {
     });
 
     $("modalObservacionFinal")?.addEventListener("hidden.bs.modal", () => {
-      if ($("txtObservacionFinal")) {
-        $("txtObservacionFinal").value = "";
-      }
+      _resetModalObservacion();
     });
 
     $("modalObservacionFinal")?.addEventListener("show.bs.modal", () => {
-      if ($("txtObservacionFinal")) {
-        $("txtObservacionFinal").value = "";
-      }
+      if ($("txtObservacionFinal")) $("txtObservacionFinal").value = "";
     });
     //listener
     $("btnAbrirDesverificarFinal")?.addEventListener("click", () => {
@@ -540,26 +541,30 @@ function buildGridQuery(extra = {}) {
       if (!selectedRowData?.id_persona) return;
 
       const obs = $("txtObservacionFinal")?.value?.trim();
+      const dirigidoA = String($("selObservacionDirigidoA")?.value || "SELF").toUpperCase();
       if (!obs) {
-        updateAlert("Escribe una observación antes de devolver.", "warning");
+        updateAlert("Escribe el motivo antes de continuar.", "warning");
         return;
       }
 
+      // ── MODO OCULTAR ──────────────────────────────────────────
+      if (_modoOcultar) {
+        bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).hide();
+        await _ejecutarToggleOculto(selectedRowData, null, obs, dirigidoA);
+        _resetModalObservacion();
+        return;
+      }
+
+      // ── MODO DEVOLVER FINAL (comportamiento original) ─────────
       try {
         await fetchJson(`/api/personas/analista/personas/${selectedRowData.id_persona}/devolver-final`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ observacion: obs })
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ observacion: obs, dirigido_a: dirigidoA })
         });
 
         updateAlert("Observación enviada correctamente. El registro regresó de FINAL.", "success");
-
-        if ($("txtObservacionFinal")) {
-          $("txtObservacionFinal").value = "";
-        }
-
+        _resetModalObservacion();
         bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).hide();
 
         reloadGrid();
@@ -1043,11 +1048,14 @@ function personaFormatter(cell) {
   const row = cell.getRow().getData();
   const nombre = row.nombre_completo || "Sin nombre";
   const sub = row.telefono_principal || row.referentes_nombres || "Sin detalle";
+  const ocultoBadge = row.oculto
+    ? `<span class="grid-chip danger ms-1" title="Registro oculto para la oficina">OCULTO</span>`
+    : "";
 
   return `
     <div class="persona-cell">
       <div class="persona-meta">
-        <div class="persona-nombre">${esc(nombre)}</div>
+        <div class="persona-nombre">${esc(nombre)}${ocultoBadge}</div>
         <div class="persona-sub">${esc(sub)}</div>
       </div>
     </div>
@@ -1061,8 +1069,8 @@ function personaFormatter(cell) {
   function verificationChip(value) {
     const v = String(value || "").toUpperCase();
     if (v === "FINAL") return chipFormatter("FINAL", "success");
-    if (v === "OFFICE") return chipFormatter("OFFICE", "warning");
-    if (v === "AREA") return chipFormatter("AREA", "info");
+    if (v === "OFFICE") return chipFormatter("Coordinación", "warning");
+    if (v === "AREA") return chipFormatter("Dirección", "info");
     return chipFormatter("SIN VERIFICAR", "neutral");
   }
 
@@ -1082,13 +1090,89 @@ function personaFormatter(cell) {
 
 function actionsFormatter(cell) {
   const row = cell.getRow().getData();
+  const user = getCurrentUser();
+  const isSuperadmin = Array.isArray(user.roles) && user.roles.includes("superadmin");
+  const ocultarBtn = isSuperadmin
+    ? `<button class="grid-action-btn ${row.oculto ? "danger" : "secondary"}"
+         data-action="ocultar" data-id="${row.id_persona}"
+         title="${row.oculto ? "Mostrar registro" : "Ocultar registro"}">
+         <i class="bi bi-eye${row.oculto ? "" : "-slash"}"></i>
+       </button>`
+    : "";
+
   return `
     <div class="grid-actions">
       <button class="grid-action-btn view" data-action="ver" data-id="${row.id_persona}" title="Ver perfil">
         <i class="bi bi-eye"></i>
       </button>
+      ${ocultarBtn}
     </div>
   `;
+}
+
+function toggleOcultoPersona(row, tabulatorRow) {
+  if (!row?.id_persona) return;
+
+  // Si está oculto → mostrar directo (sin modal, sin motivo)
+  if (row.oculto) {
+    _ejecutarToggleOculto(row, tabulatorRow, null, null);
+    return;
+  }
+
+  // Si está visible → pedir motivo con el modal existente en modo ocultar
+  _modoOcultar = true;
+  const modal = $("modalObservacionFinal");
+  if (!modal) return;
+
+  const label = modal.querySelector("#modalObservacionLabel");
+  const btn   = $("btnConfirmarDevolucion");
+  if (label) label.innerHTML = `<i class="bi bi-eye-slash me-2"></i>Ocultar registro — escribe el motivo`;
+  if (btn)   { btn.textContent = "Ocultar registro"; btn.className = "btn btn-danger"; }
+
+  bootstrap.Modal.getOrCreateInstance(modal).show();
+}
+
+async function _ejecutarToggleOculto(row, tabulatorRow, observacion, dirigidoA) {
+  try {
+    const body = observacion ? { observacion, dirigido_a: dirigidoA || "SELF" } : {};
+    const resp = await apiPatch(`/personas/${row.id_persona}/oculto`, body);
+    if (!resp?.ok) throw new Error("No se pudo cambiar la visibilidad");
+
+    const nuevoEstado = resp.oculto;
+    row.oculto = nuevoEstado;
+    if (selectedRowData?.id_persona === row.id_persona) selectedRowData.oculto = nuevoEstado;
+
+    if (tabulatorRow) {
+      tabulatorRow.update({ oculto: nuevoEstado });
+    } else {
+      reloadGrid();
+    }
+
+    // refresca el panel de detalle si el registro activo es el mismo
+    if (selectedRowData?.id_persona === row.id_persona) {
+      openDetailPanel({ ...selectedRowData, oculto: nuevoEstado });
+    }
+
+    renderAlertSummary().catch(console.error);
+    updateAlert(
+      nuevoEstado ? "Registro ocultado. Se notificó al destinatario." : "Registro visible para la oficina.",
+      nuevoEstado ? "warning" : "success"
+    );
+  } catch (e) {
+    console.error(e);
+    updateAlert(e.message || "Error al cambiar visibilidad del registro.", "danger");
+  }
+}
+
+function _resetModalObservacion() {
+  _modoOcultar = false;
+  if ($("txtObservacionFinal"))    $("txtObservacionFinal").value = "";
+  if ($("selObservacionDirigidoA")) $("selObservacionDirigidoA").value = "SELF";
+
+  const label = $("modalObservacionLabel");
+  const btn   = $("btnConfirmarDevolucion");
+  if (label) label.innerHTML = `<i class="bi bi-arrow-counterclockwise me-2"></i>Devolver con observación`;
+  if (btn)   { btn.textContent = "Devolver"; btn.className = "btn btn-warning"; }
 }
 
 function updateVerificationButtons(row) {
@@ -1311,6 +1395,10 @@ function initPersonasGrid() {
           if (action === "del") {
             updateAlert(`Aquí conectamos eliminación para ID ${row.id_persona}.`, "secondary");
           }
+
+          if (action === "ocultar") {
+            await toggleOcultoPersona(row, cell.getRow());
+          }
         }
       }
     ]
@@ -1479,8 +1567,22 @@ function openDetailPanel(row) {
       }
       <div class="profile-info">
         <div class="detail-name">${esc(row.nombre_completo || row.nombre || "Sin nombre")}</div>
+        ${row.oculto ? `<span class="badge bg-danger mt-1">OCULTO PARA LA OFICINA</span>` : ""}
       </div>
     </div>
+    ${(() => {
+      const u = getCurrentUser();
+      const esSuperadmin = Array.isArray(u.roles) && u.roles.includes("superadmin");
+      if (!esSuperadmin) return "";
+      return `
+        <div class="d-flex justify-content-end mb-2">
+          <button id="btnToggleOculto" class="btn btn-sm ${row.oculto ? "btn-outline-success" : "btn-outline-danger"}">
+            <i class="bi bi-eye${row.oculto ? "" : "-slash"} me-1"></i>
+            ${row.oculto ? "Hacer visible para la oficina" : "Ocultar para la oficina"}
+          </button>
+        </div>
+      `;
+    })()}
 
     <div class="detail-kv-row">
       <span class="label">Partido político</span>
@@ -1562,6 +1664,11 @@ function openDetailPanel(row) {
       </div>
     </div>
   `;
+
+  // toggle ocultar desde el panel de detalle
+  $("btnToggleOculto")?.addEventListener("click", () => {
+    toggleOcultoPersona(row, null);
+  });
 
   //abrir ver mas municipios
   $("btnVerMunicipiosDetalle")?.addEventListener("click", async () => {
@@ -2035,6 +2142,67 @@ function renderChartOficinas(rows) {
   });
 }
 
+function showAlertDetailModal(alerta) {
+  const body = $("alertaDetalleBody");
+  const title = $("modalAlertaDetalleLabel");
+  if (!body || !title) return;
+
+  const rows = Array.isArray(alerta?.items) ? alerta.items : [];
+  title.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${esc(alerta?.title || "Detalle de alerta")}`;
+
+  if (!rows.length) {
+    body.innerHTML = `<div class="text-muted">No hay detalle reciente para esta alerta.</div>`;
+  } else {
+    body.innerHTML = `
+      <div class="small text-muted mb-3">${esc(alerta?.text || "")}</div>
+      <div class="list-group list-group-flush">
+        ${rows.map(r => {
+          // ── Registros ocultos ──
+          if ("oculto_at" in r) {
+            return `
+              <div class="list-group-item px-0">
+                <div class="d-flex justify-content-between gap-3 flex-wrap">
+                  <div>
+                    <div class="fw-semibold">
+                      <span class="badge bg-danger me-1">OCULTO</span>
+                      ${esc(r.persona || `Registro #${r.id_persona || ""}`)}
+                    </div>
+                    <div class="small text-muted">Oficina: ${esc(r.oficina_nombre || "—")}</div>
+                  </div>
+                  <div class="small text-muted">${esc(fmtDT(r.oculto_at))}</div>
+                </div>
+                <div class="small text-muted mt-1">Ocultado por: ${esc(r.oculto_por_nombre || "—")}</div>
+              </div>
+            `;
+          }
+
+          // ── Observaciones / devoluciones (formato original) ──
+          const fecha = r.atendida_at || r.created_at;
+          const atendida = r.atendida_por_nombre
+            ? `<div class="small text-success mt-1"><i class="bi bi-check-circle me-1"></i>Atendida por: ${esc(r.atendida_por_nombre)}${r.atendida_at ? ` - ${esc(fmtDT(r.atendida_at))}` : ""}</div>`
+            : "";
+          return `
+            <div class="list-group-item px-0">
+              <div class="d-flex justify-content-between gap-3 flex-wrap">
+                <div>
+                  <div class="fw-semibold">${esc(r.persona || `Registro #${r.id_persona || ""}`)}</div>
+                  <div class="small text-muted">ID ${esc(r.id_persona || "-")} - Nivel ${esc(r.nivel || "-")} - Para ${esc(r.dirigido_a || "-")}</div>
+                </div>
+                <div class="small text-muted">${esc(fmtDT(fecha))}</div>
+              </div>
+              <div class="mt-2">${esc(r.observacion || "-")}</div>
+              <div class="small text-muted mt-1">Observó: ${esc(r.creado_por_nombre || "Sistema")}</div>
+              ${atendida}
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  bootstrap.Modal.getOrCreateInstance($("modalAlertaDetalle")).show();
+}
+
 async function renderAlertSummary() {
   const c = $("alertsContainer");
   if (!c) return;
@@ -2066,6 +2234,12 @@ async function renderAlertSummary() {
     });
   }
 
+  alertas.forEach(a => {
+    if (a.title.includes("pendiente")) a.items = stats.observaciones_pendientes_detalle || [];
+    if (a.title.includes("FINAL")) a.items = stats.devoluciones_final_7d_detalle || [];
+    if (a.title.includes("atendida")) a.items = stats.observaciones_atendidas_hoy_detalle || [];
+  });
+
   if (gridState.solo_pendientes_final) {
     alertas.push({
       cls: "is-warning",
@@ -2090,6 +2264,16 @@ async function renderAlertSummary() {
     });
   }
 
+  const nOcultos = Number(stats.registros_ocultos || 0);
+  if (nOcultos > 0) {
+    alertas.push({
+      cls: "is-danger",
+      title: `${nOcultos} registro(s) oculto(s) para su oficina`,
+      text: "Registros bajo revisión del área final. Solo visibles para superadmin.",
+      items: stats.registros_ocultos_detalle || []
+    });
+  }
+
   if (!alertas.length) {
     c.innerHTML = `
       <div class="alert-item">
@@ -2100,12 +2284,22 @@ async function renderAlertSummary() {
     return;
   }
 
-  c.innerHTML = alertas.map(a => `
-    <div class="alert-item ${a.cls}">
+  c.innerHTML = alertas.map((a, idx) => `
+    <div class="alert-item ${a.cls} ${Array.isArray(a.items) && a.items.length ? "is-clickable" : ""}" data-alert-idx="${idx}">
       <div class="alert-item-title">${esc(a.title)}</div>
       <div class="alert-item-text">${esc(a.text)}</div>
+      ${Array.isArray(a.items) && a.items.length ? `<div class="alert-item-meta"><i class="bi bi-search me-1"></i>Ver resumen</div>` : ""}
     </div>
   `).join("");
+
+  c.querySelectorAll("[data-alert-idx]").forEach(el => {
+    el.addEventListener("click", () => {
+      const idx = Number(el.dataset.alertIdx);
+      const alerta = alertas[idx];
+      if (!alerta || !Array.isArray(alerta.items) || !alerta.items.length) return;
+      showAlertDetailModal(alerta);
+    });
+  });
 }
 
   /* =========================
