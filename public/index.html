@@ -30,9 +30,9 @@
           const user = data?.user || {};
           const roles = user.roles || [];
 
-          // En captura permites capturista/analista; superadmin al dashboard
-          if (roles.includes("superadmin")) return (window.location.href = "/dashboard");
-          const ok = roles.includes("capturista") || roles.includes("analista");
+          // En captura permites capturista/analista/superadmin.
+          // Superadmin conserva alcance global por backend (smartFilter ALL).
+          const ok = roles.includes("capturista") || roles.includes("analista") || roles.includes("superadmin");
           if (!ok) return (window.location.href = "/");
 
           // Cachea user para UI si quieres (lblUsuario/lblRol)
@@ -1420,7 +1420,7 @@
       </form>
     </div>
 
-    <!-- ================== PREVIEW ================== 
+    <!-- ================== PREVIEW ================== -->
     <div class="col-lg-4">
       <div class="card">
         <div class="card-body">
@@ -1429,7 +1429,7 @@
           <pre id="payloadPreview" class="bg-light p-3 rounded" style="max-height: 75vh; overflow:auto; font-size: 12px;"></pre>
         </div>
       </div>
-    </div>-->
+    </div>
 
   </div>
 </div>
@@ -1781,7 +1781,7 @@ function showAlert(a, b) {
       if (btn && (isAnalista || isSuper)) {
         btn.classList.remove("d-none");
         btn.addEventListener("click", () => {
-          window.location.href = "/analista";
+          window.location.href = isSuper ? "/dashboard" : "/analista";
         });
       }
     }catch(e){
@@ -1949,25 +1949,43 @@ async function onDeletePersona(id_persona) {
       return;
     }
 
-    cont.innerHTML = rows.map(r => `
-      <div class="border rounded p-3 mb-2 ${r.leida ? "bg-light" : "border-warning bg-warning-subtle"}">
+    cont.innerHTML = rows.map(r => {
+      const esOculto = r.nivel === "OCULTO";
+      const nombreLabel = r.nombre_completo
+        ? escHtml(r.nombre_completo)
+        : `Registro #${escHtml(r.id_persona)}`;
+      return `
+      <div class="border rounded p-3 mb-2 ${esOculto ? "border-danger bg-danger-subtle" : r.leida ? "bg-light" : "border-warning bg-warning-subtle"}">
         <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
           <div>
             <div class="fw-semibold">
-              Registro #${escHtml(r.id_persona)}
+              ${esOculto ? `<i class="bi bi-eye-slash me-1 text-danger"></i>` : ""}
+              ${nombreLabel}
               <span class="badge ${r.leida ? "bg-secondary" : "bg-danger"} ms-2">${r.leida ? "Leida" : "Nueva"}</span>
+              ${esOculto ? `<span class="badge bg-danger ms-1">REGISTRO OCULTO</span>` : ""}
             </div>
             <div class="small text-muted">
               ${escHtml(r.nivel || "FINAL")} · ${escHtml(r.usuario || "Sistema")} · ${escHtml(fmtFecha(r.fecha))}
             </div>
           </div>
-          <button type="button" class="btn btn-sm btn-outline-primary" data-action="abrir-observacion" data-id-persona="${escHtml(r.id_persona)}">
-            Abrir
-          </button>
+          <div class="d-flex gap-2">
+            <button type="button"
+              class="btn btn-sm ${esOculto ? "btn-outline-secondary disabled" : "btn-outline-primary"}"
+              data-action="abrir-observacion"
+              data-id-persona="${escHtml(r.id_persona)}"
+              ${esOculto ? "disabled title=\"El registro está bajo revisión del área final\"" : ""}>
+              Abrir
+            </button>
+            ${r.atendida ? "" : `
+              <button type="button" class="btn btn-sm btn-outline-success" data-action="atender-observacion" data-id-observacion="${escHtml(r.id_evento)}">
+                Marcar atendida
+              </button>
+            `}
+          </div>
         </div>
         <div>${escHtml(r.detalle || "")}</div>
       </div>
-    `).join("");
+    `}).join("");
 
     cont.querySelectorAll('[data-action="abrir-observacion"]').forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -1975,6 +1993,23 @@ async function onDeletePersona(id_persona) {
         if (!Number.isFinite(idPersona) || idPersona <= 0) return;
         bootstrap.Modal.getOrCreateInstance(document.getElementById("modalNotificacionesCaptura")).hide();
         await onEditPersona(idPersona);
+      });
+    });
+
+    cont.querySelectorAll('[data-action="atender-observacion"]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const idObservacion = Number(btn.dataset.idObservacion);
+        if (!Number.isFinite(idObservacion) || idObservacion <= 0) return;
+        btn.disabled = true;
+        try {
+          await apiPost(`/personas/analista/personas/observaciones/${idObservacion}/atender`, {});
+          await cargarNotificacionesCaptura();
+          showAlert("success", "Observación marcada como atendida.");
+        } catch (e) {
+          console.error(e);
+          btn.disabled = false;
+          showAlert("danger", "No se pudo marcar como atendida: " + (e.message || e));
+        }
       });
     });
   }
