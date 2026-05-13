@@ -177,6 +177,9 @@
           </div>
 
           <div class="d-flex gap-2">
+            <button class="btn btn-warning text-dark fw-semibold" id="btnIrCaptura">
+              <i class="bi bi-pencil-square me-1"></i>Ir a Captura
+            </button>
             <button class="btn btn-outline-secondary" id="btnRefreshDashboard">
               <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
             </button>
@@ -636,6 +639,13 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
+          <label class="form-label" for="selObservacionDirigidoA">Dirigir observación a</label>
+          <select class="form-select mb-3" id="selObservacionDirigidoA">
+            <option value="SELF">Capturista</option>
+            <option value="AREA">Dirección</option>
+            <option value="OFFICE">Coordinación</option>
+          </select>
+
           <label class="form-label" for="txtObservacionFinal">Observación</label>
           <textarea
             class="form-control"
@@ -670,6 +680,25 @@
   </div>
 
   <!-- MODAL VERIFICACIÓN FINAL -->
+  <div class="modal fade" id="modalAlertaDetalle" tabindex="-1" aria-labelledby="modalAlertaDetalleLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header modal-header-brand">
+          <h5 class="modal-title" id="modalAlertaDetalleLabel">
+            <i class="bi bi-exclamation-triangle me-2"></i>Detalle de alerta
+          </h5>
+          <button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="alertaDetalleBody">
+          <div class="text-muted">Selecciona una alerta para ver el resumen.</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="modalVerificacionFinal" tabindex="-1" aria-labelledby="modalVerificacionFinalLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
