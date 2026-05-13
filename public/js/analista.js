@@ -1884,6 +1884,7 @@ async function openPerfilModal(idPersona){
     setText('v_curp',  p.curp);
     setText('v_rfc',   p.rfc);
     setText('v_clave', p.clave_elector);
+    setText('v_edad', p.edad != null && p.edad !== '' ? `${p.edad} a\u00f1os` : null);
     setText('v_ecivil', p.estado_civil);
 
     setText('v_mun_legal', p.residencia_legal_display || p.municipio_residencia_legal || '—');
@@ -2284,12 +2285,15 @@ async function openPerfilModal(idPersona){
     // Familiares
     const fam = listOrEmpty(p.familiares);
     document.getElementById('v_familiares').innerHTML = renderSimpleList(fam, (f) => {
+      const partido = f.partido_display || f.otro_partido_texto || f.partido_politico_siglas || f.partido_politico_nombre || f.partido_politico;
+      const partidoHtml = partido ? `<div class="text-muted small">Partido: ${esc(partido)}</div>` : '';
       const head = [f.nombre, f.parentesco].filter(Boolean).map(esc).join(' • ') || '—';
       const meta = [f.cargo, f.institucion].filter(Boolean).map(esc).join(' • ');
       return `
         <div class="border rounded p-2">
           <div class="fw-semibold">${head}</div>
           ${meta ? `<div class="text-muted small">${meta}</div>` : ''}
+          ${partidoHtml}
         </div>
       `;
     });
