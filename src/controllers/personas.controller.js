@@ -586,6 +586,7 @@ exports.listPersonasAdminGrid = async (req, res) => {
         p.id_persona, p.nombre, p.apellido_paterno, p.apellido_materno, p.foto_url,
         (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
         p.curp, p.rfc, p.clave_elector, p.id_oficina, p.nivel_confiabilidad, o.nombre AS oficina_nombre,
+        p.oculto, p.oculto_at, p.oculto_por,
         -- partido politico filtro 
         p.id_partido_actual,
         p.partido_otro_texto,
@@ -6660,19 +6661,21 @@ exports.updatePersonaCompleta = async (req, res) => {
     const owner = ownerRows[0];
 
     // reglas por rol
+    const isAnalista = roles.includes("analista");
     const isCapturista = roles.includes("capturista");
+    const isCapturistaPuro = isCapturista && !isAnalista;
 
     if (!isSuperadmin) {
-      // oficina obligatoria
-      if (owner.id_oficina !== req.user.id_oficina) {
-        await client.query("ROLLBACK");
-        return res.status(403).json({ error: "No puedes editar registros de otra oficina" });
-      }
-
-      // capturista solo puede editar lo suyo
-      if (isCapturista && owner.creado_por !== req.user.id_usuario) {
+      // capturista solo puede editar lo suyo, aunque el registro no tenga oficina asignada
+      if (isCapturistaPuro && owner.creado_por !== req.user.id_usuario) {
         await client.query("ROLLBACK");
         return res.status(403).json({ error: "Solo puedes editar tus propios registros" });
+      }
+
+      // analista / no capturista: misma oficina
+      if (!isCapturistaPuro && owner.id_oficina !== req.user.id_oficina) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ error: "No puedes editar registros de otra oficina" });
       }
     }
 
@@ -8501,6 +8504,11 @@ exports.listObservacionesPersona = async (req, res) => {
     params.push(id_persona);
     where.push(`p.id_persona = $${params.length}`);
 
+    if (!req.smartFilters?.isSuperadmin && req.smartFilters?.scope && req.smartFilters.scope !== "ALL") {
+      params.push(req.smartFilters.scope);
+      where.push(`po.dirigido_a = $${params.length}`);
+    }
+
     const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const { rows } = await client.query(
@@ -8509,6 +8517,7 @@ exports.listObservacionesPersona = async (req, res) => {
         po.id_observacion,
         po.id_persona,
         po.nivel,
+        po.dirigido_a,
         po.observacion,
         po.creado_por,
         po.created_at,
@@ -8545,6 +8554,7 @@ exports.devolverPersonaFinal = async (req, res) => {
   try {
     const id_persona = Number(req.params.id);
     const observacion = String(req.body?.observacion || "").trim();
+    const dirigidoA = String(req.body?.dirigido_a || "SELF").trim().toUpperCase();
 
     if (!Number.isFinite(id_persona) || id_persona <= 0) {
       return res.status(400).json({ error: "id inválido" });
@@ -8552,6 +8562,10 @@ exports.devolverPersonaFinal = async (req, res) => {
 
     if (!observacion) {
       return res.status(400).json({ error: "La observación es obligatoria" });
+    }
+
+    if (!["AREA", "OFFICE", "SELF"].includes(dirigidoA)) {
+      return res.status(400).json({ error: "Destino de observacion invalido" });
     }
 
     const scope = req.user?.scope || null;
@@ -8569,7 +8583,10 @@ exports.devolverPersonaFinal = async (req, res) => {
         p.id_persona,
         p.verif_area_at,
         p.verif_office_at,
-        p.verificado_at
+        p.verificado_at,
+        p.creado_por,
+        p.verif_area_por,
+        p.verif_office_por
       FROM personas p
       WHERE p.id_persona = $1
       FOR UPDATE
@@ -8585,11 +8602,11 @@ exports.devolverPersonaFinal = async (req, res) => {
     await client.query(
       `
       INSERT INTO personas_observaciones
-        (id_persona, nivel, observacion, creado_por)
+        (id_persona, nivel, dirigido_a, observacion, creado_por)
       VALUES
-        ($1, 'FINAL', $2, $3)
+        ($1, 'FINAL', $2, $3, $4)
       `,
-      [id_persona, observacion, req.user.id_usuario]
+      [id_persona, dirigidoA, observacion, req.user.id_usuario]
     );
 
     const { rows: upd } = await client.query(
@@ -8638,13 +8655,18 @@ exports.atenderObservacionPersona = async (req, res) => {
       return res.status(400).json({ error: "idObservacion inválido" });
     }
 
-    const { addFullFilter } = req.smartFilters;
+    const { addScopeFilter } = req.smartFilters;
     const params = [];
     const where = [];
-    addFullFilter(params, where);
+    addScopeFilter(params, where);
 
     params.push(id_observacion);
     where.push(`po.id_observacion = $${params.length}`);
+
+    if (!req.smartFilters?.isSuperadmin && req.smartFilters?.scope && req.smartFilters.scope !== "ALL") {
+      params.push(req.smartFilters.scope);
+      where.push(`po.dirigido_a = $${params.length}`);
+    }
 
     const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
@@ -8654,6 +8676,7 @@ exports.atenderObservacionPersona = async (req, res) => {
       SELECT
         po.id_observacion,
         po.id_persona,
+        po.dirigido_a,
         po.atendida
       FROM personas_observaciones po
       JOIN personas p ON p.id_persona = po.id_persona
@@ -8747,7 +8770,103 @@ exports.kpiAlertasDashboard = async (req, res) => {
           JOIN base_personas bp ON bp.id_persona = po.id_persona
           WHERE po.nivel = 'FINAL'
             AND po.created_at >= now() - interval '7 days'
-        ) AS devoluciones_final_7d
+        ) AS devoluciones_final_7d,
+
+        COALESCE((
+          SELECT jsonb_agg(to_jsonb(x))
+          FROM (
+            SELECT
+              po.id_observacion,
+              po.id_persona,
+              concat_ws(' ', p.nombre, p.apellido_paterno, p.apellido_materno) AS persona,
+              po.nivel,
+              po.dirigido_a,
+              po.observacion,
+              po.created_at,
+              u_crea.nombre AS creado_por_nombre
+            FROM personas_observaciones po
+            JOIN base_personas bp ON bp.id_persona = po.id_persona
+            JOIN personas p ON p.id_persona = po.id_persona
+            LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
+            WHERE po.atendida = false
+            ORDER BY po.created_at DESC, po.id_observacion DESC
+            LIMIT 8
+          ) x
+        ), '[]'::jsonb) AS observaciones_pendientes_detalle,
+
+        COALESCE((
+          SELECT jsonb_agg(to_jsonb(x))
+          FROM (
+            SELECT
+              po.id_observacion,
+              po.id_persona,
+              concat_ws(' ', p.nombre, p.apellido_paterno, p.apellido_materno) AS persona,
+              po.nivel,
+              po.dirigido_a,
+              po.observacion,
+              po.created_at,
+              po.atendida_at,
+              u_crea.nombre AS creado_por_nombre,
+              u_atiende.nombre AS atendida_por_nombre
+            FROM personas_observaciones po
+            JOIN base_personas bp ON bp.id_persona = po.id_persona
+            JOIN personas p ON p.id_persona = po.id_persona
+            LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
+            LEFT JOIN usuarios u_atiende ON u_atiende.id_usuario = po.atendida_por
+            WHERE po.atendida = true
+              AND po.atendida_at::date = CURRENT_DATE
+            ORDER BY po.atendida_at DESC, po.id_observacion DESC
+            LIMIT 8
+          ) x
+        ), '[]'::jsonb) AS observaciones_atendidas_hoy_detalle,
+
+        COALESCE((
+          SELECT jsonb_agg(to_jsonb(x))
+          FROM (
+            SELECT
+              po.id_observacion,
+              po.id_persona,
+              concat_ws(' ', p.nombre, p.apellido_paterno, p.apellido_materno) AS persona,
+              po.nivel,
+              po.dirigido_a,
+              po.observacion,
+              po.created_at,
+              u_crea.nombre AS creado_por_nombre
+            FROM personas_observaciones po
+            JOIN base_personas bp ON bp.id_persona = po.id_persona
+            JOIN personas p ON p.id_persona = po.id_persona
+            LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
+            WHERE po.nivel = 'FINAL'
+              AND po.created_at >= now() - interval '7 days'
+            ORDER BY po.created_at DESC, po.id_observacion DESC
+            LIMIT 8
+          ) x
+        ), '[]'::jsonb) AS devoluciones_final_7d_detalle,
+
+        -- registros ocultos (solo superadmin ve esto; para otros siempre 0)
+        (
+          SELECT COUNT(*)::int
+          FROM personas p2
+          WHERE p2.oculto = true
+        ) AS registros_ocultos,
+
+        COALESCE((
+          SELECT jsonb_agg(to_jsonb(x))
+          FROM (
+            SELECT
+              p2.id_persona,
+              concat_ws(' ', p2.nombre, p2.apellido_paterno, p2.apellido_materno) AS persona,
+              p2.oculto_at,
+              u_oculto.nombre AS oculto_por_nombre,
+              o.nombre AS oficina_nombre
+            FROM personas p2
+            LEFT JOIN usuarios u_oculto ON u_oculto.id_usuario = p2.oculto_por
+            LEFT JOIN oficinas o ON o.id_oficina = p2.id_oficina
+            WHERE p2.oculto = true
+            ORDER BY p2.oculto_at DESC
+            LIMIT 10
+          ) x
+        ), '[]'::jsonb) AS registros_ocultos_detalle
     `;
 
     const { rows } = await client.query(sql, params);
@@ -8765,21 +8884,25 @@ exports.kpiAlertasDashboard = async (req, res) => {
 exports.listNotificacionesDashboard = async (req, res) => {
   const client = await pool.connect();
   try {
-    const { addFullFilter } = req.smartFilters;
     const params = [];
     const where = [];
+    const scope = String(req.user?.scope || "").toUpperCase();
+    const isSuper = (req.user?.roles || []).includes("superadmin") || scope === "ALL";
 
-    addFullFilter(params, where);
+    if (!isSuper && req.smartFilters?.addScopeFilter) {
+      req.smartFilters.addScopeFilter(params, where);
+    }
 
     params.push(req.user.id_usuario);
     const idxUsuario = params.length;
+    params.push(scope || "SELF");
+    const idxScope = params.length;
 
     where.push(`
       po.creado_por <> $${idxUsuario}
-      AND $${idxUsuario} IN (
-        p.creado_por,
-        p.verif_area_por,
-        p.verif_office_por
+      AND (
+        (po.dirigido_a = 'SELF' AND p.creado_por = $${idxUsuario})
+        OR (po.dirigido_a IN ('AREA', 'OFFICE') AND po.dirigido_a = $${idxScope})
       )
     `);
 
@@ -8790,9 +8913,13 @@ exports.listNotificacionesDashboard = async (req, res) => {
         po.id_observacion AS id_evento,
         po.id_persona,
         po.nivel,
+        po.dirigido_a,
         po.observacion AS detalle,
         po.created_at AS fecha,
+        po.atendida,
+        po.atendida_at,
         u.nombre AS usuario,
+        concat_ws(' ', p.nombre, p.apellido_paterno, p.apellido_materno) AS nombre_completo,
         CASE
           WHEN pnl.id_lectura IS NOT NULL THEN true
           ELSE false
@@ -8805,7 +8932,7 @@ exports.listNotificacionesDashboard = async (req, res) => {
         ON pnl.id_observacion = po.id_observacion
        AND pnl.id_usuario = $${idxUsuario}
       ${whereSQL}
-      ORDER BY po.created_at DESC, po.id_observacion DESC
+      ORDER BY po.atendida ASC, po.created_at DESC, po.id_observacion DESC
       LIMIT 30
     `;
 
@@ -8846,6 +8973,62 @@ exports.marcarNotificacionLeida = async (req, res) => {
       error: "Error al marcar notificación como leída",
       detail: e.message
     });
+  } finally {
+    client.release();
+  }
+};
+
+exports.toggleOcultoPersona = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id_persona = Number(req.params.id);
+    if (!Number.isFinite(id_persona) || id_persona <= 0)
+      return res.status(400).json({ error: "id inválido" });
+
+    const observacion = (req.body?.observacion || "").trim();
+    const dirigidoA   = String(req.body?.dirigido_a || "SELF").toUpperCase();
+
+    const { rows } = await client.query(
+      `SELECT id_persona, oculto FROM personas WHERE id_persona = $1`,
+      [id_persona]
+    );
+    if (!rows.length) return res.status(404).json({ error: "Persona no encontrada" });
+
+    const nuevoEstado = !rows[0].oculto;
+
+    // Al ocultar exigimos motivo; al mostrar no
+    if (nuevoEstado && !observacion)
+      return res.status(400).json({ error: "Debes escribir el motivo para ocultar el registro." });
+
+    await client.query("BEGIN");
+
+    const { rows: upd } = await client.query(
+      `UPDATE personas
+       SET oculto     = $2,
+           oculto_at  = CASE WHEN $2 THEN now() ELSE NULL END,
+           oculto_por = CASE WHEN $2 THEN $3::integer ELSE NULL END,
+           updated_at = now()
+       WHERE id_persona = $1
+       RETURNING id_persona, oculto, oculto_at, oculto_por`,
+      [id_persona, nuevoEstado, req.user.id_usuario]
+    );
+
+    // Solo al ocultar guardamos la observación (nivel OCULTO para identificarla)
+    if (nuevoEstado) {
+      await client.query(
+        `INSERT INTO personas_observaciones
+           (id_persona, nivel, dirigido_a, observacion, creado_por)
+         VALUES ($1, 'OCULTO', $2, $3, $4)`,
+        [id_persona, dirigidoA, observacion, req.user.id_usuario]
+      );
+    }
+
+    await client.query("COMMIT");
+    return res.json({ ok: true, oculto: upd[0].oculto, persona: upd[0] });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error(e);
+    return res.status(500).json({ error: "Error al cambiar visibilidad", detail: e.message });
   } finally {
     client.release();
   }
