@@ -1444,12 +1444,13 @@ exports.createPersonaCompleta = async (req, res) => {
         sin_cargos_eleccion_popular,
         foto_url,
         id_oficina,
-        nivel_confiabilidad
+        nivel_confiabilidad,
+        edad
       )
       VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
         $15,$16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25,$26,$27,$28,$29
+        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30
       )
       RETURNING id_persona
       `,
@@ -1485,7 +1486,8 @@ exports.createPersonaCompleta = async (req, res) => {
         persona.sin_cargos_eleccion_popular ?? null,
         persona.foto_url || null,
         oficinaFinal,
-        nc
+        nc,
+        persona.edad || null
       ]
     );
 
@@ -1874,13 +1876,39 @@ exports.createPersonaCompleta = async (req, res) => {
     // FAMILIARES
     // -------------------------
     for (const f of familiares) {
-      const tieneAlgo = f?.nombre || f?.parentesco || f?.cargo || f?.institucion;
+
+      const tieneAlgo =
+        f?.nombre ||
+        f?.parentesco ||
+        f?.cargo ||
+        f?.institucion ||
+        f?.id_partido_politico ||
+        f?.otro_partido_texto;
+
       if (!tieneAlgo) continue;
 
       await client.query(
-        `INSERT INTO familiares_politica (id_persona, nombre, parentesco, cargo, institucion)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [id_persona, f.nombre || null, f.parentesco || null, f.cargo || null, f.institucion || null]
+        `
+        INSERT INTO familiares_politica (
+          id_persona,
+          nombre,
+          parentesco,
+          cargo,
+          institucion,
+          id_partido_politico,
+          otro_partido_texto
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `,
+        [
+          id_persona,
+          f.nombre || null,
+          f.parentesco || null,
+          f.cargo || null,
+          f.institucion || null,
+          Number(f.id_partido_politico || 0) || null,
+          f.otro_partido_texto || null
+        ]
       );
     }
 
@@ -2199,6 +2227,7 @@ exports.getPerfilCompleto = async (req, res) => {
         p.curp,
         p.rfc,
         p.clave_elector,
+        p.edad,
         p.estado_civil,
         p.escala_influencia,
         p.sin_servicio_publico,
@@ -2449,11 +2478,23 @@ exports.getPerfilCompleto = async (req, res) => {
               'nombre',      fp.nombre,
               'parentesco',  fp.parentesco,
               'cargo',       fp.cargo,
-              'institucion', fp.institucion
+              'institucion', fp.institucion,
+              'id_partido_politico', fp.id_partido_politico,
+              'partido_politico', cp_fam.nombre,
+              'partido_politico_nombre', cp_fam.nombre,
+              'partido_politico_siglas', cp_fam.siglas,
+              'otro_partido_texto', fp.otro_partido_texto,
+              'partido_display', COALESCE(
+                NULLIF(TRIM(fp.otro_partido_texto), ''),
+                NULLIF(TRIM(cp_fam.siglas), ''),
+                cp_fam.nombre
+              )
             )
             ORDER BY fp.id_familiar ASC
           )
           FROM familiares_politica fp
+          LEFT JOIN catalogo_partidos cp_fam
+            ON cp_fam.id_partido = fp.id_partido_politico
           WHERE fp.id_persona = p.id_persona
         ), '[]'::jsonb) AS familiares,
 
@@ -3005,10 +3046,8 @@ function buildPerfilHtml(p) {
 
   const bannerDecorativo = ""; // aquí puedes insertar un dataURL generado con canvas si luego quieres
 
-function renderSection(title, content, extraClass = "") {
-  if (!content || !String(content).trim()) return "";
+function renderSectionHead(title) {
   return `
-    <section class="section ${extraClass}">
       <div class="section-head keep-together">
         <div class="timeline-axis">
           <div class="timeline-dot"></div>
@@ -3019,7 +3058,14 @@ function renderSection(title, content, extraClass = "") {
           <div class="section-title">${esc(title)}</div>
         </div>
       </div>
+  `;
+}
 
+function renderSection(title, content, extraClass = "") {
+  if (!content || !String(content).trim()) return "";
+  return `
+    <section class="section ${extraClass}">
+      ${renderSectionHead(title)}
       <div class="section-body">
         ${content}
       </div>
@@ -3033,14 +3079,14 @@ function renderListSection(title, items, renderItem, opts = {}) {
 
   // Agregamos avoid-break a cada item individual de la lista
   const itemClass = opts.long ? "item" : "item avoid-break";
-  const itemStyle = opts.long ? "margin-bottom: 6px;" : "margin-bottom: 6px; break-inside: avoid; page-break-inside: avoid;";
-  const body = arr.map(it => `
+  const itemStyle = "margin-bottom: 6px; break-inside: avoid; page-break-inside: avoid;";
+  const renderedItems = arr.map(it => `
     <div class="${itemClass}" style="${itemStyle}">
       ${renderItem(it)}
     </div>
-  `).join("");
+  `);
 
-  return renderSection(title, body, opts.long ? "section-long" : "");
+  return renderSection(title, renderedItems.join(""), opts.long ? "section-long" : "");
 }
   const htmlDatosGenerales = `
     <div class="kv">
@@ -3048,6 +3094,7 @@ function renderListSection(title, items, renderItem, opts = {}) {
       <div class="k">RFC</div><div class="v mono">${esc(p.rfc || "—")}</div>
       <div class="k">Clave elector</div><div class="v mono">${esc(p.clave_elector || "—")}</div>
       <div class="k">Estado civil</div><div class="v">${esc(p.estado_civil || "—")}</div>
+      <div class="k">Edad</div><div class="v">${esc(p.edad != null && p.edad !== "" ? `${p.edad} a\u00f1os` : "Sin especificar")}</div>
       <div class="k">Residencia legal</div><div class="v">${esc(munLegal)}</div>
       <div class="k">Residencia real</div><div class="v">${esc(munReal)}</div>
       <div class="k">Municipio trabajo</div><div class="v">${esc(munTrab)}</div>
@@ -3212,10 +3259,6 @@ function renderListSection(title, items, renderItem, opts = {}) {
     position: relative;
     margin-bottom: 18px;
     /* Evita que la sección se parta justo en el título */
-    break-inside: auto; 
-  }
-
-  .section:not(.section-long) {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -3232,6 +3275,15 @@ function renderListSection(title, items, renderItem, opts = {}) {
     page-break-after: avoid;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .section-start {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .section-body-continuation {
+    margin-top: 0;
   }
 
   .section-header {
@@ -3297,10 +3349,14 @@ function renderListSection(title, items, renderItem, opts = {}) {
     widows: 3;
   }
 
-  .section-long .section-body,
+  .section-long .section-body {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .section-long .item {
-    break-inside: auto;
-    page-break-inside: auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   /* 5. DATOS Y FOTOS */
@@ -3522,8 +3578,8 @@ function renderListSection(title, items, renderItem, opts = {}) {
   }
 
   .section-long .item {
-    break-inside: auto;
-    page-break-inside: auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   /* Tablas */
@@ -3758,10 +3814,13 @@ function renderListSection(title, items, renderItem, opts = {}) {
       <div class="m">${esc([r.nivel ? titleCaseEs(r.nivel) : "", r.cargo ? r.cargo : ""].filter(Boolean).join(" • "))}</div>
     `, { long: true })}
 
-    ${renderListSection("Familiares en política", p.familiares, (f)=>`
+    ${renderListSection("Familiares en política", p.familiares, (f)=>{
+      const partidoFam = f.partido_display || f.otro_partido_texto || f.partido_politico_siglas || f.partido_politico_nombre || f.partido_politico;
+      return `
       <div class="t">${esc([f.nombre, f.parentesco].filter(Boolean).join(" • ") || "—")}</div>
-      <div class="m">${esc([f.cargo, f.institucion].filter(Boolean).join(" • ") || "")}</div>
-    `, { long: true })}
+      <div class="m">${esc([f.cargo, f.institucion, partidoFam ? `Partido: ${partidoFam}` : null].filter(Boolean).join(" • ") || "")}</div>
+    `;
+    }, { long: true })}
 
     ${renderListSection("Participación en organizaciones", p.participacion_organizaciones, (o)=>`
       <div class="t">${esc((normalizeTipoEnum(o.tipo) ? (normalizeTipoEnum(o.tipo) + ": ") : "") + (o.nombre || "—"))}</div>
@@ -3773,7 +3832,7 @@ function renderListSection(title, items, renderItem, opts = {}) {
       <div class="t">${esc(x.cargo || "—")}</div>
       <div class="m">${esc(x.organizacion || "")}</div>
       <div class="m">${esc(x.periodo || "")}</div>
-    `, { long: true })}
+    `)}
 
     ${renderListSection("Fuentes de consulta", p.fuentes_consulta, (f)=>`
       <div class="t">${esc(f.fuente || "—")}</div>
@@ -3816,11 +3875,6 @@ function renderListSection(title, items, renderItem, opts = {}) {
         </div>
       </div>
     `)}
-
-    <div class="foot">
-      <div>Generado: ${esc(fmtDate(new Date()))}</div>
-      <div>ID persona: ${esc(p.id_persona)}</div>
-    </div>
 
   </div>
 </body>
@@ -3893,6 +3947,7 @@ exports.getPerfilPdf = async (req, res) => {
       p.curp,
       p.rfc,
       p.clave_elector,
+      p.edad,
       p.estado_civil,
       p.escala_influencia,
       p.sin_servicio_publico,
@@ -4160,11 +4215,23 @@ exports.getPerfilPdf = async (req, res) => {
             'nombre',      fp.nombre,
             'parentesco',  fp.parentesco,
             'cargo',       fp.cargo,
-            'institucion', fp.institucion
+            'institucion', fp.institucion,
+            'id_partido_politico', fp.id_partido_politico,
+            'partido_politico', cp_fam.nombre,
+            'partido_politico_nombre', cp_fam.nombre,
+            'partido_politico_siglas', cp_fam.siglas,
+            'otro_partido_texto', fp.otro_partido_texto,
+            'partido_display', COALESCE(
+              NULLIF(TRIM(fp.otro_partido_texto), ''),
+              NULLIF(TRIM(cp_fam.siglas), ''),
+              cp_fam.nombre
+            )
           )
           ORDER BY fp.id_familiar ASC
         )
         FROM familiares_politica fp
+        LEFT JOIN catalogo_partidos cp_fam
+          ON cp_fam.id_partido = fp.id_partido_politico
         WHERE fp.id_persona = p.id_persona
       ), '[]'::jsonb) AS familiares,
 
@@ -6645,7 +6712,8 @@ exports.updatePersonaCompleta = async (req, res) => {
         foto_url = $27,
         id_oficina = $28,
         modificado_por = $29,
-        nivel_confiabilidad = $30
+        nivel_confiabilidad = $30,
+        edad = $31
       WHERE id_persona = $1
       `,
       [
@@ -6684,7 +6752,8 @@ exports.updatePersonaCompleta = async (req, res) => {
 
         oficinaFinal,               // OJO: ver nota abajo
         req.user.id_usuario,        // modificado_por
-        nc                          // ✅ nivel_confiabilidad (NO asignar dentro)
+        nc,
+        persona.edad || null                          // ✅ nivel_confiabilidad (NO asignar dentro)
       ]
     );
 
@@ -7138,14 +7207,43 @@ exports.updatePersonaCompleta = async (req, res) => {
 
     // 14) Familiares
     await del("familiares_politica");
+
     for (const f of familiares) {
-      const tieneAlgo = f?.nombre || f?.parentesco || f?.cargo || f?.institucion;
+      const idPartido = Number(f?.id_partido_politico || 0) || null;
+      const otroPartido = String(f?.otro_partido_texto || "").trim() || null;
+
+      const tieneAlgo =
+        f?.nombre ||
+        f?.parentesco ||
+        f?.cargo ||
+        f?.institucion ||
+        idPartido ||
+        otroPartido;
+
       if (!tieneAlgo) continue;
 
       await client.query(
-        `INSERT INTO familiares_politica (id_persona, nombre, parentesco, cargo, institucion)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [id_persona, f.nombre || null, f.parentesco || null, f.cargo || null, f.institucion || null]
+        `
+        INSERT INTO familiares_politica (
+          id_persona,
+          nombre,
+          parentesco,
+          cargo,
+          institucion,
+          id_partido_politico,
+          otro_partido_texto
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `,
+        [
+          id_persona,
+          f.nombre || null,
+          f.parentesco || null,
+          f.cargo || null,
+          f.institucion || null,
+          idPartido,
+          otroPartido
+        ]
       );
     }
 
@@ -7478,7 +7576,8 @@ exports.getPayloadEdicion = async (req, res) => {
         created_at,
         modificado_por,
         updated_at,
-        nivel_confiabilidad
+        nivel_confiabilidad,
+        edad
       FROM personas
       WHERE id_persona = $1`,
       [id_persona]
@@ -7692,10 +7791,18 @@ exports.getPayloadEdicion = async (req, res) => {
 
       // familiares_politica (PK: id_familiar)
       client.query(
-        `SELECT nombre, parentesco, cargo, institucion
-         FROM familiares_politica
-         WHERE id_persona = $1
-         ORDER BY id_familiar ASC`,
+        `
+        SELECT
+          nombre,
+          parentesco,
+          cargo,
+          institucion,
+          id_partido_politico,
+          otro_partido_texto
+        FROM familiares_politica
+        WHERE id_persona = $1
+        ORDER BY id_familiar ASC
+        `,
         [id_persona]
       ).then(r => r.rows),
 
