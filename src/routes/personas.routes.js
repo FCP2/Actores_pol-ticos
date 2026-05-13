@@ -26,7 +26,7 @@ router.post('/analista/personas/:id/devolver-final',
 
 router.post('/analista/personas/observaciones/:idObservacion/atender',
   requireAuth,
-  requireRole('analista', 'superadmin'),
+  requireRole('capturista', 'analista', 'superadmin'),
   requireOffice,
   applySmartFilters,
   ctrl.atenderObservacionPersona
@@ -148,6 +148,8 @@ router.get(
   applySmartFilters,   // 👈 este es el clave
   ctrl.listPersonas
 );
+
+router.patch('/:id/oculto', requireAuth, requireRole('superadmin'), ctrl.toggleOcultoPersona);
 
 router.get('/:id/perfil', requireAuth, requireRole('capturista', 'analista', 'superadmin'), ctrl.getPerfilCompleto);
 router.get('/:id/pdf', requireAuth, requireRole('superadmin', 'analista', 'capturista'), ctrl.getPerfilPdf);
