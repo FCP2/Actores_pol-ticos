@@ -72,6 +72,10 @@ function apiPut(path, body) {
   return apiFetch(path, { method: "PUT", body: JSON.stringify(body || {}) });
 }
 
+function apiPatch(path, body) {
+  return apiFetch(path, { method: "PATCH", body: JSON.stringify(body || {}) });
+}
+
 function apiDelete(path) {
   return apiFetch(path, { method: "DELETE" });
 }
