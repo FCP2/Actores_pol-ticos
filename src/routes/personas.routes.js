@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const ctrl = require('../controllers/personas.controller');
+const reportesCtrl = require('../controllers/reportes.controller');
 const { requireAuth, requireRole, requireOffice } = require('../middlewares/auth');
 const { applySmartFilters } = require('../middlewares/smartFilter'); // .js!
 
@@ -119,6 +120,12 @@ router.get('/reportes/ejecutivo',
   requireAuth,
   applySmartFilters,
   ctrl.reporteEjecutivo
+);
+
+router.get('/reportes/municipios',
+  requireAuth,
+  requireRole('superadmin'),
+  reportesCtrl.reporteMunicipios
 );
 
 router.post(
