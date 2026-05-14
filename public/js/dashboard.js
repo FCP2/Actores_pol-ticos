@@ -465,6 +465,48 @@ function buildGridQuery(extra = {}) {
       }
     });
     
+    $("btnReporteMunicipios")?.addEventListener("click", () => {
+      poblarSelectMunicipiosReporte();
+      bootstrap.Modal.getOrCreateInstance($("modalReporteMunicipios")).show();
+    });
+
+    $("chkTodosMunicipios")?.addEventListener("change", () => {
+      const sel = $("selMunicipiosReporte");
+      const checked = $("chkTodosMunicipios").checked;
+      if (sel) {
+        Array.from(sel.options).forEach(o => { o.selected = checked; });
+        actualizarLblMunicipios();
+        sel.disabled = checked;
+      }
+    });
+
+    $("selMunicipiosReporte")?.addEventListener("change", actualizarLblMunicipios);
+
+    $("btnGenerarReporteMunicipios")?.addEventListener("click", async () => {
+      const todosCheck = $("chkTodosMunicipios")?.checked;
+      const sel = $("selMunicipiosReporte");
+      const seleccionados = todosCheck
+        ? []
+        : Array.from(sel?.selectedOptions || []).map(o => o.value);
+
+      if (!todosCheck && !seleccionados.length) {
+        updateAlert("Selecciona al menos un municipio o marca 'Todos'.", "warning");
+        return;
+      }
+
+      const qs = todosCheck ? "municipios=all" : `municipios=${seleccionados.join(",")}`;
+
+      try {
+        const blob = await fetchBlob(`/api/personas/reportes/municipios?${qs}`);
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        bootstrap.Modal.getOrCreateInstance($("modalReporteMunicipios")).hide();
+      } catch (err) {
+        updateAlert(err.message || "No se pudo generar el reporte.", "danger");
+      }
+    });
+
     $("btnExportExcel")?.addEventListener("click", () => exportGrid("xlsx"));
     $("btnExportCsv")?.addEventListener("click", () => exportGrid("csv"));
     $("btnExportPdf")?.addEventListener("click", () => updateAlert("La exportación PDF ejecutiva la conectamos en el siguiente paso.", "secondary"));
@@ -1032,6 +1074,30 @@ async function loadReferentesDashboard() {
   } catch (e) {
     console.error("Error cargando referentes dashboard:", e);
   }
+}
+
+function poblarSelectMunicipiosReporte() {
+  const sel = $("selMunicipiosReporte");
+  if (!sel || sel.options.length > 1) return; // ya poblado
+
+  (municipiosDb || []).forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = String(m.id_municipio);
+    opt.textContent = m.nombre;
+    sel.appendChild(opt);
+  });
+
+  actualizarLblMunicipios();
+}
+
+function actualizarLblMunicipios() {
+  const sel = $("selMunicipiosReporte");
+  const lbl = $("lblMunicipiosSeleccionados");
+  if (!sel || !lbl) return;
+  const n = $("chkTodosMunicipios")?.checked
+    ? sel.options.length
+    : sel.selectedOptions.length;
+  lbl.textContent = `${n} seleccionado(s)`;
 }
 
   /* =========================
