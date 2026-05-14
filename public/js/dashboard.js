@@ -434,6 +434,9 @@ function buildGridQuery(extra = {}) {
       loadAllDashboardData();
     });
 
+    if (!canVerifyFinal()) {
+      $("btnIrCaptura")?.classList.add("d-none");
+    }
     $("btnIrCaptura")?.addEventListener("click", () => {
       location.href = "/captura";
     });
@@ -1092,7 +1095,7 @@ function actionsFormatter(cell) {
   const row = cell.getRow().getData();
   const user = getCurrentUser();
   const isSuperadmin = Array.isArray(user.roles) && user.roles.includes("superadmin");
-  const ocultarBtn = isSuperadmin
+  const ocultarBtn = isSuperadmin && canVerifyFinal()
     ? `<button class="grid-action-btn ${row.oculto ? "danger" : "secondary"}"
          data-action="ocultar" data-id="${row.id_persona}"
          title="${row.oculto ? "Mostrar registro" : "Ocultar registro"}">
@@ -1573,7 +1576,7 @@ function openDetailPanel(row) {
     ${(() => {
       const u = getCurrentUser();
       const esSuperadmin = Array.isArray(u.roles) && u.roles.includes("superadmin");
-      if (!esSuperadmin) return "";
+      if (!esSuperadmin || !canVerifyFinal()) return "";
       return `
         <div class="d-flex justify-content-end mb-2">
           <button id="btnToggleOculto" class="btn btn-sm ${row.oculto ? "btn-outline-success" : "btn-outline-danger"}">
