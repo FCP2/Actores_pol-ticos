@@ -183,11 +183,11 @@
             <button class="btn btn-outline-secondary" id="btnRefreshDashboard">
               <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
             </button>
-            <button class="btn btn-outline-primary" id="btnExportar">
-              <i class="bi bi-download me-1"></i>Exportar
-            </button>
             <button class="btn btn-primary" id="btnReporteEjecutivo">
               <i class="bi bi-file-earmark-pdf me-1"></i>Reporte
+            </button>
+            <button class="btn btn-outline-success" id="btnReporteMunicipios">
+              <i class="bi bi-geo-alt-fill me-1"></i>Por municipio
             </button>
           </div>
         </div>
@@ -747,6 +747,50 @@
         <div class="modal-footer">
           <button class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
           <button class="btn btn-danger" id="btnConfirmarDesverificarFinal">Retirar verificación</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL REPORTE POR MUNICIPIO -->
+  <div class="modal fade" id="modalReporteMunicipios" tabindex="-1" aria-labelledby="modalReporteMunicipiosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header modal-header-brand">
+          <h5 class="modal-title" id="modalReporteMunicipiosLabel">
+            <i class="bi bi-geo-alt-fill me-2"></i>Reporte de actores por municipio
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Selecciona uno o varios municipios para incluir en el reporte. Mantén
+            <kbd>Ctrl</kbd> para selección múltiple, o usa la casilla de abajo para incluir todos.
+          </p>
+
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="chkTodosMunicipios">
+            <label class="form-check-label fw-semibold" for="chkTodosMunicipios">
+              Incluir todos los municipios
+            </label>
+          </div>
+
+          <label class="form-label" for="selMunicipiosReporte">Municipios</label>
+          <select
+            id="selMunicipiosReporte"
+            class="form-select"
+            multiple
+            size="12"
+          ></select>
+          <div class="form-text">
+            <span id="lblMunicipiosSeleccionados">0 seleccionado(s)</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-success" id="btnGenerarReporteMunicipios">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Generar PDF
+          </button>
         </div>
       </div>
     </div>
