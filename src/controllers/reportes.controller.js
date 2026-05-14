@@ -113,8 +113,8 @@ exports.reporteMunicipios = async (req, res) => {
     // ── Encabezado institucional (base64 para no depender de red en Puppeteer) ─
     const headerImg = await fetchBase64(HEADER_IMG_URL);
 
-    // ── Distribución en 4 columnas ────────────────────────
-    const NCOLS = rows.length > 0 ? (rows.length <= 40 ? 3 : 4) : 1;
+    // ── Distribución en 3 columnas ────────────────────────
+    const NCOLS = rows.length > 0 ? 3 : 1;
     const perCol = Math.ceil(rows.length / NCOLS);
 
     const columnasHtml = Array.from({ length: NCOLS }, (_, ci) => {
@@ -158,7 +158,7 @@ exports.reporteMunicipios = async (req, res) => {
     --border: #e5e7eb;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 9.5px;
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 12px;
          color: #111; background: #fff; }
 
   /* ── Encabezado institucional ── */
@@ -175,8 +175,8 @@ exports.reporteMunicipios = async (req, res) => {
     align-items: center;
     border-top: 3px solid var(--dorado);
   }
-  .title-bar h1 { font-size: 13px; font-weight: 700; letter-spacing: .3px; }
-  .title-bar .meta { font-size: 8.5px; text-align: right; opacity: .9; line-height: 1.7; }
+  .title-bar h1 { font-size: 15px; font-weight: 700; letter-spacing: .3px; }
+  .title-bar .meta { font-size: 11px; text-align: right; opacity: .9; line-height: 1.7; }
 
   /* ── Barra resumen ── */
   .sumbar {
@@ -188,9 +188,9 @@ exports.reporteMunicipios = async (req, res) => {
     align-items: center;
   }
   .sum-item { display: flex; flex-direction: column; }
-  .sum-label { font-size: 7.5px; color: var(--gray); text-transform: uppercase;
+  .sum-label { font-size: 10px; color: var(--gray); text-transform: uppercase;
                letter-spacing: .5px; }
-  .sum-value { font-size: 13px; font-weight: 700; color: var(--guinda); }
+  .sum-value { font-size: 16px; font-weight: 700; color: var(--guinda); }
   .sum-divider { width: 1px; background: var(--dorado); align-self: stretch; opacity: .5; }
 
   /* ── Grid de columnas ── */
@@ -208,8 +208,8 @@ exports.reporteMunicipios = async (req, res) => {
     justify-content: space-between;
     background: var(--guinda);
     color: #fff;
-    padding: 4px 6px;
-    font-size: 8px;
+    padding: 5px 8px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .4px;
@@ -221,29 +221,29 @@ exports.reporteMunicipios = async (req, res) => {
   .mun-row {
     display: flex;
     align-items: center;
-    padding: 2.5px 4px;
+    padding: 4px 6px;
     border-bottom: 1px solid var(--border);
-    line-height: 1.3;
+    line-height: 1.4;
   }
   .mun-row.even { background: #fafafa; }
   .mun-row.odd  { background: #fff; }
   .rk {
-    min-width: 18px;
-    font-size: 7.5px;
+    min-width: 22px;
+    font-size: 10px;
     color: var(--dorado);
     font-weight: 700;
     text-align: right;
-    margin-right: 4px;
+    margin-right: 6px;
     flex-shrink: 0;
   }
-  .nm { flex: 1; font-size: 8.5px; color: #1f2937; overflow: hidden; }
+  .nm { flex: 1; font-size: 12px; color: #1f2937; overflow: hidden; }
   .ct {
-    min-width: 26px;
-    font-size: 8.5px;
+    min-width: 32px;
+    font-size: 12px;
     font-weight: 700;
     color: var(--guinda);
     text-align: right;
-    margin-left: 4px;
+    margin-left: 6px;
     flex-shrink: 0;
   }
   .mun-row.zero .nm { color: #9ca3af; }
