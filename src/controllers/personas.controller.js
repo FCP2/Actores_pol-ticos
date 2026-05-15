@@ -8772,7 +8772,6 @@ exports.kpiAlertasDashboard = async (req, res) => {
           FROM personas_observaciones po
           JOIN base_personas bp ON bp.id_persona = po.id_persona
           WHERE po.atendida = true
-            AND po.atendida_at::date = CURRENT_DATE
         ) AS observaciones_atendidas_hoy,
 
         (
@@ -8825,7 +8824,6 @@ exports.kpiAlertasDashboard = async (req, res) => {
             LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
             LEFT JOIN usuarios u_atiende ON u_atiende.id_usuario = po.atendida_por
             WHERE po.atendida = true
-              AND po.atendida_at::date = CURRENT_DATE
             ORDER BY po.atendida_at DESC, po.id_observacion DESC
             LIMIT 8
           ) x
