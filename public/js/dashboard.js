@@ -104,6 +104,15 @@ const gridState = {
     return user?.puede_verificar_final === true;
   }
 
+  function irAEdicionCaptura(idPersona) {
+    const id = Number(idPersona);
+    if (!Number.isFinite(id) || id <= 0) {
+      updateAlert("No se pudo abrir el registro para editar.", "warning");
+      return;
+    }
+    location.href = `/captura?edit=${encodeURIComponent(String(id))}`;
+  }
+
   function debounce(fn, wait = 250) {
     let t = null;
     return (...args) => {
@@ -1460,9 +1469,7 @@ function initPersonasGrid() {
           }
 
           if (action === "edit") {
-            if (typeof window.openEditPersonaModal === "function") {
-              window.openEditPersonaModal(row.id_persona);
-            }
+            irAEdicionCaptura(row.id_persona);
             return;
           }
 
@@ -1649,7 +1656,11 @@ function openDetailPanel(row) {
       const esSuperadmin = Array.isArray(u.roles) && u.roles.includes("superadmin");
       if (!esSuperadmin || !canVerifyFinal()) return "";
       return `
-        <div class="d-flex justify-content-end mb-2">
+        <div class="d-flex justify-content-end gap-2 mb-2">
+          <button id="btnEditarCapturaDetalle" class="btn btn-sm btn-primary">
+            <i class="bi bi-pencil-square me-1"></i>
+            Editar
+          </button>
           <button id="btnToggleOculto" class="btn btn-sm ${row.oculto ? "btn-outline-success" : "btn-outline-danger"}">
             <i class="bi bi-eye${row.oculto ? "" : "-slash"} me-1"></i>
             ${row.oculto ? "Hacer visible para la oficina" : "Ocultar para la oficina"}
@@ -1738,6 +1749,10 @@ function openDetailPanel(row) {
       </div>
     </div>
   `;
+
+  $("btnEditarCapturaDetalle")?.addEventListener("click", () => {
+    irAEdicionCaptura(row.id_persona);
+  });
 
   // toggle ocultar desde el panel de detalle
   $("btnToggleOculto")?.addEventListener("click", () => {
@@ -2216,19 +2231,61 @@ function renderChartOficinas(rows) {
   });
 }
 
-function showAlertDetailModal(alerta) {
+const OBSERVACIONES_DESCARTADAS_KEY = "dashboard_observaciones_descartadas_v1";
+
+function getObservacionesDescartadas() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(OBSERVACIONES_DESCARTADAS_KEY) || "[]").map(String));
+  } catch {
+    return new Set();
+  }
+}
+
+function descartarObservacionAlerta(idObservacion) {
+  const hidden = getObservacionesDescartadas();
+  hidden.add(String(idObservacion));
+  localStorage.setItem(OBSERVACIONES_DESCARTADAS_KEY, JSON.stringify([...hidden]));
+}
+
+function restaurarObservacionesDescartadas() {
+  localStorage.removeItem(OBSERVACIONES_DESCARTADAS_KEY);
+}
+
+function showAlertDetailModal(alerta, opts = {}) {
   const body = $("alertaDetalleBody");
   const title = $("modalAlertaDetalleLabel");
   if (!body || !title) return;
 
-  const rows = Array.isArray(alerta?.items) ? alerta.items : [];
+  const hidden = getObservacionesDescartadas();
+  const isObservacionAlert = alerta?.tipo === "observaciones";
+  const mostrarOcultas = opts.mostrarOcultas === true;
+  const allRows = Array.isArray(alerta?.items) ? alerta.items : [];
+  const ocultasCount = isObservacionAlert
+    ? allRows.filter(r => r.id_observacion && hidden.has(String(r.id_observacion))).length
+    : 0;
+  const rows = allRows
+    .filter(r => !isObservacionAlert || mostrarOcultas || !r.id_observacion || !hidden.has(String(r.id_observacion)));
   title.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${esc(alerta?.title || "Detalle de alerta")}`;
 
   if (!rows.length) {
-    body.innerHTML = `<div class="text-muted">No hay detalle reciente para esta alerta.</div>`;
+    body.innerHTML = `
+      ${isObservacionAlert && ocultasCount ? `
+        <div class="d-flex gap-2 flex-wrap mb-3">
+          <button type="button" class="btn btn-sm btn-outline-primary" data-action="mostrar-observaciones-ocultas">Mostrar ocultas (${ocultasCount})</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-action="desocultar-observaciones">Desocultar todas</button>
+        </div>
+      ` : ""}
+      <div class="text-muted">No hay detalle visible para esta alerta.</div>
+    `;
   } else {
     body.innerHTML = `
       <div class="small text-muted mb-3">${esc(alerta?.text || "")}</div>
+      ${isObservacionAlert ? `
+        <div class="d-flex gap-2 flex-wrap mb-3">
+          ${ocultasCount && !mostrarOcultas ? `<button type="button" class="btn btn-sm btn-outline-primary" data-action="mostrar-observaciones-ocultas">Mostrar ocultas (${ocultasCount})</button>` : ""}
+          ${ocultasCount ? `<button type="button" class="btn btn-sm btn-outline-danger" data-action="desocultar-observaciones">Desocultar todas</button>` : ""}
+        </div>
+      ` : ""}
       <div class="list-group list-group-flush">
         ${rows.map(r => {
           // ── Registros ocultos ──
@@ -2252,17 +2309,21 @@ function showAlertDetailModal(alerta) {
 
           // ── Observaciones / devoluciones (formato original) ──
           const fecha = r.atendida_at || r.created_at;
+          const descartada = isObservacionAlert && r.id_observacion && hidden.has(String(r.id_observacion));
           const atendida = r.atendida_por_nombre
             ? `<div class="small text-success mt-1"><i class="bi bi-check-circle me-1"></i>Atendida por: ${esc(r.atendida_por_nombre)}${r.atendida_at ? ` - ${esc(fmtDT(r.atendida_at))}` : ""}</div>`
             : "";
           return `
-            <div class="list-group-item px-0">
+            <div class="list-group-item px-0" data-alert-item="${esc(r.id_observacion || "")}">
               <div class="d-flex justify-content-between gap-3 flex-wrap">
                 <div>
                   <div class="fw-semibold">${esc(r.persona || `Registro #${r.id_persona || ""}`)}</div>
-                  <div class="small text-muted">ID ${esc(r.id_persona || "-")} - Nivel ${esc(r.nivel || "-")} - Para ${esc(r.dirigido_a || "-")}</div>
+                  <div class="small text-muted">ID ${esc(r.id_persona || "-")} - Nivel ${esc(r.nivel || "-")} - Para ${esc(r.dirigido_a || "-")} ${descartada ? " - Oculta" : ""}</div>
                 </div>
-                <div class="small text-muted">${esc(fmtDT(fecha))}</div>
+                <div class="text-end">
+                  <div class="small text-muted">${esc(fmtDT(fecha))}</div>
+                  ${isObservacionAlert && r.id_observacion && !descartada ? `<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-action="descartar-observacion-alerta" data-id="${esc(r.id_observacion)}">Ocultar alerta</button>` : ""}
+                </div>
               </div>
               <div class="mt-2">${esc(r.observacion || "-")}</div>
               <div class="small text-muted mt-1">Observó: ${esc(r.creado_por_nombre || "Sistema")}</div>
@@ -2273,6 +2334,26 @@ function showAlertDetailModal(alerta) {
       </div>
     `;
   }
+
+  body.querySelectorAll('[data-action="descartar-observacion-alerta"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      if (!id) return;
+      descartarObservacionAlerta(id);
+      showAlertDetailModal(alerta);
+    });
+  });
+
+  body.querySelectorAll('[data-action="mostrar-observaciones-ocultas"]').forEach(btn => {
+    btn.addEventListener("click", () => showAlertDetailModal(alerta, { mostrarOcultas: true }));
+  });
+
+  body.querySelectorAll('[data-action="desocultar-observaciones"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      restaurarObservacionesDescartadas();
+      showAlertDetailModal(alerta);
+    });
+  });
 
   bootstrap.Modal.getOrCreateInstance($("modalAlertaDetalle")).show();
 }
@@ -2304,14 +2385,24 @@ async function renderAlertSummary() {
     alertas.push({
       cls: "is-info",
       title: `${stats.observaciones_atendidas_hoy} observación(es) atendida(s) hoy`,
-      text: "Hubo seguimiento reciente a observaciones operativas."
+      text: "Hay observaciones operativas atendidas con seguimiento registrado."
     });
   }
 
   alertas.forEach(a => {
-    if (a.title.includes("pendiente")) a.items = stats.observaciones_pendientes_detalle || [];
-    if (a.title.includes("FINAL")) a.items = stats.devoluciones_final_7d_detalle || [];
-    if (a.title.includes("atendida")) a.items = stats.observaciones_atendidas_hoy_detalle || [];
+    if (a.title.includes("pendiente")) {
+      a.tipo = "observaciones";
+      a.items = stats.observaciones_pendientes_detalle || [];
+    }
+    if (a.title.includes("FINAL")) {
+      a.tipo = "observaciones";
+      a.items = stats.devoluciones_final_7d_detalle || [];
+    }
+    if (a.title.includes("atendida")) {
+      a.tipo = "observaciones";
+      a.title = `${stats.observaciones_atendidas_hoy} observacion(es) atendida(s)`;
+      a.items = stats.observaciones_atendidas_hoy_detalle || [];
+    }
   });
 
   if (gridState.solo_pendientes_final) {
