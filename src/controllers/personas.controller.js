@@ -337,6 +337,17 @@ exports.listPersonasAdminGrid = async (req, res) => {
       `);
     }
 
+    if (req.query.sin_municipio_principal === "1") {
+      where.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM personas_municipios_trabajo pmt
+          WHERE pmt.id_persona = p.id_persona
+            AND pmt.es_principal = true
+        )
+      `);
+    }
+
     const refMode = String(req.query.refMode || "").trim(); // "exact" | ""
 
     // -------- filtro referente
