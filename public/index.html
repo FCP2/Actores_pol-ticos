@@ -1852,6 +1852,18 @@ function showAlert(a, b) {
     showAlert("danger", "No pude cargar el registro para editar: " + e.message);
   }
 }
+
+async function cargarEdicionDesdeUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const idPersona = Number(params.get("edit") || params.get("editar") || params.get("id_persona") || 0);
+  if (!Number.isFinite(idPersona) || idPersona <= 0) return;
+
+  await onEditPersona(idPersona);
+
+  const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`;
+  window.history.replaceState({}, "", cleanUrl);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 //detele
 async function onDeletePersona(id_persona) {
   const ok = confirm(`¿Eliminar el registro #${id_persona}? Esta acción no se puede deshacer.`);
@@ -6548,6 +6560,8 @@ function initGrupoPostulacionMulti() {
           }
         }
       });
+
+      await cargarEdicionDesdeUrl();
       
     } catch (e) {
       console.error(e);
