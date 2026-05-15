@@ -60,6 +60,7 @@ const gridState = {
   referente: "",
   refNivel: "",
   refMode: "exact",
+  sinMunicipioPrincipal: false,
   sortField: "updated_at",
   sortDir: "desc",
   pageSize: 25
@@ -190,8 +191,9 @@ function collectGridFilters() {
   // ✅ nuevo filtro por nivel de verificación
   gridState.verifLevel = $("fltVerificacion")?.value || "";
 
-  // ✅ viejo filtro rápido: solo pendientes finales
-  gridState.verificado = $("fltSoloPendientesFinal")?.checked ? "0" : "";
+  gridState.verificado = "";
+
+  gridState.sinMunicipioPrincipal = $("fltSinMunicipioPrincipal")?.checked || false;
 
   gridState.pageSize = Number($("gridPageSize")?.value || 25);
 }
@@ -219,6 +221,7 @@ function buildGridQuery(extra = {}) {
 
     // ✅ viejo filtro binario, por compatibilidad
     verificado: gridState.verificado,
+    sin_municipio_principal: gridState.sinMunicipioPrincipal ? "1" : "",
     partidoId: gridState.partidoId,
 
     referente: gridState.referente,
@@ -630,7 +633,8 @@ function buildGridQuery(extra = {}) {
       "fltRegion", "filtroOficina", "selMunicipio", "fltVerificacion",
       "fltPartido", "fltConfiabilidad", "fltLiderazgo", "fltControversias",
       "fltEmpresas", "fltElecciones", "fltCapturista", "fltAnalista",
-      "fltVerificadorFinal", "fltFechaDesde", "fltFechaHasta", "fltSoloPendientesFinal"
+      "fltVerificadorFinal", "fltFechaDesde", "fltFechaHasta",
+      "fltSinMunicipioPrincipal"
     ].forEach(id => {
       const el = $(id);
       if (!el) return;
@@ -676,7 +680,8 @@ function buildGridQuery(extra = {}) {
       if (el) el.value = "";
     });
 
-    if ($("fltSoloPendientesFinal")) $("fltSoloPendientesFinal").checked = false;
+    if ($("fltSinMunicipioPrincipal")) $("fltSinMunicipioPrincipal").checked = false;
+    gridState.sinMunicipioPrincipal = false;
 
     gridState.q = "";
     gridState.region = "";
@@ -736,7 +741,7 @@ function buildGridQuery(extra = {}) {
     if (gridState.q) active.push(`búsqueda: "${gridState.q}"`);
     if (gridState.oficinaId) active.push("oficina");
     if (gridState.municipio_trabajo) active.push("municipio");
-    if (gridState.verificado === "0") active.push("pendientes FINAL");
+    if (gridState.sinMunicipioPrincipal) active.push("sin municipio principal");
     setText("gridInfoExtra", active.length ? `Filtros activos: ${active.join(" · ")}` : "Sin filtros aplicados");
   }
 
