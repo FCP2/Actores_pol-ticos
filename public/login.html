@@ -2,230 +2,707 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Login</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Acceso al sistema — Actores Políticos</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 
-  <!-- Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    :root {
+      --guinda:     #8b2136;
+      --guinda-dk:  #6b1828;
+      --guinda-lt:  #a83248;
+      --dorado:     #b89056;
+      --dorado-lt:  #d4aa72;
+      --ok:         #16a34a;
+      --err:        #dc2626;
+      --border:     #e5e7eb;
+      --gray:       #6b7280;
+      --text:       #111827;
+    }
 
-  <!-- Tu CSS (cuando me lo pases lo integramos mejor) -->
-  <link rel="stylesheet" href="/static/css/main.css">
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: "Segoe UI", system-ui, Arial, sans-serif;
+      color: var(--text);
+      background: #f1f5f9;
+    }
+
+    /* ── Layout split ──────────────────────────────────────── */
+    .login-shell {
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* Panel izquierdo — marca */
+    .brand-panel {
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 48px 40px;
+      background: linear-gradient(160deg, var(--guinda-dk) 0%, var(--guinda) 55%, var(--guinda-lt) 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .brand-panel::before {
+      content: "";
+      position: absolute;
+      width: 480px; height: 480px;
+      border-radius: 50%;
+      border: 60px solid rgba(255,255,255,.05);
+      top: -120px; right: -120px;
+    }
+    .brand-panel::after {
+      content: "";
+      position: absolute;
+      width: 320px; height: 320px;
+      border-radius: 50%;
+      border: 40px solid rgba(255,255,255,.05);
+      bottom: -80px; left: -80px;
+    }
+
+    .brand-logo-wrap img {
+      height: 56px;
+      object-fit: contain;
+      filter: brightness(0) invert(1);
+      opacity: .92;
+    }
+
+    .brand-body { position: relative; z-index: 1; }
+
+    .brand-tagline {
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.2;
+      margin-bottom: 16px;
+    }
+    .brand-tagline span { color: var(--dorado-lt); }
+
+    .brand-desc {
+      font-size: 15px;
+      color: rgba(255,255,255,.75);
+      line-height: 1.6;
+      max-width: 340px;
+    }
+
+    .brand-footer {
+      font-size: 12px;
+      color: rgba(255,255,255,.45);
+      position: relative; z-index: 1;
+    }
+
+    /* Panel derecho — formulario */
+    .form-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      background: #fff;
+    }
+
+    .form-box {
+      width: 100%;
+      max-width: 420px;
+      animation: fadeUp .4s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Logo móvil */
+    .mobile-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .mobile-logo img {
+      height: 48px;
+      object-fit: contain;
+    }
+    .mobile-logo-text .name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--guinda);
+    }
+    .mobile-logo-text .sub {
+      font-size: 11px;
+      color: var(--gray);
+    }
+
+    /* Encabezado del form */
+    .form-heading { margin-bottom: 28px; }
+    .form-heading h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .form-heading p {
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    /* ── Campos ─────────────────────────────────────────────── */
+    .field { margin-bottom: 20px; }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 13px;
+      color: #9ca3af;
+      font-size: 16px;
+      pointer-events: none;
+      transition: color .2s;
+    }
+
+    .field-input {
+      width: 100%;
+      padding: 11px 42px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .field-input::placeholder { color: #c4c9d4; }
+
+    .field-input:focus {
+      border-color: var(--guinda);
+      box-shadow: 0 0 0 3.5px rgba(139,33,54,.12);
+    }
+    .field-input:focus ~ .input-icon,
+    .input-wrap:focus-within .input-icon { color: var(--guinda); }
+
+    /* Estados de validación */
+    .field-input.is-valid   { border-color: var(--ok);  }
+    .field-input.is-invalid { border-color: var(--err); background: #fff9f9; }
+    .field-input.is-valid:focus   { box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+    .field-input.is-invalid:focus { box-shadow: 0 0 0 3px rgba(220,38,38,.12); }
+
+    .field-msg {
+      font-size: 11.5px;
+      margin-top: 5px;
+      min-height: 16px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .field-msg.err { color: var(--err); }
+    .field-msg.ok  { color: var(--ok); }
+
+    /* Botón ojo contraseña */
+    .pw-toggle {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #9ca3af;
+      font-size: 17px;
+      padding: 4px;
+      line-height: 1;
+      transition: color .15s;
+    }
+    .pw-toggle:hover { color: var(--guinda); }
+
+    /* ── Recordarme ─────────────────────────────────────────── */
+    .remember-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .remember-row input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--guinda);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .remember-row label {
+      font-size: 13px;
+      color: var(--gray);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ── Botón submit ───────────────────────────────────────── */
+    .btn-login {
+      width: 100%;
+      padding: 13px;
+      background: var(--guinda);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background .18s, transform .12s, box-shadow .18s;
+      box-shadow: 0 4px 14px rgba(139,33,54,.28);
+      letter-spacing: .2px;
+    }
+    .btn-login:hover:not(:disabled) {
+      background: var(--guinda-dk);
+      box-shadow: 0 6px 20px rgba(139,33,54,.38);
+    }
+    .btn-login:active:not(:disabled) { transform: scale(.98); }
+    .btn-login:disabled {
+      opacity: .65;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .65s linear infinite;
+      display: none;
+      flex-shrink: 0;
+    }
+    .btn-login.loading .spinner { display: block; }
+    .btn-login.loading .btn-label { opacity: .8; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Toast de error ─────────────────────────────────────── */
+    .toast-wrap {
+      position: fixed;
+      top: 20px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      width: min(90vw, 400px);
+      pointer-events: none;
+    }
+
+    .toast {
+      background: #fff;
+      border-radius: 12px;
+      padding: 14px 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.18);
+      border-left: 4px solid transparent;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      opacity: 0;
+      transform: translateY(-12px);
+      transition: opacity .25s, transform .25s;
+      pointer-events: auto;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .toast.err  { border-color: var(--err); }
+    .toast.warn { border-color: #f59e0b; }
+    .toast.ok   { border-color: var(--ok); }
+
+    .toast-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .toast.err  .toast-icon { color: var(--err); }
+    .toast.warn .toast-icon { color: #f59e0b; }
+    .toast.ok   .toast-icon { color: var(--ok); }
+
+    .toast-body { flex: 1; }
+    .toast-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .toast-msg   { font-size: 12px; color: var(--gray); line-height: 1.4; }
+
+    /* ── Footer ─────────────────────────────────────────────── */
+    .form-footer {
+      text-align: center;
+      font-size: 12px;
+      color: #c4c9d4;
+      margin-top: 28px;
+    }
+    .form-footer .dot { margin: 0 6px; }
+
+    /* ── Responsive ─────────────────────────────────────────── */
+    @media (min-width: 900px) {
+      .brand-panel { display: flex; flex: 0 0 420px; }
+      .mobile-logo { display: none; }
+      .form-panel  { background: #f8fafc; }
+      .form-box {
+        background: #fff;
+        border-radius: 20px;
+        padding: 44px 48px;
+        box-shadow: 0 4px 32px rgba(0,0,0,.08);
+        border: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 899px) {
+      .form-panel { padding: 40px 20px; background: #fff; }
+    }
+  </style>
 </head>
-
 <body>
-  <main class="container py-4 py-sm-5">
-    <div class="row justify-content-center">
-      <div class="col-12 col-sm-10 col-md-7 col-lg-5 col-xl-4">
-        <div class="card shadow-sm">
-          <div class="card-body p-4 p-sm-4">
 
-            <!-- Encabezado -->
-            <div class="d-flex align-items-center gap-3 mb-3">
-              <div class="brand-badge">
-                <img src="https://lh3.googleusercontent.com/d/1r3VLia9iHTkhhle4ghvhaz2RPC_4-ezg" alt="Logo" class="brand-logo">
-              </div>
-              <div>
-                <h1 class="h5 mb-0">Iniciar sesión</h1>
-                <div class="text-muted small">Acceso al sistema</div>
-              </div>
-            </div>
-
-            <div id="alert" class="alert d-none mb-3" role="alert"></div>
-
-            <form id="loginForm" class="needs-validation" novalidate>
-              <div class="mb-3">
-                <label class="form-label" for="email">Correo</label>
-                <input
-                  class="form-control"
-                  type="email"
-                  id="email"
-                  name="email"
-                  inputmode="email"
-                  autocomplete="email"
-                  required
-                  placeholder="tu@correo.com"
-                >
-                <div class="invalid-feedback">Escribe un correo válido.</div>
-              </div>
-
-              <div class="mb-2">
-                <label class="form-label" for="password">Contraseña</label>
-
-                <div class="input-group">
-                  <input
-                    class="form-control"
-                    type="password"
-                    id="password"
-                    name="password"
-                    autocomplete="current-password"
-                    required
-                    placeholder="••••••••"
-                  >
-                  <button class="btn btn-outline-secondary" type="button" id="togglePass" aria-label="Mostrar contraseña">
-                    Ver
-                  </button>
-                  <div class="invalid-feedback">Escribe tu contraseña.</div>
-                </div>
-              </div>
-
-              <!--<div class="d-flex align-items-center justify-content-between mt-3 mb-3">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" value="" id="remember">
-                   <label class="form-check-label" for="remember">Recordarme</label> 
-                </div>
-                <a class="small link-inst text-decoration-none" href="#" onclick="return false;">¿Olvidaste tu contraseña?</a>
-              </div>-->
-
-              <button class="btn btn-inst w-100 text-white d-inline-flex align-items-center justify-content-center gap-2"
-                      id="btnLogin"
-                      type="submit">
-                <span class="spinner-border spinner-border-sm d-none" id="spinner" aria-hidden="true"></span>
-                <span id="btnText">Entrar</span>
-              </button>
-
-              <p class="text-muted small mt-3 mb-0">
-                Tip: si estás en móvil, gira la pantalla para ver mejor algunos formularios.
-              </p>
-            </form>
-
-          </div>
-        </div>
-
-        <div class="text-center small text-muted mt-3">
-          © <span id="year"></span> ATI
-        </div>
+  <!-- Toast de notificación -->
+  <div class="toast-wrap" id="toastWrap" aria-live="polite">
+    <div class="toast" id="toast" role="alert">
+      <i class="bi toast-icon" id="toastIcon"></i>
+      <div class="toast-body">
+        <div class="toast-title" id="toastTitle"></div>
+        <div class="toast-msg"   id="toastMsg"></div>
       </div>
     </div>
-  </main>
+  </div>
 
-<script>
-const API_BASE = '/api';
+  <div class="login-shell">
 
-const alertBox = document.getElementById('alert');
-const form = document.getElementById('loginForm');
-const btn = document.getElementById('btnLogin');
-const spinner = document.getElementById('spinner');
-const btnText = document.getElementById('btnText');
+    <!-- ── Panel marca (solo desktop) ── -->
+    <aside class="brand-panel">
+      <div class="brand-logo-wrap">
+        <img
+          src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550"
+          alt="Logo institucional"
+          onerror="this.style.display='none'"
+        >
+      </div>
 
-// 🔒 FUNCIÓN REDIRECCIÓN SEGURA
-function redirectByRole(roles) {
-  // Prioridad clara: superadmin > analista > capturista
-  if (roles.includes('superadmin')) {
-    window.location.href = '/dashboard';  // ← .html explícito
-    return;
-  }
-  if (roles.includes('analista')) {
-    window.location.href = '/analista';   // ← .html explícito
-    return;
-  }
-  // Default: capturista (incluye otros roles)
-  window.location.href = '/captura';         // ← .html explícito
-}
+      <div class="brand-body">
+        <div class="brand-tagline">
+          Inteligencia<br><span>política</span><br>del Estado de México
+        </div>
+        <p class="brand-desc">
+          Plataforma de gestión, seguimiento y análisis estratégico de actores políticos.
+        </p>
+      </div>
 
-function showAlert(type, msg){
-  alertBox.className = `alert alert-${type}`;
-  alertBox.textContent = msg;
-  alertBox.classList.remove('d-none');
-}
+      <div class="brand-footer">
+        Sistema interno — Uso exclusivo del personal autorizado
+      </div>
+    </aside>
 
-function setLoading(isLoading){
-  btn.disabled = isLoading;
-  spinner.classList.toggle('d-none', !isLoading);
-  btnText.textContent = isLoading ? 'Ingresando…' : 'Entrar';
-}
+    <!-- ── Panel formulario ── -->
+    <main class="form-panel">
+      <div class="form-box">
 
-// 🔓 Toggle password
-document.getElementById('togglePass').addEventListener('click', () => {
-  const input = document.getElementById('password');
-  const isPass = input.type === 'password';
-  input.type = isPass ? 'text' : 'password';
-  document.getElementById('togglePass').textContent = isPass ? 'Ocultar' : 'Ver';
-  input.focus();
-});
+        <!-- Logo móvil -->
+        <div class="mobile-logo">
+          <img
+            src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550"
+            alt="Logo"
+            onerror="this.style.opacity='.4'"
+          >
+        </div>
 
-// 🔒 CHECK SESIÓN PREVIA al cargar página
-window.addEventListener('load', async () => {
-  const token = localStorage.getItem('token');
-  const userStr = localStorage.getItem('user');
-  
-  if (token && userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      const roles = Array.isArray(user.roles) ? user.roles : [user.rol || 'capturista'].filter(Boolean);
-      
-      // 🚫 Si ya tiene sesión, redirige inmediatamente
-      redirectByRole(roles);
-    } catch (e) {
-      // Token/user corrupto → limpiar
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+        <div class="form-heading">
+          <h1>Bienvenido</h1>
+          <p>Ingresa tus credenciales para acceder al sistema</p>
+        </div>
+
+        <form id="loginForm" novalidate autocomplete="on">
+
+          <!-- Email -->
+          <div class="field">
+            <label for="email">Correo electrónico</label>
+            <div class="input-wrap">
+              <i class="bi bi-envelope input-icon"></i>
+              <input
+                class="field-input"
+                type="email"
+                id="email"
+                name="email"
+                inputmode="email"
+                autocomplete="email"
+                placeholder="usuario@correo.com"
+                required
+              >
+            </div>
+            <div class="field-msg" id="msg-email"></div>
+          </div>
+
+          <!-- Contraseña -->
+          <div class="field">
+            <label for="password">Contraseña</label>
+            <div class="input-wrap">
+              <i class="bi bi-lock input-icon"></i>
+              <input
+                class="field-input"
+                type="password"
+                id="password"
+                name="password"
+                autocomplete="current-password"
+                placeholder="••••••••"
+                required
+              >
+              <button type="button" class="pw-toggle" id="togglePass" aria-label="Mostrar u ocultar contraseña" tabindex="-1">
+                <i class="bi bi-eye" id="eyeIcon"></i>
+              </button>
+            </div>
+            <div class="field-msg" id="msg-password"></div>
+          </div>
+
+          <!-- Recordarme -->
+          <div class="remember-row">
+            <input type="checkbox" id="remember" name="remember">
+            <label for="remember">Recordar mi correo en este equipo</label>
+          </div>
+
+          <!-- Botón -->
+          <button class="btn-login" id="btnLogin" type="submit" disabled>
+            <div class="spinner" id="spinner"></div>
+            <span class="btn-label" id="btnLabel">
+              <i class="bi bi-box-arrow-in-right me-1"></i>Ingresar al sistema
+            </span>
+          </button>
+
+        </form>
+
+        <div class="form-footer">
+          © <span id="year"></span> ATI
+          <span class="dot">·</span>
+          Acceso restringido
+        </div>
+
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+  (() => {
+    "use strict";
+
+    const API_BASE = "/api";
+
+    // ── Elementos ─────────────────────────────────────────────
+    const form      = document.getElementById("loginForm");
+    const emailInp  = document.getElementById("email");
+    const pwInp     = document.getElementById("password");
+    const rememberCk= document.getElementById("remember");
+    const btn       = document.getElementById("btnLogin");
+    const spinner   = document.getElementById("spinner");
+    const btnLabel  = document.getElementById("btnLabel");
+    const eyeIcon   = document.getElementById("eyeIcon");
+    const toast     = document.getElementById("toast");
+    const toastIcon = document.getElementById("toastIcon");
+    const toastTitle= document.getElementById("toastTitle");
+    const toastMsg  = document.getElementById("toastMsg");
+
+    let toastTimer = null;
+
+    // ── Toast ─────────────────────────────────────────────────
+    const TOAST_ICONS = {
+      err:  { icon: "bi-x-circle-fill",            title: "Acceso denegado" },
+      warn: { icon: "bi-exclamation-triangle-fill", title: "Atención" },
+      ok:   { icon: "bi-check-circle-fill",         title: "Listo" }
+    };
+
+    function showToast(type, msg, duration = 5000) {
+      clearTimeout(toastTimer);
+      const cfg = TOAST_ICONS[type] || TOAST_ICONS.warn;
+      toast.className = `toast ${type}`;
+      toastIcon.className = `bi ${cfg.icon} toast-icon`;
+      toastTitle.textContent = cfg.title;
+      toastMsg.textContent = msg;
+      requestAnimationFrame(() => toast.classList.add("show"));
+      toastTimer = setTimeout(() => toast.classList.remove("show"), duration);
     }
-  }
-});
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  alertBox.classList.add('d-none');
+    // ── Validación en tiempo real ──────────────────────────────
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // Validación Bootstrap
-  if (!form.checkValidity()) {
-    form.classList.add('was-validated');
-    return;
-  }
+    function setFieldState(input, msgEl, state, text = "") {
+      input.classList.remove("is-valid", "is-invalid");
+      msgEl.className = "field-msg";
+      msgEl.innerHTML = "";
+      if (state === "valid") {
+        input.classList.add("is-valid");
+        msgEl.className = "field-msg ok";
+        msgEl.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${text}`;
+      } else if (state === "invalid") {
+        input.classList.add("is-invalid");
+        msgEl.className = "field-msg err";
+        msgEl.innerHTML = `<i class="bi bi-exclamation-circle-fill"></i> ${text}`;
+      }
+      checkCanSubmit();
+    }
 
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
+    function validateEmail() {
+      const v = emailInp.value.trim();
+      const msgEl = document.getElementById("msg-email");
+      if (!v) {
+        setFieldState(emailInp, msgEl, "", "");
+      } else if (!EMAIL_RE.test(v)) {
+        setFieldState(emailInp, msgEl, "invalid", "Formato de correo inválido");
+      } else {
+        setFieldState(emailInp, msgEl, "valid", "Correo válido");
+      }
+    }
 
-  try {
-    setLoading(true);
+    function validatePassword() {
+      const v = pwInp.value;
+      const msgEl = document.getElementById("msg-password");
+      if (!v) {
+        setFieldState(pwInp, msgEl, "", "");
+      } else if (v.length < 4) {
+        setFieldState(pwInp, msgEl, "invalid", "Contraseña muy corta");
+      } else {
+        setFieldState(pwInp, msgEl, "valid", "");
+      }
+    }
 
-    const res = await fetch(API_BASE + '/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+    function checkCanSubmit() {
+      const emailOk = EMAIL_RE.test(emailInp.value.trim());
+      const pwOk    = pwInp.value.length >= 4;
+      btn.disabled  = !(emailOk && pwOk);
+    }
+
+    emailInp.addEventListener("input", validateEmail);
+    pwInp.addEventListener("input",    validatePassword);
+
+    // ── Toggle contraseña ──────────────────────────────────────
+    document.getElementById("togglePass").addEventListener("click", () => {
+      const show = pwInp.type === "password";
+      pwInp.type = show ? "text" : "password";
+      eyeIcon.className = show ? "bi bi-eye-slash" : "bi bi-eye";
+      pwInp.focus();
     });
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return showAlert('danger', data.error || 'Error de login');
-
-    // ✅ GUARDADO ATÓMICO (todo junto)
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    localStorage.setItem('loginTime', Date.now().toString()); // 🔏 Extra seguridad
-
-    // 🔍 EXTRACCIÓN ROBUSTA DE ROLES
-    const u = data.user;
-    let roles = [];
-    
-    // Prioridad 1: u.roles (array)
-    if (Array.isArray(u.roles) && u.roles.length) {
-      roles = u.roles;
-    }
-    // Prioridad 2: u.rol (string)
-    else if (u.rol) {
-      roles = [u.rol];
-    }
-    // Prioridad 3: default capturista
-    else {
-      roles = ['capturista'];
-      console.warn('Rol no definido, asignado capturista por default');
+    // ── Recordarme — pre-fill email ────────────────────────────
+    const savedEmail = localStorage.getItem("rememberEmail");
+    if (savedEmail) {
+      emailInp.value = savedEmail;
+      rememberCk.checked = true;
+      validateEmail();
     }
 
-    console.log('🔐 Login exitoso:', { email: email.substring(0,3)+'...', roles });
+    // ── Estado de carga ────────────────────────────────────────
+    function setLoading(on) {
+      btn.disabled = on;
+      btn.classList.toggle("loading", on);
+      spinner.style.display = on ? "block" : "none";
+      btnLabel.innerHTML = on
+        ? "Verificando..."
+        : `<i class="bi bi-box-arrow-in-right me-1"></i>Ingresar al sistema`;
+    }
 
-    // 🚀 REDIRECCIÓN INMEDIATA Y SEGURA
-    redirectByRole(roles);
+    // ── Redirección por rol ────────────────────────────────────
+    function redirectByRole(roles) {
+      if (roles.includes("superadmin")) { window.location.href = "/dashboard"; return; }
+      if (roles.includes("analista"))   { window.location.href = "/analista";  return; }
+      window.location.href = "/captura";
+    }
 
-  } catch(err) {
-    console.error('Login error:', err);
-    showAlert('danger', 'No se pudo conectar con el servidor.');
-  } finally {
-    setLoading(false);
-  }
-});
+    // ── Verificar sesión previa ────────────────────────────────
+    window.addEventListener("load", async () => {
+      const token   = localStorage.getItem("token");
+      const userStr = localStorage.getItem("user");
+      if (token && userStr) {
+        try {
+          const user  = JSON.parse(userStr);
+          const roles = Array.isArray(user.roles) ? user.roles : [user.rol || "capturista"];
+          redirectByRole(roles);
+        } catch {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+        }
+      }
+    });
 
-document.getElementById('year').textContent = new Date().getFullYear();
-</script>
+    // ── Submit ─────────────────────────────────────────────────
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const email    = emailInp.value.trim();
+      const password = pwInp.value;
+
+      // Doble validación por seguridad (no depender solo de disabled)
+      if (!email || !EMAIL_RE.test(email)) {
+        showToast("warn", "Ingresa un correo electrónico válido.");
+        emailInp.focus();
+        return;
+      }
+      if (!password) {
+        showToast("warn", "La contraseña no puede estar vacía.");
+        pwInp.focus();
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          // Mensaje genérico — no revela si falló email o contraseña
+          const msg = res.status === 401 || res.status === 403
+            ? "Credenciales incorrectas. Verifica tus datos e intenta de nuevo."
+            : (data.error || "No se pudo completar el acceso. Intenta más tarde.");
+          showToast("err", msg);
+          pwInp.value = "";
+          validatePassword();
+          pwInp.focus();
+          return;
+        }
+
+        // Recordarme
+        if (rememberCk.checked) {
+          localStorage.setItem("rememberEmail", email);
+        } else {
+          localStorage.removeItem("rememberEmail");
+        }
+
+        // Guardado atómico
+        localStorage.setItem("token",     data.token);
+        localStorage.setItem("user",      JSON.stringify(data.user));
+        localStorage.setItem("loginTime", Date.now().toString());
+
+        const u     = data.user;
+        const roles = Array.isArray(u.roles) && u.roles.length
+          ? u.roles
+          : [u.rol || "capturista"];
+
+        showToast("ok", "Acceso verificado. Redirigiendo...", 2000);
+        setTimeout(() => redirectByRole(roles), 600);
+
+      } catch {
+        showToast("err", "No se pudo conectar con el servidor. Verifica tu conexión.");
+      } finally {
+        setLoading(false);
+        checkCanSubmit();
+      }
+    });
+
+    document.getElementById("year").textContent = new Date().getFullYear();
+  })();
+  </script>
 
 </body>
 </html>
