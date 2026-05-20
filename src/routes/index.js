@@ -7,6 +7,8 @@ router.use('/catalogos', require('./catalogos.routes'));
 router.use('/borradores', require('./borradores.routes'));
 router.use('/analista', require('./analista.routes'));
 
+router.use('/backup', require('./backup.routes'));
+
 router.get('/ping', (req, res) => res.json({ ok: true }));
 
 module.exports = router;
