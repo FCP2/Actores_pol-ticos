@@ -253,9 +253,7 @@ exports.listPersonasAdminGrid = async (req, res) => {
       const i = params.length;
       where.push(`
         (
-          COALESCE(p.nombre,'') ILIKE $${i}
-          OR COALESCE(p.apellido_paterno,'') ILIKE $${i}
-          OR COALESCE(p.apellido_materno,'') ILIKE $${i}
+          CONCAT_WS(' ', p.nombre, p.apellido_paterno, p.apellido_materno) ILIKE $${i}
           OR COALESCE(p.curp,'') ILIKE $${i}
           OR COALESCE(p.rfc,'') ILIKE $${i}
           OR COALESCE(p.clave_elector,'') ILIKE $${i}
@@ -344,6 +342,17 @@ exports.listPersonasAdminGrid = async (req, res) => {
           FROM personas_municipios_trabajo pmt
           WHERE pmt.id_persona = p.id_persona
             AND pmt.es_principal = true
+        )
+      `);
+    }
+
+    if (req.query.con_observacion === "1") {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM personas_observaciones po
+          WHERE po.id_persona = p.id_persona
+            AND po.atendida = false
         )
       `);
     }
@@ -598,7 +607,16 @@ exports.listPersonasAdminGrid = async (req, res) => {
         (p.nombre || ' ' || COALESCE(p.apellido_paterno,'') || ' ' || COALESCE(p.apellido_materno,'')) AS nombre_completo,
         p.curp, p.rfc, p.clave_elector, p.id_oficina, p.nivel_confiabilidad, o.nombre AS oficina_nombre,
         p.oculto, p.oculto_at, p.oculto_por,
-        -- partido politico filtro 
+
+        -- observaciones pendientes (para chip en grid)
+        (
+          SELECT COUNT(*)::int
+          FROM personas_observaciones po
+          WHERE po.id_persona = p.id_persona
+            AND po.atendida = false
+        ) AS obs_pendientes,
+
+        -- partido politico filtro
         p.id_partido_actual,
         p.partido_otro_texto,
         COALESCE(NULLIF(TRIM(p.partido_otro_texto), ''), cp.nombre) AS partido_nombre, cp.siglas,
@@ -8793,14 +8811,32 @@ exports.kpiAlertasDashboard = async (req, res) => {
               po.dirigido_a,
               po.observacion,
               po.created_at,
-              u_crea.nombre AS creado_por_nombre
+              u_crea.nombre    AS creado_por_nombre,
+              o.nombre         AS oficina_nombre,
+              u_cap.nombre     AS capturista_nombre,
+              CASE po.dirigido_a
+                WHEN 'SELF' THEN u_cap.nombre
+                WHEN 'AREA' THEN (
+                  SELECT u.nombre FROM usuarios u
+                  WHERE u.id_oficina = p.id_oficina AND u.scope = 'AREA' AND u.activo = true
+                  LIMIT 1
+                )
+                WHEN 'OFFICE' THEN (
+                  SELECT u.nombre FROM usuarios u
+                  WHERE u.id_oficina = p.id_oficina AND u.scope = 'OFFICE' AND u.activo = true
+                  LIMIT 1
+                )
+                ELSE NULL
+              END AS dirigido_a_nombre
             FROM personas_observaciones po
             JOIN base_personas bp ON bp.id_persona = po.id_persona
-            JOIN personas p ON p.id_persona = po.id_persona
+            JOIN personas p        ON p.id_persona  = po.id_persona
             LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
+            LEFT JOIN oficinas o      ON o.id_oficina      = p.id_oficina
+            LEFT JOIN usuarios u_cap  ON u_cap.id_usuario  = p.creado_por
             WHERE po.atendida = false
             ORDER BY po.created_at DESC, po.id_observacion DESC
-            LIMIT 8
+            LIMIT 25
           ) x
         ), '[]'::jsonb) AS observaciones_pendientes_detalle,
 
@@ -8816,16 +8852,34 @@ exports.kpiAlertasDashboard = async (req, res) => {
               po.observacion,
               po.created_at,
               po.atendida_at,
-              u_crea.nombre AS creado_por_nombre,
-              u_atiende.nombre AS atendida_por_nombre
+              u_crea.nombre    AS creado_por_nombre,
+              u_atiende.nombre AS atendida_por_nombre,
+              o.nombre         AS oficina_nombre,
+              u_cap.nombre     AS capturista_nombre,
+              CASE po.dirigido_a
+                WHEN 'SELF' THEN u_cap.nombre
+                WHEN 'AREA' THEN (
+                  SELECT u.nombre FROM usuarios u
+                  WHERE u.id_oficina = p.id_oficina AND u.scope = 'AREA' AND u.activo = true
+                  LIMIT 1
+                )
+                WHEN 'OFFICE' THEN (
+                  SELECT u.nombre FROM usuarios u
+                  WHERE u.id_oficina = p.id_oficina AND u.scope = 'OFFICE' AND u.activo = true
+                  LIMIT 1
+                )
+                ELSE NULL
+              END AS dirigido_a_nombre
             FROM personas_observaciones po
             JOIN base_personas bp ON bp.id_persona = po.id_persona
-            JOIN personas p ON p.id_persona = po.id_persona
-            LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
+            JOIN personas p        ON p.id_persona  = po.id_persona
+            LEFT JOIN usuarios u_crea    ON u_crea.id_usuario   = po.creado_por
             LEFT JOIN usuarios u_atiende ON u_atiende.id_usuario = po.atendida_por
+            LEFT JOIN oficinas o         ON o.id_oficina         = p.id_oficina
+            LEFT JOIN usuarios u_cap     ON u_cap.id_usuario     = p.creado_por
             WHERE po.atendida = true
             ORDER BY po.atendida_at DESC, po.id_observacion DESC
-            LIMIT 8
+            LIMIT 25
           ) x
         ), '[]'::jsonb) AS observaciones_atendidas_hoy_detalle,
 
@@ -8840,17 +8894,36 @@ exports.kpiAlertasDashboard = async (req, res) => {
               po.dirigido_a,
               po.observacion,
               po.created_at,
-              u_crea.nombre AS creado_por_nombre
+              u_crea.nombre AS creado_por_nombre,
+              o.nombre      AS oficina_nombre,
+              u_cap.nombre  AS capturista_nombre,
+              CASE po.dirigido_a
+                WHEN 'SELF' THEN u_cap.nombre
+                WHEN 'AREA' THEN (
+                  SELECT u.nombre FROM usuarios u
+                  WHERE u.id_oficina = p.id_oficina AND u.scope = 'AREA' AND u.activo = true
+                  LIMIT 1
+                )
+                WHEN 'OFFICE' THEN (
+                  SELECT u.nombre FROM usuarios u
+                  WHERE u.id_oficina = p.id_oficina AND u.scope = 'OFFICE' AND u.activo = true
+                  LIMIT 1
+                )
+                ELSE NULL
+              END AS dirigido_a_nombre
             FROM personas_observaciones po
             JOIN base_personas bp ON bp.id_persona = po.id_persona
-            JOIN personas p ON p.id_persona = po.id_persona
+            JOIN personas p       ON p.id_persona  = po.id_persona
             LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
+            LEFT JOIN oficinas o      ON o.id_oficina      = p.id_oficina
+            LEFT JOIN usuarios u_cap  ON u_cap.id_usuario  = p.creado_por
             WHERE po.nivel = 'FINAL'
               AND po.created_at >= now() - interval '7 days'
             ORDER BY po.created_at DESC, po.id_observacion DESC
-            LIMIT 8
+            LIMIT 25
           ) x
         ), '[]'::jsonb) AS devoluciones_final_7d_detalle,
+
 
         -- registros ocultos (solo superadmin ve esto; para otros siempre 0)
         (
@@ -8879,11 +8952,268 @@ exports.kpiAlertasDashboard = async (req, res) => {
     `;
 
     const { rows } = await client.query(sql, params);
-    return res.json({ ok: true, data: rows[0] || {} });
+    const data = rows[0] || {};
+
+    // ── Desverificados automáticos (columnas opcionales, requieren migración) ─
+    try {
+      const { rows: dv } = await client.query(`
+        SELECT
+          COUNT(*)::int AS desverificados_auto,
+          COALESCE((
+            SELECT jsonb_agg(to_jsonb(x))
+            FROM (
+              SELECT
+                p2.id_persona,
+                concat_ws(' ', p2.nombre, p2.apellido_paterno, p2.apellido_materno) AS persona,
+                p2.desverf_final_at,
+                p2.desverf_final_campos,
+                p2.verif_office_at,
+                u_dv.nombre AS desverf_por_nombre,
+                o.nombre    AS oficina_nombre
+              FROM personas p2
+              LEFT JOIN usuarios u_dv ON u_dv.id_usuario = p2.desverf_final_por
+              LEFT JOIN oficinas o   ON o.id_oficina     = p2.id_oficina
+              WHERE p2.desverf_final_at IS NOT NULL
+                AND p2.verificado_at    IS NULL
+              ORDER BY p2.desverf_final_at DESC
+              LIMIT 10
+            ) x
+          ), '[]'::jsonb) AS desverificados_auto_detalle
+        FROM personas p2
+        WHERE p2.desverf_final_at IS NOT NULL
+          AND p2.verificado_at    IS NULL
+      `);
+      data.desverificados_auto         = dv[0]?.desverificados_auto         ?? 0;
+      data.desverificados_auto_detalle = dv[0]?.desverificados_auto_detalle ?? [];
+    } catch (_) {
+      // Columnas aún no existen — se ignora hasta correr la migración
+      data.desverificados_auto         = 0;
+      data.desverificados_auto_detalle = [];
+    }
+
+    return res.json({ ok: true, data });
 
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Error KPI alertas", detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+
+// ── KPI Alertas para panel analista ──────────────────────────────────────────
+// ── Observaciones paginadas para modal ───────────────────────────────────────
+exports.alertasObservacionesPaginadas = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where  = [];
+    addFullFilter(params, where);
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const tipo   = String(req.query.tipo || "pendientes"); // pendientes | atendidas_hoy | final_7d
+    const page   = Math.max(1, parseInt(req.query.page  || "1",  10));
+    const size   = Math.min(100, Math.max(10, parseInt(req.query.size || "25", 10)));
+    const offset = (page - 1) * size;
+
+    // Construir condición según tipo
+    let whereObs = "";
+    let orderBy  = "po.created_at DESC, po.id_observacion DESC";
+    if (tipo === "pendientes") {
+      whereObs = "AND po.atendida = false";
+    } else if (tipo === "atendidas_hoy") {
+      whereObs = "AND po.atendida = true AND po.atendida_at::date = CURRENT_DATE";
+      orderBy  = "po.atendida_at DESC, po.id_observacion DESC";
+    } else if (tipo === "final_7d") {
+      whereObs = "AND po.nivel = 'FINAL' AND po.created_at >= now() - interval '7 days'";
+    }
+
+    const sqlTotal = `
+      SELECT COUNT(*)::int AS total
+      FROM personas_observaciones po
+      JOIN (SELECT p.id_persona FROM personas p ${whereSQL}) bp ON bp.id_persona = po.id_persona
+      WHERE 1=1 ${whereObs}
+    `;
+
+    const sqlData = `
+      SELECT
+        po.id_observacion, po.id_persona,
+        concat_ws(' ', p.nombre, p.apellido_paterno, p.apellido_materno) AS persona,
+        po.nivel, po.dirigido_a, po.observacion, po.created_at, po.atendida_at,
+        u_crea.nombre    AS creado_por_nombre,
+        u_atiende.nombre AS atendida_por_nombre,
+        o.nombre         AS oficina_nombre,
+        u_cap.nombre     AS capturista_nombre,
+        CASE po.dirigido_a
+          WHEN 'SELF' THEN u_cap.nombre
+          WHEN 'AREA' THEN (
+            SELECT u.nombre FROM usuarios u
+            WHERE u.id_oficina = p.id_oficina AND u.scope = 'AREA' AND u.activo = true LIMIT 1
+          )
+          WHEN 'OFFICE' THEN (
+            SELECT u.nombre FROM usuarios u
+            WHERE u.id_oficina = p.id_oficina AND u.scope = 'OFFICE' AND u.activo = true LIMIT 1
+          )
+          ELSE NULL
+        END AS dirigido_a_nombre
+      FROM personas_observaciones po
+      JOIN (SELECT p2.id_persona, p2.id_oficina, p2.creado_por,
+                   p2.nombre, p2.apellido_paterno, p2.apellido_materno
+            FROM personas p2 ${whereSQL}) p ON p.id_persona = po.id_persona
+      LEFT JOIN usuarios u_crea    ON u_crea.id_usuario    = po.creado_por
+      LEFT JOIN usuarios u_atiende ON u_atiende.id_usuario = po.atendida_por
+      LEFT JOIN oficinas o         ON o.id_oficina         = p.id_oficina
+      LEFT JOIN usuarios u_cap     ON u_cap.id_usuario     = p.creado_por
+      WHERE 1=1 ${whereObs}
+      ORDER BY ${orderBy}
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+
+    const [rTotal, rData] = await Promise.all([
+      client.query(sqlTotal, params),
+      client.query(sqlData,  [...params, size, offset])
+    ]);
+
+    const total     = rTotal.rows[0]?.total || 0;
+    const last_page = Math.max(1, Math.ceil(total / size));
+
+    return res.json({ ok: true, data: rData.rows, total, page, size, last_page });
+
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Error al paginar observaciones", detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+
+exports.kpiAlertasAnalista = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where  = [];
+    addFullFilter(params, where);
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    // Observaciones pendientes dirigidas al analista (scope: AREA u OFFICE)
+    const sql = `
+      WITH base_personas AS (
+        SELECT p.id_persona FROM personas p ${whereSQL}
+      )
+      SELECT
+        (
+          SELECT COUNT(*)::int
+          FROM personas_observaciones po
+          JOIN base_personas bp ON bp.id_persona = po.id_persona
+          WHERE po.atendida = false
+        ) AS observaciones_pendientes,
+
+        COALESCE((
+          SELECT jsonb_agg(to_jsonb(x))
+          FROM (
+            SELECT
+              po.id_observacion,
+              po.id_persona,
+              concat_ws(' ', p.nombre, p.apellido_paterno, p.apellido_materno) AS persona,
+              po.nivel, po.dirigido_a, po.observacion, po.created_at,
+              u_crea.nombre AS creado_por_nombre,
+              CASE po.dirigido_a
+                WHEN 'SELF' THEN u_cap.nombre
+                WHEN 'AREA' THEN (
+                  SELECT u.nombre FROM usuarios u
+                  WHERE u.id_oficina = p.id_oficina AND u.scope = 'AREA' AND u.activo = true
+                  LIMIT 1
+                )
+                WHEN 'OFFICE' THEN (
+                  SELECT u.nombre FROM usuarios u
+                  WHERE u.id_oficina = p.id_oficina AND u.scope = 'OFFICE' AND u.activo = true
+                  LIMIT 1
+                )
+                ELSE NULL
+              END AS dirigido_a_nombre
+            FROM personas_observaciones po
+            JOIN base_personas bp ON bp.id_persona = po.id_persona
+            JOIN personas p        ON p.id_persona  = po.id_persona
+            LEFT JOIN usuarios u_crea ON u_crea.id_usuario = po.creado_por
+            LEFT JOIN usuarios u_cap  ON u_cap.id_usuario  = p.creado_por
+            WHERE po.atendida = false
+            ORDER BY po.created_at DESC
+            LIMIT 8
+          ) x
+        ), '[]'::jsonb) AS observaciones_pendientes_detalle
+    `;
+
+    const { rows } = await client.query(sql, params);
+    const data = rows[0] || {};
+
+    // Desverificaciones AREA y OFFICE (columnas opcionales — requieren migración)
+    try {
+      const { rows: dv } = await client.query(`
+        WITH base AS (SELECT p.id_persona FROM personas p ${whereSQL})
+        SELECT
+          COUNT(*) FILTER (
+            WHERE p2.desverf_area_at IS NOT NULL AND p2.verif_area_at IS NULL
+          )::int AS desverf_area,
+
+          COUNT(*) FILTER (
+            WHERE p2.desverf_office_at IS NOT NULL AND p2.verif_office_at IS NULL
+          )::int AS desverf_office,
+
+          COALESCE((
+            SELECT jsonb_agg(to_jsonb(x))
+            FROM (
+              SELECT
+                p2b.id_persona,
+                concat_ws(' ', p2b.nombre, p2b.apellido_paterno, p2b.apellido_materno) AS persona,
+                p2b.desverf_area_at, p2b.desverf_area_campos,
+                u_a.nombre AS desverf_por_nombre,
+                o.nombre   AS oficina_nombre
+              FROM personas p2b
+              JOIN base bp ON bp.id_persona = p2b.id_persona
+              LEFT JOIN usuarios u_a ON u_a.id_usuario = p2b.desverf_area_por
+              LEFT JOIN oficinas o   ON o.id_oficina   = p2b.id_oficina
+              WHERE p2b.desverf_area_at IS NOT NULL AND p2b.verif_area_at IS NULL
+              ORDER BY p2b.desverf_area_at DESC LIMIT 8
+            ) x
+          ), '[]'::jsonb) AS desverf_area_detalle,
+
+          COALESCE((
+            SELECT jsonb_agg(to_jsonb(x))
+            FROM (
+              SELECT
+                p2b.id_persona,
+                concat_ws(' ', p2b.nombre, p2b.apellido_paterno, p2b.apellido_materno) AS persona,
+                p2b.desverf_office_at, p2b.desverf_office_campos,
+                u_o.nombre AS desverf_por_nombre,
+                o.nombre   AS oficina_nombre
+              FROM personas p2b
+              JOIN base bp ON bp.id_persona = p2b.id_persona
+              LEFT JOIN usuarios u_o ON u_o.id_usuario = p2b.desverf_office_por
+              LEFT JOIN oficinas o   ON o.id_oficina   = p2b.id_oficina
+              WHERE p2b.desverf_office_at IS NOT NULL AND p2b.verif_office_at IS NULL
+              ORDER BY p2b.desverf_office_at DESC LIMIT 8
+            ) x
+          ), '[]'::jsonb) AS desverf_office_detalle
+
+        FROM personas p2
+        JOIN base bp ON bp.id_persona = p2.id_persona
+      `, params);
+
+      Object.assign(data, dv[0] || {});
+    } catch (_) {
+      data.desverf_area           = 0;
+      data.desverf_office         = 0;
+      data.desverf_area_detalle   = [];
+      data.desverf_office_detalle = [];
+    }
+
+    return res.json({ ok: true, data });
+
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Error KPI alertas analista", detail: e.message });
   } finally {
     client.release();
   }
