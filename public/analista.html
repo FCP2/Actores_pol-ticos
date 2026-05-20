@@ -92,6 +92,29 @@
   <main class="container-fluid my-3">
     <div id="alertBox" class="alert d-none" role="alert"></div>
 
+    <!-- ── Alertas operativas (KPI superior) ── -->
+    <div id="alertasAnalistaContainer" class="mb-3"></div>
+
+    <!-- Modal detalle alerta analista -->
+    <div class="modal fade" id="modalAlertaAnalistaDetalle" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header" style="background:#8b2136;color:#fff;">
+            <h5 class="modal-title" id="modalAlertaAnalistaLabel">
+              <i class="bi bi-exclamation-triangle me-2"></i>Detalle de alerta
+            </h5>
+            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="modalAlertaAnalistaBody">
+            <div class="text-muted">Cargando...</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-light btn-sm" data-bs-dismiss="modal">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="row g-3">
 
       <!-- Columna izquierda: filtros + grid -->
@@ -186,6 +209,16 @@
                   <option value="final">Verificado final</option>
                   <option value="cualquiera_verificado">Cualquier verificación</option>
                 </select>
+              </div>
+
+              <div class="col-md-3 d-flex align-items-end">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="fltConObservacion">
+                  <label class="form-check-label fw-semibold" for="fltConObservacion"
+                         style="color:#d97706;">
+                    <i class="bi bi-envelope-exclamation-fill me-1"></i>Con observación
+                  </label>
+                </div>
               </div>
 
               <div class="card mt-3">
