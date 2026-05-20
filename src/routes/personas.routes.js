@@ -47,6 +47,19 @@ router.get('/dashboard/kpi/alertas',
   ctrl.kpiAlertasDashboard
 );
 
+router.get('/dashboard/alertas/observaciones',
+  requireAuth,
+  applySmartFilters,
+  ctrl.alertasObservacionesPaginadas
+);
+
+router.get('/analista/kpi/alertas',
+  requireAuth,
+  requireRole('analista', 'superadmin'),
+  applySmartFilters,
+  ctrl.kpiAlertasAnalista
+);
+
 router.get('/dashboard/notificaciones',
   requireAuth,
   applySmartFilters,
