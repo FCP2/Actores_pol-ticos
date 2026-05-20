@@ -61,7 +61,7 @@ const gridState = {
   refNivel: "",
   refMode: "exact",
   sinMunicipioPrincipal: false,
-  sortField: "updated_at",
+  sortField: "id_persona",
   sortDir: "desc",
   pageSize: 25
 };
@@ -400,7 +400,8 @@ function buildGridQuery(extra = {}) {
     bootstrap.Modal.getOrCreateInstance($("modalVerificacionFinal"))?.hide();
     bootstrap.Modal.getOrCreateInstance($("modalDesverificarFinal"))?.hide();
 
-    reloadGrid();
+    _keepSelection = true;
+    reloadGrid(true);
     loadSummaryKpis().catch(console.error);
     renderAlertSummary?.();
     updateGridInfoExtra?.();
@@ -624,7 +625,8 @@ function buildGridQuery(extra = {}) {
         _resetModalObservacion();
         bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).hide();
 
-        reloadGrid();
+        _keepSelection = true;
+        reloadGrid(true);
         loadSummaryKpis().catch(console.error);
         renderAlertSummary().catch(console.error);
         updateGridInfoExtra?.();
@@ -1128,17 +1130,27 @@ function initials(nombre = "") {
 }
 
 function personaFormatter(cell) {
-  const row = cell.getRow().getData();
+  const row    = cell.getRow().getData();
   const nombre = row.nombre_completo || "Sin nombre";
-  const sub = row.telefono_principal || row.referentes_nombres || "Sin detalle";
+  const sub    = row.telefono_principal || row.referentes_nombres || "Sin detalle";
+
   const ocultoBadge = row.oculto
     ? `<span class="grid-chip danger ms-1" title="Registro oculto para la oficina">OCULTO</span>`
+    : "";
+
+  const n = Number(row.obs_pendientes || 0);
+  const obsBadge = n > 0
+    ? `<span class="grid-chip warn ms-1"
+           title="${n} observación${n > 1 ? "es" : ""} sin atender"
+           style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">
+         <i class="bi bi-envelope-exclamation-fill me-1"></i>Obs${n > 1 ? ` (${n})` : "."}
+       </span>`
     : "";
 
   return `
     <div class="persona-cell">
       <div class="persona-meta">
-        <div class="persona-nombre">${esc(nombre)}${ocultoBadge}</div>
+        <div class="persona-nombre">${esc(nombre)}${ocultoBadge}${obsBadge}</div>
         <div class="persona-sub">${esc(sub)}</div>
       </div>
     </div>
@@ -1333,6 +1345,13 @@ function initPersonasGrid() {
 
     dataLoaded: function(data) {
       console.log("✅ Tabla lista con", data.length, "filas");
+      if (_highlightId) {
+        requestAnimationFrame(() => _flashRow(_highlightId));
+      } else if (_keepSelection && selectedRowData?.id_persona) {
+        const id = selectedRowData.id_persona;
+        _keepSelection = false;
+        requestAnimationFrame(() => _reSelectAfterReload(id));
+      }
     },
 
     ajaxError: function (xhr) {
@@ -1551,7 +1570,7 @@ async function loadKpisResumenEjecutivo() {
   }
 }
 
-function reloadGrid() {
+function reloadGrid(keepPage = false) {
   collectGridFilters();
 
   if (!window.personasGrid) {
@@ -1570,7 +1589,14 @@ function reloadGrid() {
     return;
   }
 
-  window.personasGrid.setData();
+  // Preservar página si es un refresh post-edición
+  const currentPage = keepPage ? (window.personasGrid.getPage() || 1) : 1;
+
+  window.personasGrid.setData().then(() => {
+    if (keepPage && currentPage > 1) {
+      window.personasGrid.setPage(currentPage).catch(() => {});
+    }
+  }).catch(() => {});
 }
 
   function exportGrid(type) {
@@ -2251,6 +2277,107 @@ function restaurarObservacionesDescartadas() {
   localStorage.removeItem(OBSERVACIONES_DESCARTADAS_KEY);
 }
 
+// ── Modal paginado de observaciones ──────────────────────────────────────────
+const OBS_TIPOS = {
+  "observaciones": "pendientes",
+  "atendidas":     "atendidas_hoy",
+  "final":         "final_7d"
+};
+
+async function showObservacionesModal(alerta, page = 1) {
+  const body  = $("alertaDetalleBody");
+  const title = $("modalAlertaDetalleLabel");
+  if (!body || !title) return;
+
+  const tipo = OBS_TIPOS[alerta.tipo] || "pendientes";
+  const size = 25;
+
+  title.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${esc(alerta.title || "Observaciones")}`;
+  body.innerHTML  = `<div class="text-muted py-3 text-center"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</div>`;
+  bootstrap.Modal.getOrCreateInstance($("modalAlertaDetalle")).show();
+
+  try {
+    const resp = await fetchJson(`/api/personas/dashboard/alertas/observaciones?tipo=${tipo}&page=${page}&size=${size}`);
+    const rows      = resp.data      || [];
+    const total     = resp.total     || 0;
+    const last_page = resp.last_page || 1;
+    const hidden    = getObservacionesDescartadas();
+
+    const filas = rows
+      .filter(r => !hidden.has(String(r.id_observacion || "")))
+      .map(r => {
+        const fecha       = r.atendida_at || r.created_at;
+        const nivelLabel  = { FINAL:"Final", AREA:"Dirección", OFFICE:"Coordinación", SELF:"Capturista" }[r.nivel] || r.nivel || "—";
+        const dirigidoLabel = (() => {
+          const base = { SELF:"Capturista", AREA:"Dirección", OFFICE:"Coordinación" }[r.dirigido_a] || r.dirigido_a || "—";
+          return r.dirigido_a_nombre ? `${base} — ${esc(r.dirigido_a_nombre)}` : base;
+        })();
+        const atendida = r.atendida_por_nombre
+          ? `<div class="small text-success mt-1"><i class="bi bi-check-circle me-1"></i>Atendida por: ${esc(r.atendida_por_nombre)}${r.atendida_at ? ` · ${esc(fmtDT(r.atendida_at))}` : ""}</div>`
+          : "";
+        return `
+          <div class="list-group-item px-0" data-alert-item="${esc(r.id_observacion || "")}">
+            <div class="d-flex justify-content-between gap-3 flex-wrap">
+              <div>
+                <div class="fw-semibold">${esc(r.persona || `Registro #${r.id_persona || ""}`)}</div>
+                <div class="small text-muted">
+                  ID ${esc(r.id_persona || "—")}
+                  · Nivel <strong>${esc(nivelLabel)}</strong>
+                  · Para <strong>${dirigidoLabel}</strong>
+                </div>
+              </div>
+              <div class="text-end">
+                <div class="small text-muted">${esc(fmtDT(fecha))}</div>
+                ${r.id_observacion ? `<button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-action="descartar-obs-pag" data-id="${esc(r.id_observacion)}">Ocultar</button>` : ""}
+              </div>
+            </div>
+            <div class="mt-2 fst-italic">${esc(r.observacion || "—")}</div>
+            <div class="small text-muted mt-2 d-flex flex-wrap gap-3">
+              <span><i class="bi bi-building me-1"></i>${esc(r.oficina_nombre || "—")}</span>
+              <span><i class="bi bi-person me-1"></i>Capturó: ${esc(r.capturista_nombre || "—")}</span>
+              <span><i class="bi bi-eye me-1"></i>Observó: ${esc(r.creado_por_nombre || "Sistema")}</span>
+            </div>
+            ${atendida}
+          </div>`;
+      }).join("") || `<div class="text-muted">Sin observaciones visibles en esta página.</div>`;
+
+    // Paginación
+    const desde = (page - 1) * size + 1;
+    const hasta = Math.min(page * size, total);
+    const paginacion = last_page > 1 ? `
+      <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top flex-wrap gap-2">
+        <div class="small text-muted">Mostrando ${desde}–${hasta} de ${total}</div>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-outline-secondary" ${page <= 1 ? "disabled" : ""} data-obs-page="${page - 1}">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <span class="btn btn-sm btn-light disabled">${page} / ${last_page}</span>
+          <button class="btn btn-sm btn-outline-secondary" ${page >= last_page ? "disabled" : ""} data-obs-page="${page + 1}">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+        </div>
+      </div>` : `<div class="small text-muted mt-2">Total: ${total} observaciones</div>`;
+
+    body.innerHTML = `
+      <div class="small text-muted mb-3">${esc(alerta.text || "")}</div>
+      <div class="list-group list-group-flush">${filas}</div>
+      ${paginacion}`;
+
+    body.querySelectorAll("[data-obs-page]").forEach(btn => {
+      btn.addEventListener("click", () => showObservacionesModal(alerta, Number(btn.dataset.obsPage)));
+    });
+    body.querySelectorAll('[data-action="descartar-obs-pag"]').forEach(btn => {
+      btn.addEventListener("click", () => {
+        descartarObservacionAlerta(btn.dataset.id);
+        showObservacionesModal(alerta, page);
+      });
+    });
+
+  } catch (e) {
+    body.innerHTML = `<div class="text-danger">Error al cargar: ${esc(e.message)}</div>`;
+  }
+}
+
 function showAlertDetailModal(alerta, opts = {}) {
   const body = $("alertaDetalleBody");
   const title = $("modalAlertaDetalleLabel");
@@ -2288,6 +2415,66 @@ function showAlertDetailModal(alerta, opts = {}) {
       ` : ""}
       <div class="list-group list-group-flush">
         ${rows.map(r => {
+          // ── Desverificados automáticamente ──
+          if ("desverf_final_at" in r) {
+            const CAMPO_LABELS = {
+              nombre: "Nombre",
+              apellido_paterno: "Apellido paterno",
+              apellido_materno: "Apellido materno",
+              curp: "CURP",
+              rfc: "RFC",
+              clave_elector: "Clave de elector",
+              edad: "Edad",
+              estado_civil: "Estado civil",
+              escala_influencia: "Escala de influencia",
+              nivel_confiabilidad: "Confiabilidad",
+              id_partido_actual: "Partido político",
+              partido_otro_texto: "Otro partido",
+              municipio_trabajo_politico: "Municipio de trabajo",
+              municipio_residencia_legal: "Municipio residencia legal",
+              municipio_residencia_real: "Municipio residencia real",
+              id_oficina: "Oficina",
+              foto_url: "Foto",
+              id_tema_interes_central: "Tema de interés",
+              id_grupo_postulacion: "Grupo de postulación",
+              id_ideologia_politica: "Ideología política",
+              sin_controversias_publicas: "Sin controversias",
+              sin_servicio_publico: "Sin servicio público",
+              ha_contendido_eleccion: "Ha contendido elección",
+              sin_cargos_eleccion_popular: "Sin cargos de elección",
+              oculto: "Visibilidad"
+            };
+
+            const camposRaw = (r.desverf_final_campos || "").split(",").map(s => s.trim()).filter(Boolean);
+            const camposLabel = camposRaw.map(c => CAMPO_LABELS[c] || c).join(", ");
+
+            return `
+              <div class="list-group-item px-0">
+                <div class="d-flex justify-content-between gap-3 flex-wrap">
+                  <div>
+                    <div class="fw-semibold">
+                      <span class="badge bg-warning text-dark me-1">DESVERIFICADO</span>
+                      ${esc(r.persona || `Registro #${r.id_persona || ""}`)}
+                    </div>
+                    <div class="small text-muted">Oficina: ${esc(r.oficina_nombre || "—")}</div>
+                  </div>
+                  <div class="small text-muted text-end">${esc(fmtDT(r.desverf_final_at))}</div>
+                </div>
+                <div class="small text-muted mt-1">Modificado por: ${esc(r.desverf_por_nombre || "—")}</div>
+                ${camposLabel ? `
+                <div class="mt-2 p-2 rounded" style="background:#fff8e1;border:1px solid #ffe082;">
+                  <div class="small fw-semibold" style="color:#b45309;">
+                    <i class="bi bi-pencil-square me-1"></i>Campos que cambiaron:
+                  </div>
+                  <div class="small mt-1" style="color:#92400e;">${esc(camposLabel)}</div>
+                </div>` : ""}
+                <div class="small text-warning mt-1">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Requiere re-verificación FINAL
+                </div>
+              </div>
+            `;
+          }
+
           // ── Registros ocultos ──
           if ("oculto_at" in r) {
             return `
@@ -2307,26 +2494,48 @@ function showAlertDetailModal(alerta, opts = {}) {
             `;
           }
 
-          // ── Observaciones / devoluciones (formato original) ──
+          // ── Observaciones / devoluciones ──
           const fecha = r.atendida_at || r.created_at;
           const descartada = isObservacionAlert && r.id_observacion && hidden.has(String(r.id_observacion));
+
+          const nivelLabel = { FINAL: "Final", AREA: "Dirección", OFFICE: "Coordinación", SELF: "Capturista" }[r.nivel] || r.nivel || "—";
+
+          const dirigidoLabel = (() => {
+            const base = { SELF: "Capturista", AREA: "Dirección", OFFICE: "Coordinación" }[r.dirigido_a] || r.dirigido_a || "—";
+            return r.dirigido_a_nombre ? `${base} — ${esc(r.dirigido_a_nombre)}` : base;
+          })();
+
           const atendida = r.atendida_por_nombre
-            ? `<div class="small text-success mt-1"><i class="bi bi-check-circle me-1"></i>Atendida por: ${esc(r.atendida_por_nombre)}${r.atendida_at ? ` - ${esc(fmtDT(r.atendida_at))}` : ""}</div>`
+            ? `<div class="small text-success mt-1"><i class="bi bi-check-circle me-1"></i>Atendida por: ${esc(r.atendida_por_nombre)}${r.atendida_at ? ` · ${esc(fmtDT(r.atendida_at))}` : ""}</div>`
             : "";
+
           return `
             <div class="list-group-item px-0" data-alert-item="${esc(r.id_observacion || "")}">
               <div class="d-flex justify-content-between gap-3 flex-wrap">
                 <div>
                   <div class="fw-semibold">${esc(r.persona || `Registro #${r.id_persona || ""}`)}</div>
-                  <div class="small text-muted">ID ${esc(r.id_persona || "-")} - Nivel ${esc(r.nivel || "-")} - Para ${esc(r.dirigido_a || "-")} ${descartada ? " - Oculta" : ""}</div>
+                  <div class="small text-muted">
+                    ID ${esc(r.id_persona || "—")}
+                    · Nivel <strong>${esc(nivelLabel)}</strong>
+                    · Para <strong>${dirigidoLabel}</strong>
+                    ${descartada ? " · <em>Oculta</em>" : ""}
+                  </div>
                 </div>
                 <div class="text-end">
                   <div class="small text-muted">${esc(fmtDT(fecha))}</div>
-                  ${isObservacionAlert && r.id_observacion && !descartada ? `<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-action="descartar-observacion-alerta" data-id="${esc(r.id_observacion)}">Ocultar alerta</button>` : ""}
+                  ${isObservacionAlert && r.id_observacion && !descartada
+                    ? `<button type="button" class="btn btn-sm btn-outline-secondary mt-2"
+                               data-action="descartar-observacion-alerta"
+                               data-id="${esc(r.id_observacion)}">Ocultar alerta</button>`
+                    : ""}
                 </div>
               </div>
-              <div class="mt-2">${esc(r.observacion || "-")}</div>
-              <div class="small text-muted mt-1">Observó: ${esc(r.creado_por_nombre || "Sistema")}</div>
+              <div class="mt-2 fst-italic">${esc(r.observacion || "—")}</div>
+              <div class="small text-muted mt-2 d-flex flex-wrap gap-3">
+                <span><i class="bi bi-building me-1"></i>${esc(r.oficina_nombre || "—")}</span>
+                <span><i class="bi bi-person me-1"></i>Capturó: ${esc(r.capturista_nombre || "—")}</span>
+                <span><i class="bi bi-eye me-1"></i>Observó: ${esc(r.creado_por_nombre || "Sistema")}</span>
+              </div>
               ${atendida}
             </div>
           `;
@@ -2381,6 +2590,15 @@ async function renderAlertSummary() {
     });
   }
 
+  if (Number(stats.desverificados_auto || 0) > 0) {
+    alertas.push({
+      cls: "is-danger",
+      title: `${stats.desverificados_auto} registro(s) perdieron verificación FINAL por cambio de datos`,
+      text: "Un dato fue modificado después de la verificación. Requieren re-verificación.",
+      items: stats.desverificados_auto_detalle || []
+    });
+  }
+
   if (Number(stats.observaciones_atendidas_hoy || 0) > 0) {
     alertas.push({
       cls: "is-info",
@@ -2391,17 +2609,20 @@ async function renderAlertSummary() {
 
   alertas.forEach(a => {
     if (a.title.includes("pendiente")) {
-      a.tipo = "observaciones";
+      a.tipo  = "observaciones";
       a.items = stats.observaciones_pendientes_detalle || [];
+      a.usePagination = true;
     }
-    if (a.title.includes("FINAL")) {
-      a.tipo = "observaciones";
+    if (a.title.includes("FINAL") && !a.title.includes("verificación")) {
+      a.tipo  = "final";
       a.items = stats.devoluciones_final_7d_detalle || [];
+      a.usePagination = true;
     }
     if (a.title.includes("atendida")) {
-      a.tipo = "observaciones";
+      a.tipo  = "atendidas";
       a.title = `${stats.observaciones_atendidas_hoy} observacion(es) atendida(s)`;
       a.items = stats.observaciones_atendidas_hoy_detalle || [];
+      a.usePagination = true;
     }
   });
 
@@ -2449,20 +2670,30 @@ async function renderAlertSummary() {
     return;
   }
 
-  c.innerHTML = alertas.map((a, idx) => `
-    <div class="alert-item ${a.cls} ${Array.isArray(a.items) && a.items.length ? "is-clickable" : ""}" data-alert-idx="${idx}">
-      <div class="alert-item-title">${esc(a.title)}</div>
-      <div class="alert-item-text">${esc(a.text)}</div>
-      ${Array.isArray(a.items) && a.items.length ? `<div class="alert-item-meta"><i class="bi bi-search me-1"></i>Ver resumen</div>` : ""}
-    </div>
-  `).join("");
+  c.innerHTML = alertas.map((a, idx) => {
+    const clickable = a.usePagination || (Array.isArray(a.items) && a.items.length);
+    return `
+      <div class="alert-item ${a.cls} ${clickable ? "is-clickable" : ""}" data-alert-idx="${idx}">
+        <div class="alert-item-title">${esc(a.title)}</div>
+        <div class="alert-item-text">${esc(a.text)}</div>
+        ${clickable ? `<div class="alert-item-meta"><i class="bi bi-search me-1"></i>Ver detalle</div>` : ""}
+      </div>`;
+  }).join("");
 
   c.querySelectorAll("[data-alert-idx]").forEach(el => {
     el.addEventListener("click", () => {
-      const idx = Number(el.dataset.alertIdx);
+      const idx    = Number(el.dataset.alertIdx);
       const alerta = alertas[idx];
-      if (!alerta || !Array.isArray(alerta.items) || !alerta.items.length) return;
-      showAlertDetailModal(alerta);
+      if (!alerta) return;
+      // Observaciones → modal paginado con fetch server-side
+      if (alerta.usePagination) {
+        showObservacionesModal(alerta, 1);
+        return;
+      }
+      // Resto (ocultos, desverificados) → modal estático
+      if (Array.isArray(alerta.items) && alerta.items.length) {
+        showAlertDetailModal(alerta);
+      }
     });
   });
 }
@@ -2536,6 +2767,67 @@ async function renderAlertSummary() {
 
     const rows = await loadNotificaciones();
     updateBadgeNotificaciones(rows);
+  }
+
+  // ── Highlight de registro post-edición ──────────────────────────────────────
+  const _highlightId = (() => {
+    const p = new URLSearchParams(window.location.search).get("highlight");
+    const id = Number(p);
+    if (id > 0) {
+      // Limpia el param de la URL sin recargar
+      window.history.replaceState({}, "", "/dashboard");
+      // Usa updated_at DESC para que el registro editado esté en página 1
+      gridState.sortField = "updated_at";
+      return id;
+    }
+    return null;
+  })();
+
+  let _keepSelection = false; // flag para re-seleccionar tras reloadGrid(true)
+
+  function _flashRow(idPersona) {
+    if (!idPersona || !window.personasGrid) return;
+    const row = window.personasGrid.getRow(idPersona);
+    if (!row) return;
+    const el  = row.getElement();
+    const data = row.getData();
+    if (!el) return;
+
+    // Scroll suave al registro
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    // Animación dorada
+    el.style.transition = "background .3s, outline .3s";
+    el.style.background  = "#fef3c7";
+    el.style.outline     = "2px solid #b89056";
+    el.style.borderRadius = "6px";
+    setTimeout(() => {
+      el.style.background = "";
+      el.style.outline    = "";
+    }, 3000);
+
+    // Seleccionar la fila y abrir panel lateral con datos frescos
+    selectedRowData = data;
+    openDetailPanel(data);
+  }
+
+  function _reSelectAfterReload(idPersona) {
+    if (!idPersona || !window.personasGrid) return;
+    const row = window.personasGrid.getRow(idPersona);
+    if (!row) return;
+    const el   = row.getElement();
+    const data = row.getData();
+
+    selectedRowData = data;
+    openDetailPanel(data);  // refresca panel con datos actualizados
+
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Pulso sutil para indicar que se actualizó
+      el.style.transition  = "background .25s";
+      el.style.background  = "#f0fdf4";
+      setTimeout(() => { el.style.background = ""; }, 1500);
+    }
   }
 
   document.addEventListener("DOMContentLoaded", () => {
