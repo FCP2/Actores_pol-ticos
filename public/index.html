@@ -1420,7 +1420,7 @@
       </form>
     </div>
 
-    <!-- ================== PREVIEW ================== 
+    <!-- ================== PREVIEW ================== -->
     <div class="col-lg-4">
       <div class="card">
         <div class="card-body">
@@ -1429,7 +1429,7 @@
           <pre id="payloadPreview" class="bg-light p-3 rounded" style="max-height: 75vh; overflow:auto; font-size: 12px;"></pre>
         </div>
       </div>
-    </div>-->
+    </div>
 
   </div>
 </div>
@@ -6545,7 +6545,17 @@ function initGrupoPostulacionMulti() {
             await cargarListaBorradores();
           }
 
-          if (isEdit) activateEditing(null);
+          if (isEdit) {
+            // Superadmin: volver al dashboard posicionado en el registro editado
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if ((user.roles || []).includes('superadmin')) {
+              setTimeout(() => {
+                window.location.href = `/dashboard?highlight=${idGuardado}`;
+              }, 1200);
+              return;
+            }
+            activateEditing(null);
+          }
           clearAll();
 
         } catch (err) {
