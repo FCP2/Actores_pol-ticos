@@ -255,11 +255,12 @@ function updateVerifButtons(p) {
 }
 
   function refreshGridSafe() {
-    if (!grid) {
-      console.log("⏳ Grid no listo");
-      return;
+    if (!grid) return;
+    if (grid.getPage() === 1) {
+      grid.setData();
+    } else {
+      grid.setPage(1);
     }
-    grid.setData();  // ← RECARGA REMOTA AUTOMÁTICA
   }
 
 function setupFilterEvents() {
@@ -314,12 +315,23 @@ function setupFilterEvents() {
     });
   }
 
+  const fltConObs = document.getElementById("fltConObservacion");
+  if (fltConObs) {
+    fltConObs.addEventListener("change", () => refreshGridSafe());
+  }
+
   if (fSearch) {
     const onSearch = debounce(() => {
-      if (grid) grid.setPage(1);
-      refreshGridSafe();
-    }, 500);
+      if (!grid) return;
+      if (grid.getPage() === 1) {
+        grid.setData();   // ya en pág 1 → fuerza re-fetch (paste, borrar texto, etc.)
+      } else {
+        grid.setPage(1);  // en otra pág → navega a pág 1 y re-fetcha
+      }
+    }, 400);
     fSearch.addEventListener("input", onSearch);
+    // paste: espera que el DOM actualice el valor antes de buscar
+    fSearch.addEventListener("paste", () => setTimeout(() => onSearch(), 50));
   }
 
   if (btnBuscar) {
@@ -564,6 +576,10 @@ async function loadReferentesSelect(){
         const capturistaId = document.getElementById("fUsuario")?.value;
         if (capturistaId) qs.set("capturistaId", capturistaId);
 
+        if (document.getElementById("fltConObservacion")?.checked) {
+          qs.set("con_observacion", "1");
+        }
+
         const referente = document.getElementById("txtReferente")?.value?.trim();
         if (referente) {
           qs.set("referente", referente);
@@ -636,6 +652,24 @@ async function loadReferentesSelect(){
       },
 
       columns: [
+        {
+          title: "",
+          field: "obs_pendientes",
+          width: 46,
+          hozAlign: "center",
+          headerSort: false,
+          tooltip: false,
+          formatter: (cell) => {
+            const n = Number(cell.getValue() || 0);
+            if (!n) return "";
+            return `<span title="${n} observación${n > 1 ? "es" : ""} pendiente${n > 1 ? "s" : ""}"
+                         style="display:inline-flex;align-items:center;justify-content:center;
+                                width:26px;height:26px;border-radius:50%;
+                                background:#fef3c7;border:1.5px solid #fde68a;cursor:help;">
+                      <i class="bi bi-envelope-exclamation-fill" style="color:#d97706;font-size:13px;"></i>
+                    </span>`;
+          }
+        },
         {
           title: "Estado",
           field: "_estado_verif",
@@ -1274,50 +1308,18 @@ function renderObservacionesPanel(rows = []) {
           ${
             r.atendida
               ? `<div class="small text-success">
-                   Atendida ${r.atendida_at ? `el ${esc(fmtDT(r.atendida_at))}` : ""}
+                   <i class="bi bi-check-circle me-1"></i>Atendida ${r.atendida_at ? `el ${esc(fmtDT(r.atendida_at))}` : ""}
                    ${r.atendida_por_nombre ? `por ${esc(r.atendida_por_nombre)}` : ""}
                  </div>`
-              : `
-                <div class="mt-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-success"
-                    data-action="atender-observacion"
-                    data-id="${r.id_observacion}">
-                    Marcar como atendida
-                  </button>
-                </div>
-              `
+              : `<div class="small text-warning mt-1">
+                   <i class="bi bi-clock me-1"></i>Pendiente de atención
+                 </div>`
           }
         </div>
       `).join("")}
     </div>
   `;
 
-  el.querySelectorAll('[data-action="atender-observacion"]').forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const idObservacion = Number(btn.dataset.id);
-      if (!Number.isFinite(idObservacion) || !selectedData?.id_persona) return;
-
-      try {
-        btn.disabled = true;
-
-        await apiFetch(`/personas/analista/personas/observaciones/${idObservacion}/atender`, {
-          method: "POST"
-        });
-
-        updateAlert("Observación marcada como atendida.", "success");
-
-        const observaciones = await loadPersonaObservaciones(selectedData.id_persona);
-        renderObservacionesPanel(observaciones);
-
-      } catch (e) {
-        console.error("Error atendiendo observación:", e);
-        updateAlert(e.message || "No se pudo marcar la observación como atendida.", "danger");
-        btn.disabled = false;
-      }
-    });
-  });
 }
 
 async function renderObservacionesInboxAnalista() {
@@ -1366,6 +1368,203 @@ async function renderObservacionesInboxAnalista() {
   }
 }
 
+  // ── Alertas operativas analista ───────────────────────────────────────────
+
+  const CAMPO_LABELS_ANALISTA = {
+    nombre: "Nombre", apellido_paterno: "Apellido paterno", apellido_materno: "Apellido materno",
+    curp: "CURP", rfc: "RFC", clave_elector: "Clave de elector",
+    municipio_trabajo_politico: "Municipio de trabajo",
+    id_partido_actual: "Partido político", partido_otro_texto: "Otro partido",
+    nivel_confiabilidad: "Confiabilidad", escala_influencia: "Escala de influencia",
+    id_oficina: "Oficina"
+  };
+
+  function escA(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c =>
+      ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c])
+    );
+  }
+
+  function fmtDTA(v) {
+    if (!v) return "—";
+    try {
+      return new Date(v).toLocaleString("es-MX", {
+        timeZone: "America/Mexico_City", year:"numeric",
+        month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit"
+      });
+    } catch { return String(v); }
+  }
+
+  function renderCampos(str) {
+    if (!str) return "";
+    const labels = str.split(",").map(c => CAMPO_LABELS_ANALISTA[c.trim()] || c.trim()).join(", ");
+    return `
+      <div class="mt-2 px-2 py-1 rounded" style="background:#fff8e1;border:1px solid #ffe082;font-size:11px;">
+        <span style="color:#b45309;font-weight:600;"><i class="bi bi-pencil-square me-1"></i>Campos:</span>
+        <span style="color:#92400e;">${escA(labels)}</span>
+      </div>`;
+  }
+
+  async function renderAlertasAnalista() {
+    const container = document.getElementById("alertasAnalistaContainer");
+    if (!container) return;
+
+    let stats = {};
+    try {
+      const resp = await apiGet("/personas/analista/kpi/alertas");
+      stats = resp?.data || {};
+    } catch { return; }
+
+    const alertas = [];
+
+    if (Number(stats.observaciones_pendientes || 0) > 0) {
+      alertas.push({
+        cls: "danger", icon: "bi-envelope-exclamation-fill",
+        label: "Observaciones pendientes",
+        count: stats.observaciones_pendientes,
+        title: `${stats.observaciones_pendientes} observación(es) pendiente(s)`,
+        text: "Registros devueltos que requieren atención.",
+        items: stats.observaciones_pendientes_detalle || [],
+        tipo: "obs"
+      });
+    }
+    if (Number(stats.desverf_area || 0) > 0) {
+      alertas.push({
+        cls: "warning", icon: "bi-shield-exclamation",
+        label: "Desverif. Dirección",
+        count: stats.desverf_area,
+        title: `${stats.desverf_area} registro(s) perdieron verificación de Dirección`,
+        text: "Campo crítico modificado. Re-verificar.",
+        items: stats.desverf_area_detalle || [],
+        tipo: "area"
+      });
+    }
+    if (Number(stats.desverf_office || 0) > 0) {
+      alertas.push({
+        cls: "warning", icon: "bi-shield-exclamation",
+        label: "Desverif. Coordinación",
+        count: stats.desverf_office,
+        title: `${stats.desverf_office} registro(s) perdieron verificación de Coordinación`,
+        text: "Campo crítico modificado. Re-verificar.",
+        items: stats.desverf_office_detalle || [],
+        tipo: "office"
+      });
+    }
+
+
+    if (!alertas.length) {
+      container.innerHTML = "";
+      container.style.display = "none";
+      return;
+    }
+    container.style.display = "";
+
+    // Estilo KPI horizontal — chips clickeables en la parte superior
+    container.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        ${alertas.map((a, idx) => `
+          <div data-idx="${idx}"
+               style="display:flex;align-items:center;gap:10px;
+                      padding:10px 16px;border-radius:10px;
+                      background:${a.cls === "danger" ? "#fff0f0" : "#fffbe6"};
+                      border:1.5px solid ${a.cls === "danger" ? "#fca5a5" : "#fde68a"};
+                      cursor:${a.items.length ? "pointer" : "default"};
+                      min-width:220px;flex:1;transition:box-shadow .15s;"
+               onmouseenter="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'"
+               onmouseleave="this.style.boxShadow='none'">
+            <div style="width:36px;height:36px;border-radius:8px;flex-shrink:0;
+                        background:${a.cls === "danger" ? "#fee2e2" : "#fef3c7"};
+                        display:flex;align-items:center;justify-content:center;">
+              <i class="bi ${a.icon}"
+                 style="font-size:17px;color:${a.cls === "danger" ? "#dc2626" : "#d97706"};"></i>
+            </div>
+            <div class="flex-grow-1 min-w-0">
+              <div style="font-size:11px;color:#6b7280;text-transform:uppercase;
+                          letter-spacing:.4px;font-weight:600;">
+                ${escA(a.label)}
+              </div>
+              <div style="font-size:20px;font-weight:800;
+                          color:${a.cls === "danger" ? "#dc2626" : "#d97706"};
+                          line-height:1.1;">
+                ${a.count}
+              </div>
+              <div style="font-size:10.5px;color:#6b7280;margin-top:1px;">
+                ${escA(a.text)}
+              </div>
+            </div>
+            ${a.items.length ? `
+              <i class="bi bi-arrow-right-circle"
+                 style="color:#9ca3af;font-size:16px;flex-shrink:0;"></i>` : ""}
+          </div>
+        `).join("")}
+      </div>`;
+
+    container.querySelectorAll("[data-idx]").forEach(el => {
+      el.addEventListener("click", () => {
+        const a = alertas[Number(el.dataset.idx)];
+        if (!a?.items?.length) return;
+        showAlertaAnalistaModal(a);
+      });
+    });
+  }
+
+  function showAlertaAnalistaModal(alerta) {
+    const body  = document.getElementById("modalAlertaAnalistaBody");
+    const title = document.getElementById("modalAlertaAnalistaLabel");
+    if (!body || !title) return;
+
+    title.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${escA(alerta.title)}`;
+
+    body.innerHTML = `
+      <p class="text-muted small mb-3">${escA(alerta.text)}</p>
+      <div class="list-group list-group-flush">
+        ${alerta.items.map(r => {
+          const esDesverf = alerta.tipo === "area" || alerta.tipo === "office";
+          const fecha = esDesverf
+            ? (r.desverf_area_at || r.desverf_office_at)
+            : r.created_at;
+          const campos = esDesverf
+            ? (r.desverf_area_campos || r.desverf_office_campos)
+            : null;
+          // Etiqueta "Para:" con nombre real del destinatario
+          const dirigidoLabel = (() => {
+            if (esDesverf) return null;
+            const base = { SELF: "Capturista", AREA: "Dirección", OFFICE: "Coordinación" }[r.dirigido_a] || r.dirigido_a || "—";
+            return r.dirigido_a_nombre ? `${base} — ${escA(r.dirigido_a_nombre)}` : base;
+          })();
+
+          return `
+            <div class="list-group-item px-0">
+              <div class="d-flex justify-content-between gap-3 flex-wrap">
+                <div>
+                  <div class="fw-semibold" style="font-size:13px;">
+                    ${esDesverf ? `<span class="badge bg-warning text-dark me-1">DESVERIFICADO</span>` : ""}
+                    ${escA(r.persona || `Registro #${r.id_persona || ""}`)}
+                  </div>
+                  ${dirigidoLabel ? `
+                    <div class="small mt-1">
+                      <i class="bi bi-send me-1" style="color:#8b2136;"></i>
+                      <strong>Para:</strong> ${dirigidoLabel}
+                    </div>` : ""}
+                  <div class="small text-muted">Oficina: ${escA(r.oficina_nombre || "—")}</div>
+                </div>
+                <div class="small text-muted">${escA(fmtDTA(fecha))}</div>
+              </div>
+              <div class="small text-muted mt-1">
+                ${esDesverf ? "Modificado por" : "Observó"}: ${escA(r.desverf_por_nombre || r.creado_por_nombre || "—")}
+              </div>
+              ${campos ? renderCampos(campos) : ""}
+              ${!esDesverf && r.observacion ? `<div class="mt-1 small fst-italic">${escA(r.observacion)}</div>` : ""}
+              ${esDesverf ? `<div class="small mt-1" style="color:#d97706;"><i class="bi bi-arrow-counterclockwise me-1"></i>Requiere re-verificación</div>` : ""}
+            </div>`;
+        }).join("")}
+      </div>`;
+
+    bootstrap.Modal.getOrCreateInstance(
+      document.getElementById("modalAlertaAnalistaDetalle")
+    ).show();
+  }
+
   async function init() {
     try { await initUserHeader(); } catch (e) { console.warn(e); }
     // 1) GRID Y EVENTOS PRIMERO
@@ -1375,7 +1574,7 @@ async function renderObservacionesInboxAnalista() {
     await loadCapturistasFiltro();
     await loadKpiCompletitud();
     await loadSessionUser();
-    await renderObservacionesInboxAnalista();
+    renderAlertasAnalista().catch(console.warn);
     setupReferenteAutocomplete();
     loadReferentesSelect();
 
