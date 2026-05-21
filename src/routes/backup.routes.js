@@ -2,9 +2,11 @@ const router  = require("express").Router();
 const { spawn } = require("child_process");
 const path    = require("path");
 
-const UPLOADS_DIR   = process.env.UPLOAD_DIR
-  ? path.resolve(process.env.UPLOAD_DIR)
-  : path.join(__dirname, "../../uploads");
+const UPLOADS_DIR = process.env.DISK_MOUNT_PATH
+  ? path.join(process.env.DISK_MOUNT_PATH, "uploads")   // Render: /var/data/uploads
+  : process.env.UPLOAD_DIR
+    ? path.resolve(process.env.UPLOAD_DIR)
+    : path.join(__dirname, "../../uploads");
 
 const BACKUP_SECRET = process.env.BACKUP_SECRET || "";
 
