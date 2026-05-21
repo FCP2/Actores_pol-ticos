@@ -443,6 +443,17 @@ function buildGridQuery(extra = {}) {
       $("dashboardSidebar")?.classList.toggle("open");
     });
 
+    document.querySelectorAll(".sidebar-link[href^='#']").forEach(link => {
+      link.addEventListener("click", () => {
+        document.querySelectorAll(".sidebar-link").forEach(a => {
+          a.classList.remove("active");
+          a.removeAttribute("aria-current");
+        });
+        link.classList.add("active");
+        link.setAttribute("aria-current", "page");
+        $("dashboardSidebar")?.classList.remove("open");
+      });
+    });
 
     $("btnRefreshDashboard")?.addEventListener("click", () => {
       loadAllDashboardData();
