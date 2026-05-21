@@ -2,16 +2,17 @@ const { Pool } = require('pg');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 8,                    // 🔑 Límite seguro Render free/low
-  idleTimeoutMillis: 30000,  // 🔑 Cierra idle >30s (evita "terminated")
-  connectionTimeoutMillis: 5000,
-  allowExitOnIdle: false     // 🔑 No exit cuando idle muere
+  max: 8,
+  idleTimeoutMillis: 10000,       // Cierra idle mucho antes de que Render las mate (~30s)
+  connectionTimeoutMillis: 8000,  // Más margen para conectar a DB remota
+  allowExitOnIdle: false,
+  keepAlive: true,                // TCP keepalive — previene que el OS mate la conexión
+  keepAliveInitialDelayMillis: 5000
 });
 
-// 🔑 Handler errores idle (Render mata conex idle)
-pool.on('error', (err, client) => {
-  console.error('🔴 Pool idle error:', err.message);
-  // No process.exit() - deja que Render maneje
+// Captura errores en clientes idle del pool (Render mata conexiones inactivas)
+pool.on('error', (err) => {
+  console.error('🔴 Pool error:', err.message);
 });
 
 pool.on('connect', (client) => {
