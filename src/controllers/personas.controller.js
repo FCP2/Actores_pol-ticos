@@ -9027,7 +9027,7 @@ exports.alertasObservacionesPaginadas = async (req, res) => {
     if (tipo === "pendientes") {
       whereObs = "AND po.atendida = false";
     } else if (tipo === "atendidas_hoy") {
-      whereObs = "AND po.atendida = true AND po.atendida_at::date = CURRENT_DATE";
+      whereObs = "AND po.atendida = true";
       orderBy  = "po.atendida_at DESC, po.id_observacion DESC";
     } else if (tipo === "final_7d") {
       whereObs = "AND po.nivel = 'FINAL' AND po.created_at >= now() - interval '7 days'";
