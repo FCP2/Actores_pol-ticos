@@ -6582,9 +6582,8 @@ exports.updatePersonaCompleta = async (req, res) => {
       return res.status(403).json({ error: "Usuario sin oficina asignada" });
     }
 
-    const oficinaFinal = isSuperadmin
-      ? (persona.id_oficina || req.user.id_oficina || null)
-      : req.user.id_oficina;
+    // ⚠️ oficina se calcula DESPUÉS de obtener ownerRows para no pisar la oficina original
+    let oficinaFinal; // se asigna más abajo, tras obtener el registro actual
 
     // Validación: controversias vs sin_controversias_publicas
     if (persona.sin_controversias_publicas === true && Array.isArray(controversias) && controversias.length > 0) {
@@ -6688,6 +6687,11 @@ exports.updatePersonaCompleta = async (req, res) => {
     }
 
     const owner = ownerRows[0];
+
+    // Superadmin: si no manda id_oficina, conserva la oficina original del registro
+    oficinaFinal = isSuperadmin
+      ? (Number(persona.id_oficina) || Number(owner.id_oficina) || null)
+      : req.user.id_oficina;
 
     // reglas por rol
     const isAnalista = roles.includes("analista");
