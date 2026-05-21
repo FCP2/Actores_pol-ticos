@@ -416,18 +416,43 @@
           </div>
 
           <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-              <div class="small text-muted" id="gridInfo">Mostrando 0 registros</div>
-              <div class="small text-muted" id="gridInfoExtra">Sin filtros aplicados</div>
-            </div>
+            <div class="row g-4 align-items-stretch master-detail-layout">
+              <div class="col-lg-5">
+                <div class="card master-list-card h-100">
+                  <div class="card-header bg-white border-bottom">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                      <div>
+                        <div class="fw-bold text-dark">Listado de actores</div>
+                        <div class="small text-muted">La bandeja usa los filtros globales superiores.</div>
+                      </div>
+                      <div class="text-end">
+                        <div class="small text-muted" id="gridInfo">Mostrando 0 registros</div>
+                        <div class="small text-muted" id="gridInfoExtra">Sin filtros aplicados</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body p-3">
+                    <div id="gridPersonas"></div>
+                  </div>
+                </div>
+              </div>
 
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-              <div class="small text-muted">
-                La bandeja usa los filtros globales superiores.
+              <div class="col-lg-7">
+                <div class="card master-detail-card h-100">
+                  <div id="estadoVacioFicha" class="master-detail-empty">
+                    <div class="master-detail-empty-icon">
+                      <i class="bi bi-person-vcard"></i>
+                    </div>
+                    <h4 class="mb-2">Selecciona un actor politico</h4>
+                    <p class="text-muted mb-0">
+                      El expediente ejecutivo se mostrara aqui
+                    </p>
+                  </div>
+
+                  <div id="contenedorFichaDetalle" class="d-none"></div>
+                </div>
               </div>
             </div>
-
-            <div id="gridPersonas"></div>
           </div>
         </div>
       </section>
@@ -445,19 +470,20 @@
                   <small class="text-muted">Cobertura, verificación y concentración de actores</small>
                 </div>
 
-                <div class="d-flex gap-2">
-                  <select class="form-select form-select-sm" id="mapLayerSelect" style="width:220px;">
-                    <option value="cobertura">Cobertura de registros</option>
-                    <option value="verificacion">Nivel de verificación</option>
-                    <option value="confiabilidad">Confiabilidad</option>
-                    <option value="controversias">Controversias</option>
-                    <option value="influencia">Influencia</option>
-                  </select>
-                  <button
-                    class="btn btn-outline-secondary btn-sm"
-                    id="btnResetMap"
-                    aria-label="Restablecer vista del mapa"
-                  >
+                <div class="d-flex align-items-center gap-1 flex-wrap">
+                  <button class="map-layer-btn active" data-layer="cobertura" title="Total de actores por municipio">
+                    <i class="bi bi-bar-chart-fill"></i> Cobertura
+                  </button>
+                  <button class="map-layer-btn" data-layer="partido" title="Partido dominante por municipio">
+                    <i class="bi bi-flag-fill"></i> Partido
+                  </button>
+                  <button class="map-layer-btn" data-layer="verificacion" title="% de actores verificados">
+                    <i class="bi bi-shield-check"></i> Verificación
+                  </button>
+                  <button class="map-layer-btn" data-layer="confiabilidad" title="% de confiabilidad alta">
+                    <i class="bi bi-star-fill"></i> Confiabilidad
+                  </button>
+                  <button class="btn btn-outline-secondary btn-sm ms-1" id="btnResetMap" title="Restablecer vista">
                     <i class="bi bi-arrow-counterclockwise"></i>
                   </button>
                 </div>
