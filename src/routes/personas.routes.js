@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const ctrl = require('../controllers/personas.controller');
 const reportesCtrl = require('../controllers/reportes.controller');
+const previewCtrl = require('../controllers/personas.preview.controller');
 const { requireAuth, requireRole, requireOffice } = require('../middlewares/auth');
 const { applySmartFilters } = require('../middlewares/smartFilter'); // .js!
 
@@ -139,6 +140,12 @@ router.get('/reportes/municipios',
   requireAuth,
   requireRole('superadmin'),
   reportesCtrl.reporteMunicipios
+);
+
+router.get('/preview/:id/pdf',
+  requireAuth,
+  requireRole('superadmin', 'analista', 'capturista'),
+  previewCtrl.previewExpedientePdf
 );
 
 router.post(
