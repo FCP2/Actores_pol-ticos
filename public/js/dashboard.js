@@ -20,6 +20,7 @@ const CAPTURISTAS_URL = "/api/personas/admin/capturistas";
 
 const MUNICIPIOS_URL = "/api/municipios";
 const COBERTURA_URL = "/api/analista/municipios/cobertura";
+const CAPAS_URL     = "/api/analista/municipios/capas";
 const MUNICIPIOS_JSON_URL = "/data/municipios.json";
 const KPI_RESUMEN_EJECUTIVO_URL = "/api/personas/admin/kpis/resumen-ejecutivo";
 
@@ -802,7 +803,7 @@ function buildGridQuery(extra = {}) {
       window.drawMunicipios(municipiosConPoligono);
     }
 
-    await loadAndPaintMunicipioCoverage();
+    await loadCapasMapa();
 
     if (typeof window.setOnMunicipioSelected === "function") {
       window.setOnMunicipioSelected((idMunicipio) => {
@@ -835,11 +836,13 @@ function buildGridQuery(extra = {}) {
       resetMapUI();
     });
 
-    $("mapLayerSelect")?.addEventListener("change", () => {
-      updateMapLayerText();
+    document.querySelectorAll(".map-layer-btn[data-layer]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".map-layer-btn[data-layer]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        window.switchMapLayer?.(btn.dataset.layer);
+      });
     });
-
-    updateMapLayerText();
   }
 
   function resetMapUI() {
@@ -851,34 +854,13 @@ function buildGridQuery(extra = {}) {
     }
   }
 
-  function updateMapLayerText() {
-    const layer = $("mapLayerSelect")?.value || "cobertura";
-    const map = {
-      cobertura: "Capa activa: cobertura de registros.",
-      verificacion: "Capa activa: nivel de verificación por municipio.",
-      confiabilidad: "Capa activa: confiabilidad por municipio.",
-      controversias: "Capa activa: controversias por municipio.",
-      influencia: "Capa activa: influencia territorial."
-    };
-    setText("mapResumen", map[layer], "");
-  }
-
-  async function loadAndPaintMunicipioCoverage() {
+  async function loadCapasMapa() {
     try {
-      const resp = await fetchJson(COBERTURA_URL);
-      const conteo = resp?.data || resp || [];
-
-      if (typeof window.setMunicipioCoverageCounts === "function") {
-        const normalized = {};
-        (conteo || []).forEach(row => {
-          const id = Number(row.id_municipio);
-          if (!id) return;
-          normalized[id] = Number(row.total || row.count || 0);
-        });
-        window.setMunicipioCoverageCounts(normalized);
-      }
+      const resp = await fetchJson(CAPAS_URL);
+      const data = resp?.data || [];
+      window.setCapasMapa?.(data);
     } catch (err) {
-      console.warn("No se pudo pintar cobertura municipal:", err.message);
+      console.warn("No se pudo cargar capas del mapa:", err.message);
     }
   }
 
@@ -908,9 +890,11 @@ async function loadPersonaMunicipiosTrabajoDashboard(idPersona) {
 /*refrentes, seleccion actores pintar el mapa*/
 async function loadAndPaintFilteredMunicipiosDashboard() {
   try {
+    // Si hay municipio seleccionado en el mapa, resaltarMunicipioById ya lo marcó — no pisar
+    if (gridState.municipio_trabajo) return;
+
     const hasRelevantFilter =
       !!gridState.referente ||
-      !!gridState.municipio_trabajo ||
       !!gridState.oficinaId ||
       !!gridState.capturistaId ||
       !!gridState.partidoId ||
@@ -1129,7 +1113,7 @@ function initials(nombre = "") {
     .join("");
 }
 
-function personaFormatter(cell) {
+function legacyPersonaFormatter(cell) {
   const row    = cell.getRow().getData();
   const nombre = row.nombre_completo || "Sin nombre";
   const sub    = row.telefono_principal || row.referentes_nombres || "Sin detalle";
@@ -1201,6 +1185,49 @@ function actionsFormatter(cell) {
         <i class="bi bi-eye"></i>
       </button>
       ${ocultarBtn}
+    </div>
+  `;
+}
+
+function personaFormatter(cell) {
+  const row = cell.getRow().getData();
+  const nombre = row.nombre_completo || row.nombre || "Sin nombre";
+  const municipio = row.municipio_trabajo_nombre || "Sin municipio";
+  const obsPendientes = Number(row.obs_pendientes || 0);
+
+  const ocultoBadge = row.oculto
+    ? `<span class="badge text-bg-danger">OCULTO</span>`
+    : "";
+
+  const obsBadge = obsPendientes > 0
+    ? `<span class="badge text-bg-warning" title="${obsPendientes} observacion${obsPendientes > 1 ? "es" : ""} sin atender">
+         <i class="bi bi-envelope-exclamation-fill me-1"></i>${obsPendientes}
+       </span>`
+    : "";
+
+  return `
+    <div class="persona-list-card">
+      <div class="persona-list-photo">
+        ${
+          row.foto_url
+            ? `<img src="${esc(row.foto_url)}" alt="Foto de ${esc(nombre)}" loading="lazy">`
+            : `<span>${esc(initials(nombre))}</span>`
+        }
+      </div>
+      <div class="d-flex justify-content-between align-items-start gap-3">
+        <div class="min-w-0">
+          <div class="persona-list-name text-uppercase">${esc(nombre)}</div>
+          <div class="d-flex align-items-center flex-wrap gap-2 mt-2">
+            <span class="badge rounded-pill text-bg-light border text-dark">ID ${esc(row.id_persona || "N/D")}</span>
+            <span class="badge rounded-pill persona-municipio-badge">
+              <i class="bi bi-geo-alt-fill me-1"></i>${esc(municipio)}
+            </span>
+            ${ocultoBadge}
+            ${obsBadge}
+          </div>
+        </div>
+        <i class="bi bi-chevron-right text-muted mt-1"></i>
+      </div>
     </div>
   `;
 }
@@ -1301,16 +1328,16 @@ function initPersonasGrid() {
 
   window.personasGrid = new Tabulator("#gridPersonas", {
     layout: "fitColumns",
-    height: "620px",
+    height: "560px",
     placeholder: "Sin registros para mostrar",
-    responsiveLayout: "collapse",
     pagination: true,
     paginationMode: "remote",
     paginationSize: gridState.pageSize,
     paginationSizeSelector: [10, 25, 50, 100],
     movableColumns: false,
+    selectableRows: 1,
     headerSortTristate: true,
-    rowHeight: 80,
+    rowHeight: 76,
     ajaxFiltering: false,
     ajaxSorting: true,
 
@@ -1364,7 +1391,7 @@ function initPersonasGrid() {
       updateAlert("No se pudo cargar la bandeja de actores.", "danger");
     },
 
-    columns: [
+    legacyColumns: [
       {
         title: "Actor político",
         field: "nombre_completo",
@@ -1501,6 +1528,15 @@ function initPersonasGrid() {
           }
         }
       }
+    ],
+
+    columns: [
+      {
+        title: "Listado de Actores",
+        field: "nombre_completo",
+        formatter: personaFormatter,
+        headerSort: true
+      }
     ]
   });
 
@@ -1508,8 +1544,7 @@ function initPersonasGrid() {
   window.personasGrid.on("rowClick", async function (_e, row) {
     const data = row.getData();
     selectedRowData = data;
-
-
+    row.select();
 
     try {
       openDetailPanel(data);
@@ -1652,7 +1687,7 @@ function renderPartidoChip(row) {
 
 
 
-function openDetailPanel(row) {
+function legacyOpenDetailPanel(row) {
   selectedRowData = row || null;
 
   const panel = $("detailPanel");
@@ -1824,6 +1859,368 @@ function openDetailPanel(row) {
   updateVerificationButtons(row);
   panel.classList.add("open");
   backdrop.classList.remove("d-none");
+}
+
+function openDetailPanel(row) {
+  selectedRowData = row || null;
+
+  const empty = $("estadoVacioFicha");
+  const detail = $("contenedorFichaDetalle");
+  if (!detail || !row) return;
+
+  const previousPreviewUrl = $("previewExpedientePanel")?.dataset?.previewUrl;
+  if (previousPreviewUrl) URL.revokeObjectURL(previousPreviewUrl);
+
+  empty?.classList.add("d-none");
+  detail.classList.remove("d-none");
+
+  const firmaStep = (label, dateValue) => {
+    const validado = Boolean(dateValue);
+    return `
+      <div class="signature-step ${validado ? "is-valid" : "is-pending"}">
+        <div class="signature-dot">
+          <i class="bi ${validado ? "bi-check-lg" : "bi-clock"}"></i>
+        </div>
+        <div class="signature-body">
+          <div class="fw-bold">${esc(label)}</div>
+          <div class="small text-muted">${esc(fmtDateTime(dateValue))}</div>
+          <span class="badge ${validado ? "text-bg-success" : "text-bg-warning"} mt-2">
+            ${validado ? "Validado" : "Pendiente"}
+          </span>
+        </div>
+      </div>
+    `;
+  };
+
+  detail.innerHTML = `
+    <div class="detail-tabs-shell">
+      <div class="detail-tabs-nav">
+        <button type="button" class="detail-tab-btn active" data-detail-tab="quick">
+          <i class="bi bi-layout-text-sidebar-reverse me-1"></i>Detalle rapido
+        </button>
+        <button type="button" class="detail-tab-btn" data-detail-tab="preview">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Preview expediente
+        </button>
+      </div>
+
+      <div class="detail-tab-pane active" id="detailTabQuick">
+        <div class="detail-executive detail-two-column">
+          <div class="row g-2 h-100">
+        <div class="col-md-8 detail-info-column">
+          <div class="detail-main-card rounded-3">
+            <div class="detail-executive-header">
+              <div class="detail-biblio-photo">
+                ${
+                  row.foto_url
+                    ? `<img class="detail-executive-avatar" src="${esc(row.foto_url)}" alt="Foto de perfil">`
+                    : `<div class="detail-executive-avatar detail-executive-initials">${esc(initials(row.nombre_completo || row.nombre || ""))}</div>`
+                }
+              </div>
+              <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                  <span class="badge rounded-pill text-bg-light border text-dark">ID ${esc(row.id_persona || "N/D")}</span>
+                  <span class="badge rounded-pill detail-brand-badge">Nivel Final</span>
+                  ${row.oculto ? `<span class="badge text-bg-danger">OCULTO</span>` : ""}
+                </div>
+                <h3 class="detail-executive-name mb-1">${esc(row.nombre_completo || row.nombre || "Sin nombre")}</h3>
+                <div class="text-muted small mb-2">
+                  <i class="bi bi-calendar3 me-1"></i>Fecha de captura: ${esc(fmtDateTime(row.created_at))}
+                </div>
+                <div class="detail-party-box">
+                  <div class="detail-party-label">PARTIDO ACTUAL</div>
+                  <div class="d-flex align-items-center gap-2">
+                    ${renderPartidoChip(row)}
+                    <div class="fw-bold text-dark">${esc(row.siglas || row.partido_nombre || row.partido_otro_texto || "Sin partido")}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row row-cols-2 g-2 detail-meta-grid">
+              <div class="col">
+                <div class="detail-meta-item">
+                  <i class="bi bi-building"></i>
+                  <div><span>Region</span><strong>${esc(row.oficina_nombre || "N/D")}</strong></div>
+                </div>
+              </div>
+              <div class="col">
+                <div class="detail-meta-item">
+                  <i class="bi bi-person-badge"></i>
+                  <div><span>Capturista</span><strong>${esc(row.creado_por_nombre || "N/D")}</strong></div>
+                </div>
+              </div>
+              <div class="col">
+                <div class="detail-meta-item">
+                  <i class="bi bi-geo-alt"></i>
+                  <div><span>Municipios</span><strong>${esc(row.total_municipios_trabajo || 0)}</strong></div>
+                </div>
+              </div>
+              <div class="col">
+                <div class="detail-meta-item">
+                  <i class="bi bi-eye"></i>
+                  <div><span>Reviso</span><strong>${esc(row.verif_office_por_nombre || "Pendiente")}</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-signature-flow">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <div>
+                <div class="detail-section-label">Revisiónn</div>
+                <div class="small text-muted">Revisión institucional</div>
+              </div>
+              ${verificationChip(row.estado_verificacion)}
+            </div>
+            <div class="signature-line">
+              ${firmaStep("Direccion", row.verif_area_at)}
+              ${firmaStep("Coordinacion", row.verif_office_at)}
+              ${firmaStep("Subsecretario", row.verificado_at)}
+            </div>
+          </div>
+
+          <div class="detail-comments-panel rounded-3">
+            <div class="text-muted fw-bold mb-2 small">OBSERVACIONES DEL REGISTRO</div>
+            <div id="detailObservacionesRegistro" class="detail-observations-list">
+              <div class="text-muted small">Cargando observaciones...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4 detail-actions-sidebar">
+          <div class="detail-control-section">
+            <div class="detail-control-heading"><span>Gestion y Consulta</span></div>
+            <div class="detail-action-grid detail-action-stack">
+              <button type="button" class="btn btn-outline-secondary" id="btnEditarCapturaDetalle">
+                <i class="bi bi-pencil-square me-1"></i>Editar Captura
+              </button>
+              <button type="button" class="btn detail-export-btn" id="btnExportarExpedienteDetalle">
+                <i class="bi bi-file-earmark-pdf me-1"></i>Exportar Expediente
+              </button>
+              <button type="button" class="btn btn-outline-secondary" id="btnVerTrazabilidadDetalle">
+                <i class="bi bi-clock-history me-1"></i>Control de Historial
+              </button>
+              ${(() => {
+                const u = getCurrentUser();
+                const esSuperadmin = Array.isArray(u.roles) && u.roles.includes("superadmin");
+                if (!esSuperadmin || !canVerifyFinal()) return "";
+                return `
+                  <button type="button" class="btn btn-outline-secondary" id="btnToggleOcultoDetalle">
+                    <i class="bi bi-eye${row.oculto ? "" : "-slash"} me-1"></i>
+                    ${row.oculto ? "Hacer visible para la oficina" : "Ocultar para la Oficina"}
+                  </button>
+                `;
+              })()}
+            </div>
+          </div>
+
+          <div class="detail-control-section">
+            <div class="detail-control-heading"><span>Verificacion de Estado</span></div>
+            <div class="detail-action-grid detail-action-stack">
+              <button type="button" class="btn btn-final-approve" id="btnAprobarFinalDetalle">
+                <i class="bi bi-check-circle-fill me-1"></i>Aprobar Verificacion FINAL
+              </button>
+              <button type="button" class="btn btn-final-return" id="btnDevolverObservacionDetalle">
+                <i class="bi bi-reply-fill me-1"></i>Devolver con Observacion
+              </button>
+              <button type="button" class="btn btn-final-revoke" id="btnAbrirDesverificarFinalDetalle">
+                <i class="bi bi-x-circle me-1"></i>Quitar Verificacion Final
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+        </div>
+      </div>
+
+      <div class="detail-tab-pane" id="detailTabPreview">
+        <div id="previewExpedientePanel" class="preview-expediente-panel">
+          <div class="preview-expediente-empty">
+            <i class="bi bi-file-earmark-pdf"></i>
+            <div class="fw-bold mt-2">Preview del expediente</div>
+            <div class="small text-muted">Abre esta pestaña para generar la vista previa oficial.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const canVerify = canVerifyFinal();
+  const yaFinal = Boolean(row.verificado_at);
+  const btnAprobarDetalle = $("btnAprobarFinalDetalle");
+  const btnDesverificarDetalle = $("btnAbrirDesverificarFinalDetalle");
+
+  if (!canVerify) {
+    btnAprobarDetalle?.classList.add("d-none");
+    btnDesverificarDetalle?.classList.add("d-none");
+  } else {
+    if (btnAprobarDetalle) btnAprobarDetalle.disabled = yaFinal;
+    if (btnDesverificarDetalle) btnDesverificarDetalle.disabled = !yaFinal;
+  }
+
+  $("btnVerTrazabilidadDetalle")?.addEventListener("click", () => {
+    if (!selectedRowData?.id_persona) return;
+    renderTrazabilidadModal(selectedRowData);
+    bootstrap.Modal.getOrCreateInstance($("modalTrazabilidad")).show();
+  });
+
+  $("btnAprobarFinalDetalle")?.addEventListener("click", () => {
+    if (!selectedRowData?.id_persona) return;
+    bootstrap.Modal.getOrCreateInstance($("modalVerificacionFinal")).show();
+  });
+
+  $("btnAbrirDesverificarFinalDetalle")?.addEventListener("click", () => {
+    if (!selectedRowData?.id_persona) {
+      updateAlert("Selecciona un registro antes de retirar la verificacion.", "warning");
+      return;
+    }
+    bootstrap.Modal.getOrCreateInstance($("modalDesverificarFinal")).show();
+  });
+
+  $("btnDevolverObservacionDetalle")?.addEventListener("click", () => {
+    if (!selectedRowData?.id_persona) return;
+    bootstrap.Modal.getOrCreateInstance($("modalObservacionFinal")).show();
+  });
+
+  $("btnToggleOcultoDetalle")?.addEventListener("click", () => {
+    if (!selectedRowData?.id_persona) return;
+    toggleOcultoPersona(selectedRowData, null);
+  });
+
+  $("btnEditarCapturaDetalle")?.addEventListener("click", () => {
+    irAEdicionCaptura(row.id_persona);
+  });
+
+  $("btnExportarExpedienteDetalle")?.addEventListener("click", () => {
+    if (!row?.id_persona) return;
+    generarPDFPersona(row.id_persona).catch(err => updateAlert(err.message, "danger"));
+  });
+
+  setupDetailPreviewTabs(row.id_persona);
+
+  loadDetalleObservaciones(row.id_persona).catch(err => {
+    console.error("Error cargando observaciones del detalle:", err);
+    const box = $("detailObservacionesRegistro");
+    if (box) {
+      box.innerHTML = `<div class="text-danger small">No se pudieron cargar las observaciones.</div>`;
+    }
+  });
+}
+
+async function loadDetalleObservaciones(idPersona) {
+  const box = $("detailObservacionesRegistro");
+  if (!box || !idPersona) return;
+
+  const resp = await apiGet(`/personas/analista/personas/${idPersona}/observaciones`);
+  const rows = Array.isArray(resp?.data) ? resp.data : [];
+
+  if (!rows.length) {
+    box.innerHTML = `
+      <div class="detail-observation-empty">
+        Sin observaciones registradas para este expediente.
+      </div>
+    `;
+    return;
+  }
+
+  box.innerHTML = rows.map(obs => {
+    const pendiente = obs.atendida === false;
+    const nivel = obs.nivel || "OBS";
+    const destino = obs.dirigido_a || "";
+    const fecha = obs.created_at ? fmtDateTime(obs.created_at) : "";
+
+    return `
+      <div class="detail-observation-item ${pendiente ? "is-pending" : "is-done"}">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+          <div class="d-flex flex-wrap gap-1">
+            <span class="badge ${pendiente ? "text-bg-warning" : "text-bg-success"}">
+              ${pendiente ? "Pendiente" : "Atendida"}
+            </span>
+            <span class="badge text-bg-light border text-dark">${esc(nivel)}</span>
+            ${destino ? `<span class="badge text-bg-light border text-dark">Para: ${esc(destino)}</span>` : ""}
+          </div>
+          <span class="small text-muted text-nowrap">${esc(fecha)}</span>
+        </div>
+        <div class="detail-observation-text">${esc(obs.observacion || "Sin detalle")}</div>
+        <div class="small text-muted mt-1">
+          ${obs.creado_por_nombre ? `Registró: ${esc(obs.creado_por_nombre)}` : "Registro del sistema"}
+          ${obs.atendida_por_nombre ? ` · Atendió: ${esc(obs.atendida_por_nombre)}` : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function setupDetailPreviewTabs(idPersona) {
+  const buttons = Array.from(document.querySelectorAll("[data-detail-tab]"));
+  const quick = $("detailTabQuick");
+  const preview = $("detailTabPreview");
+  let previewLoaded = false;
+
+  buttons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.detailTab;
+
+      buttons.forEach(b => b.classList.toggle("active", b === btn));
+      quick?.classList.toggle("active", tab === "quick");
+      preview?.classList.toggle("active", tab === "preview");
+
+      if (tab === "preview" && !previewLoaded) {
+        previewLoaded = true;
+        loadExpedientePreviewPdf(idPersona).catch(err => {
+          console.error("Error cargando preview expediente:", err);
+          const box = $("previewExpedientePanel");
+          if (box) {
+            box.innerHTML = `
+              <div class="alert alert-danger mb-0">
+                No se pudo cargar el preview del expediente.
+              </div>
+            `;
+          }
+        });
+      }
+    });
+  });
+}
+
+async function loadExpedientePreviewPdf(idPersona) {
+  const box = $("previewExpedientePanel");
+  if (!box || !idPersona) return;
+
+  box.innerHTML = `
+    <div class="preview-expediente-loading">
+      <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+      <span>Generando preview...</span>
+    </div>
+  `;
+
+  const token = localStorage.getItem("token") || "";
+  const res = await fetch(`/api/personas/preview/${encodeURIComponent(idPersona)}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    location.href = "/";
+    return;
+  }
+
+  if (!res.ok) {
+    throw new Error("No se pudo generar el preview.");
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+
+  box.dataset.previewUrl = url;
+  box.innerHTML = `
+    <iframe
+      class="preview-expediente-frame"
+      src="${url}"
+      title="Preview del expediente"
+    ></iframe>
+  `;
 }
 
   function closeDetailPanel() {
@@ -2316,7 +2713,7 @@ async function showObservacionesModal(alerta, page = 1) {
           ? `<div class="small text-success mt-1"><i class="bi bi-check-circle me-1"></i>Atendida por: ${esc(r.atendida_por_nombre)}${r.atendida_at ? ` · ${esc(fmtDT(r.atendida_at))}` : ""}</div>`
           : "";
         return `
-          <div class="list-group-item px-0" data-alert-item="${esc(r.id_observacion || "")}">
+          <div class="alert-modal-item" data-alert-item="${esc(r.id_observacion || "")}">
             <div class="d-flex justify-content-between gap-3 flex-wrap">
               <div>
                 <div class="fw-semibold">${esc(r.persona || `Registro #${r.id_persona || ""}`)}</div>
@@ -2328,7 +2725,7 @@ async function showObservacionesModal(alerta, page = 1) {
               </div>
               <div class="text-end">
                 <div class="small text-muted">${esc(fmtDT(fecha))}</div>
-                ${r.id_observacion ? `<button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-action="descartar-obs-pag" data-id="${esc(r.id_observacion)}">Ocultar</button>` : ""}
+                ${r.id_observacion ? `<button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-action="descartar-observacion-alerta" data-id="${esc(r.id_observacion)}">Ocultar</button>` : ""}
               </div>
             </div>
             <div class="mt-2 fst-italic">${esc(r.observacion || "—")}</div>
@@ -2360,13 +2757,13 @@ async function showObservacionesModal(alerta, page = 1) {
 
     body.innerHTML = `
       <div class="small text-muted mb-3">${esc(alerta.text || "")}</div>
-      <div class="list-group list-group-flush">${filas}</div>
+      <div class="alert-modal-list">${filas}</div>
       ${paginacion}`;
 
     body.querySelectorAll("[data-obs-page]").forEach(btn => {
       btn.addEventListener("click", () => showObservacionesModal(alerta, Number(btn.dataset.obsPage)));
     });
-    body.querySelectorAll('[data-action="descartar-obs-pag"]').forEach(btn => {
+    body.querySelectorAll('[data-action="descartar-observacion-alerta"]').forEach(btn => {
       btn.addEventListener("click", () => {
         descartarObservacionAlerta(btn.dataset.id);
         showObservacionesModal(alerta, page);
@@ -2413,43 +2810,22 @@ function showAlertDetailModal(alerta, opts = {}) {
           ${ocultasCount ? `<button type="button" class="btn btn-sm btn-outline-danger" data-action="desocultar-observaciones">Desocultar todas</button>` : ""}
         </div>
       ` : ""}
-      <div class="list-group list-group-flush">
+      <div class="alert-modal-list">
         ${rows.map(r => {
           // ── Desverificados automáticamente ──
           if ("desverf_final_at" in r) {
             const CAMPO_LABELS = {
-              nombre: "Nombre",
-              apellido_paterno: "Apellido paterno",
-              apellido_materno: "Apellido materno",
-              curp: "CURP",
-              rfc: "RFC",
-              clave_elector: "Clave de elector",
-              edad: "Edad",
-              estado_civil: "Estado civil",
-              escala_influencia: "Escala de influencia",
-              nivel_confiabilidad: "Confiabilidad",
-              id_partido_actual: "Partido político",
-              partido_otro_texto: "Otro partido",
-              municipio_trabajo_politico: "Municipio de trabajo",
-              municipio_residencia_legal: "Municipio residencia legal",
-              municipio_residencia_real: "Municipio residencia real",
-              id_oficina: "Oficina",
-              foto_url: "Foto",
-              id_tema_interes_central: "Tema de interés",
-              id_grupo_postulacion: "Grupo de postulación",
-              id_ideologia_politica: "Ideología política",
-              sin_controversias_publicas: "Sin controversias",
-              sin_servicio_publico: "Sin servicio público",
-              ha_contendido_eleccion: "Ha contendido elección",
-              sin_cargos_eleccion_popular: "Sin cargos de elección",
-              oculto: "Visibilidad"
+              nombre: "Nombre", apellido_paterno: "Apellido paterno", apellido_materno: "Apellido materno",
+              curp: "CURP", rfc: "RFC", clave_elector: "Clave de elector",
+              edad: "Edad", estado_civil: "Estado civil", escala_influencia: "Escala de influencia",
+              nivel_confiabilidad: "Confiabilidad", id_partido_actual: "Partido político",
+              partido_otro_texto: "Otro partido", municipio_trabajo_politico: "Municipio de trabajo",
+              id_oficina: "Oficina", foto_url: "Foto"
             };
-
-            const camposRaw = (r.desverf_final_campos || "").split(",").map(s => s.trim()).filter(Boolean);
+            const camposRaw   = (r.desverf_final_campos || "").split(",").map(s => s.trim()).filter(Boolean);
             const camposLabel = camposRaw.map(c => CAMPO_LABELS[c] || c).join(", ");
-
             return `
-              <div class="list-group-item px-0">
+              <div class="alert-modal-item">
                 <div class="d-flex justify-content-between gap-3 flex-wrap">
                   <div>
                     <div class="fw-semibold">
@@ -2463,22 +2839,18 @@ function showAlertDetailModal(alerta, opts = {}) {
                 <div class="small text-muted mt-1">Modificado por: ${esc(r.desverf_por_nombre || "—")}</div>
                 ${camposLabel ? `
                 <div class="mt-2 p-2 rounded" style="background:#fff8e1;border:1px solid #ffe082;">
-                  <div class="small fw-semibold" style="color:#b45309;">
-                    <i class="bi bi-pencil-square me-1"></i>Campos que cambiaron:
-                  </div>
+                  <div class="small fw-semibold" style="color:#b45309;"><i class="bi bi-pencil-square me-1"></i>Campos que cambiaron:</div>
                   <div class="small mt-1" style="color:#92400e;">${esc(camposLabel)}</div>
                 </div>` : ""}
                 <div class="small text-warning mt-1">
                   <i class="bi bi-arrow-counterclockwise me-1"></i>Requiere re-verificación FINAL
                 </div>
-              </div>
-            `;
+              </div>`;
           }
-
           // ── Registros ocultos ──
           if ("oculto_at" in r) {
             return `
-              <div class="list-group-item px-0">
+              <div class="alert-modal-item">
                 <div class="d-flex justify-content-between gap-3 flex-wrap">
                   <div>
                     <div class="fw-semibold">
@@ -2490,27 +2862,21 @@ function showAlertDetailModal(alerta, opts = {}) {
                   <div class="small text-muted">${esc(fmtDT(r.oculto_at))}</div>
                 </div>
                 <div class="small text-muted mt-1">Ocultado por: ${esc(r.oculto_por_nombre || "—")}</div>
-              </div>
-            `;
+              </div>`;
           }
-
           // ── Observaciones / devoluciones ──
-          const fecha = r.atendida_at || r.created_at;
-          const descartada = isObservacionAlert && r.id_observacion && hidden.has(String(r.id_observacion));
-
-          const nivelLabel = { FINAL: "Final", AREA: "Dirección", OFFICE: "Coordinación", SELF: "Capturista" }[r.nivel] || r.nivel || "—";
-
+          const fecha       = r.atendida_at || r.created_at;
+          const descartada  = isObservacionAlert && r.id_observacion && hidden.has(String(r.id_observacion));
+          const nivelLabel  = { FINAL:"Final", AREA:"Dirección", OFFICE:"Coordinación", SELF:"Capturista" }[r.nivel] || r.nivel || "—";
           const dirigidoLabel = (() => {
-            const base = { SELF: "Capturista", AREA: "Dirección", OFFICE: "Coordinación" }[r.dirigido_a] || r.dirigido_a || "—";
+            const base = { SELF:"Capturista", AREA:"Dirección", OFFICE:"Coordinación" }[r.dirigido_a] || r.dirigido_a || "—";
             return r.dirigido_a_nombre ? `${base} — ${esc(r.dirigido_a_nombre)}` : base;
           })();
-
           const atendida = r.atendida_por_nombre
             ? `<div class="small text-success mt-1"><i class="bi bi-check-circle me-1"></i>Atendida por: ${esc(r.atendida_por_nombre)}${r.atendida_at ? ` · ${esc(fmtDT(r.atendida_at))}` : ""}</div>`
             : "";
-
           return `
-            <div class="list-group-item px-0" data-alert-item="${esc(r.id_observacion || "")}">
+            <div class="alert-modal-item" data-alert-item="${esc(r.id_observacion || "")}">
               <div class="d-flex justify-content-between gap-3 flex-wrap">
                 <div>
                   <div class="fw-semibold">${esc(r.persona || `Registro #${r.id_persona || ""}`)}</div>
@@ -2537,8 +2903,7 @@ function showAlertDetailModal(alerta, opts = {}) {
                 <span><i class="bi bi-eye me-1"></i>Observó: ${esc(r.creado_por_nombre || "Sistema")}</span>
               </div>
               ${atendida}
-            </div>
-          `;
+            </div>`;
         }).join("")}
       </div>
     `;
@@ -2572,111 +2937,111 @@ async function renderAlertSummary() {
   if (!c) return;
 
   const alertas = [];
-  const stats = await loadAlertSummaryData();
+  const stats   = await loadAlertSummaryData();
 
-  if (Number(stats.observaciones_pendientes || 0) > 0) {
-    alertas.push({
-      cls: "is-danger",
-      title: `${stats.observaciones_pendientes} observación(es) pendiente(s)`,
-      text: "Hay registros devueltos que aún requieren atención."
-    });
-  }
+  // ── Configuración visual por tipo ──────────────────────────────────
+  const V = {
+    pendientes: { icon: "bi-exclamation-circle-fill", bg: "#fef2f2", color: "#dc2626", sev: "danger",  pulse: true  },
+    final:      { icon: "bi-arrow-counterclockwise",  bg: "#fffbeb", color: "#d97706", sev: "warning", pulse: false },
+    desverif:   { icon: "bi-shield-exclamation",      bg: "#fdf2f4", color: "#8b2136", sev: "guinda",  pulse: false },
+    atendidas:  { icon: "bi-check-circle-fill",       bg: "#f0fdf4", color: "#16a34a", sev: "success", pulse: false },
+    ocultos:    { icon: "bi-eye-slash-fill",          bg: "#f5f3ff", color: "#7c3aed", sev: "purple",  pulse: false },
+    contexto:   { icon: "bi-funnel-fill",             bg: "#eff6ff", color: "#0284c7", sev: "info",    pulse: false },
+    sensitivo:  { icon: "bi-exclamation-octagon-fill",bg: "#fffbeb", color: "#b45309", sev: "warning", pulse: false },
+  };
 
-  if (Number(stats.devoluciones_final_7d || 0) > 0) {
-    alertas.push({
-      cls: "is-warning",
-      title: `${stats.devoluciones_final_7d} devolución(es) FINAL en los últimos 7 días`,
-      text: "Se detectaron devoluciones recientes en el cierre institucional."
-    });
-  }
+  const push = (v, label, sub, extra = {}) =>
+    alertas.push({ ...v, label, sub, ...extra });
 
-  if (Number(stats.desverificados_auto || 0) > 0) {
-    alertas.push({
-      cls: "is-danger",
-      title: `${stats.desverificados_auto} registro(s) perdieron verificación FINAL por cambio de datos`,
-      text: "Un dato fue modificado después de la verificación. Requieren re-verificación.",
-      items: stats.desverificados_auto_detalle || []
-    });
-  }
+  // ── KPI alerts ─────────────────────────────────────────────────────
+  const nPend = Number(stats.observaciones_pendientes || 0);
+  if (nPend > 0)
+    push(V.pendientes, "Observaciones pendientes",
+      "Registros devueltos que requieren atención inmediata",
+      { count: nPend, tipo: "observaciones", usePagination: true,
+        items: stats.observaciones_pendientes_detalle || [],
+        title: `${nPend} observación(es) pendiente(s)` });
 
-  if (Number(stats.observaciones_atendidas_hoy || 0) > 0) {
-    alertas.push({
-      cls: "is-info",
-      title: `${stats.observaciones_atendidas_hoy} observación(es) atendida(s) hoy`,
-      text: "Hay observaciones operativas atendidas con seguimiento registrado."
-    });
-  }
+  const nFinal = Number(stats.devoluciones_final_7d || 0);
+  if (nFinal > 0)
+    push(V.final, "Devoluciones FINAL · últimos 7 días",
+      "Cierres institucionales devueltos recientemente",
+      { count: nFinal, tipo: "final", usePagination: true,
+        items: stats.devoluciones_final_7d_detalle || [],
+        title: `${nFinal} devolución(es) FINAL en los últimos 7 días` });
 
-  alertas.forEach(a => {
-    if (a.title.includes("pendiente")) {
-      a.tipo  = "observaciones";
-      a.items = stats.observaciones_pendientes_detalle || [];
-      a.usePagination = true;
-    }
-    if (a.title.includes("FINAL") && !a.title.includes("verificación")) {
-      a.tipo  = "final";
-      a.items = stats.devoluciones_final_7d_detalle || [];
-      a.usePagination = true;
-    }
-    if (a.title.includes("atendida")) {
-      a.tipo  = "atendidas";
-      a.title = `${stats.observaciones_atendidas_hoy} observacion(es) atendida(s)`;
-      a.items = stats.observaciones_atendidas_hoy_detalle || [];
-      a.usePagination = true;
-    }
-  });
+  const nDesv = Number(stats.desverificados_auto || 0);
+  if (nDesv > 0)
+    push(V.desverif, "Perdieron verificación FINAL",
+      "Datos modificados post-verificación. Requieren revisión.",
+      { count: nDesv,
+        items: stats.desverificados_auto_detalle || [],
+        title: `${nDesv} registro(s) perdieron verificación FINAL por cambio de datos` });
 
-  if (gridState.solo_pendientes_final) {
-    alertas.push({
-      cls: "is-warning",
-      title: "Vista enfocada en pendientes FINAL",
-      text: "La bandeja muestra registros que requieren cierre institucional."
-    });
-  }
+  const nAten = Number(stats.observaciones_atendidas_hoy || 0);
+  if (nAten > 0)
+    push(V.atendidas, "Observaciones atendidas",
+      "Con seguimiento registrado",
+      { count: nAten, tipo: "atendidas", usePagination: true,
+        items: stats.observaciones_atendidas_hoy_detalle || [],
+        title: `${nAten} observacion(es) atendida(s)` });
 
-  if (gridState.controversias === "1") {
-    alertas.push({
-      cls: "is-danger",
-      title: "Filtro de controversias activo",
-      text: "Se priorizan perfiles con seguimiento sensible."
-    });
-  }
+  const nOcul = Number(stats.registros_ocultos || 0);
+  if (nOcul > 0)
+    push(V.ocultos, "Registros ocultos",
+      "Bajo revisión del área final. Solo visibles para superadmin.",
+      { count: nOcul,
+        items: stats.registros_ocultos_detalle || [],
+        title: `${nOcul} registro(s) oculto(s) para su oficina` });
 
-  if (gridState.oficinaId) {
-    alertas.push({
-      cls: "is-info",
-      title: "Segmentación por oficina",
-      text: "El tablero está acotado a una oficina específica."
-    });
-  }
+  // ── Context alerts (filtros activos) ───────────────────────────────
+  if (gridState.solo_pendientes_final)
+    push(V.contexto, "Vista: pendientes FINAL",
+      "La bandeja muestra registros que requieren cierre institucional.",
+      { title: "Vista enfocada en pendientes FINAL" });
 
-  const nOcultos = Number(stats.registros_ocultos || 0);
-  if (nOcultos > 0) {
-    alertas.push({
-      cls: "is-danger",
-      title: `${nOcultos} registro(s) oculto(s) para su oficina`,
-      text: "Registros bajo revisión del área final. Solo visibles para superadmin.",
-      items: stats.registros_ocultos_detalle || []
-    });
-  }
+  if (gridState.controversias === "1")
+    push(V.sensitivo, "Filtro: controversias activo",
+      "Se priorizan perfiles con seguimiento sensible.",
+      { title: "Filtro de controversias activo" });
 
+  if (gridState.oficinaId)
+    push(V.contexto, "Segmentado por oficina",
+      "El tablero está acotado a una oficina específica.",
+      { title: "Segmentación por oficina" });
+
+  // ── Empty state ────────────────────────────────────────────────────
   if (!alertas.length) {
     c.innerHTML = `
-      <div class="alert-item">
-        <div class="alert-item-title">Sin alertas cargadas</div>
-        <div class="alert-item-text text-muted">Aquí aparecerán incidencias, focos de atención y prioridades.</div>
-      </div>
-    `;
+      <div class="acrd-empty">
+        <div class="acrd-empty-icon"><i class="bi bi-shield-check"></i></div>
+        <div class="acrd-empty-title">Sistema al día</div>
+        <div class="acrd-empty-sub">Sin incidencias que requieran atención</div>
+      </div>`;
     return;
   }
 
+  // ── Render cards ───────────────────────────────────────────────────
   c.innerHTML = alertas.map((a, idx) => {
-    const clickable = a.usePagination || (Array.isArray(a.items) && a.items.length);
+    const clickable = a.usePagination || (Array.isArray(a.items) && a.items.length > 0);
+    const countHtml = a.count != null
+      ? `<div class="acrd-count" style="color:${a.color}">${a.count}</div>`
+      : "";
+    const actionHtml = clickable
+      ? `<div class="acrd-action"><span>Ver detalle</span><i class="bi bi-arrow-right-short"></i></div>`
+      : "";
     return `
-      <div class="alert-item ${a.cls} ${clickable ? "is-clickable" : ""}" data-alert-idx="${idx}">
-        <div class="alert-item-title">${esc(a.title)}</div>
-        <div class="alert-item-text">${esc(a.text)}</div>
-        ${clickable ? `<div class="alert-item-meta"><i class="bi bi-search me-1"></i>Ver detalle</div>` : ""}
+      <div class="acrd acrd-${a.sev}${clickable ? " is-clickable" : ""}" data-alert-idx="${idx}">
+        <div class="acrd-icon${a.pulse ? " acrd-pulse" : ""}"
+             style="background:${a.bg};color:${a.color}">
+          <i class="bi ${a.icon}"></i>
+        </div>
+        <div class="acrd-body">
+          ${countHtml}
+          <div class="acrd-label">${esc(a.label)}</div>
+          <div class="acrd-sub">${esc(a.sub)}</div>
+          ${actionHtml}
+        </div>
       </div>`;
   }).join("");
 
@@ -2685,15 +3050,8 @@ async function renderAlertSummary() {
       const idx    = Number(el.dataset.alertIdx);
       const alerta = alertas[idx];
       if (!alerta) return;
-      // Observaciones → modal paginado con fetch server-side
-      if (alerta.usePagination) {
-        showObservacionesModal(alerta, 1);
-        return;
-      }
-      // Resto (ocultos, desverificados) → modal estático
-      if (Array.isArray(alerta.items) && alerta.items.length) {
-        showAlertDetailModal(alerta);
-      }
+      if (alerta.usePagination) { showObservacionesModal(alerta, 1); return; }
+      if (Array.isArray(alerta.items) && alerta.items.length) showAlertDetailModal(alerta);
     });
   });
 }
