@@ -57,6 +57,40 @@ exports.coberturaMunicipios = async (req, res) => {
 
 //Endpoint: personas por municipio (solo su oficina) analista
 
+exports.capasMapaMunicipios = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { addFullFilter } = req.smartFilters;
+    const params = [];
+    const where  = [];
+    addFullFilter(params, where);
+    where.push(`p.municipio_trabajo_politico IS NOT NULL`);
+    const whereSQL = `WHERE ${where.join(" AND ")}`;
+
+    const { rows } = await client.query(`
+      SELECT
+        p.municipio_trabajo_politico                                              AS id_municipio,
+        COUNT(*)::int                                                             AS total,
+        COUNT(p.verificado_at)::int                                              AS verificados,
+        COUNT(CASE WHEN LOWER(COALESCE(p.nivel_confiabilidad,'')) = 'alto'
+              THEN 1 END)::int                                                   AS confiabilidad_alta,
+        mode() WITHIN GROUP (ORDER BY cp.siglas)                                 AS partido_dominante
+      FROM personas p
+      LEFT JOIN catalogo_partidos cp ON cp.id_partido = p.id_partido_actual
+      ${whereSQL}
+      GROUP BY p.municipio_trabajo_politico
+      ORDER BY total DESC
+    `, params);
+
+    return res.json({ ok: true, data: rows });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'Error capas mapa', detail: e.message });
+  } finally {
+    client.release();
+  }
+};
+
 exports.personasPorMunicipio = async (req, res) => {
   const client = await pool.connect();
   try {
