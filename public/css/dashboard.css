@@ -45,6 +45,17 @@ html, body {
   font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
 }
 
+html{
+  scroll-behavior: smooth;
+}
+
+#inicioDashboard,
+#resumenEjecutivo,
+#bandejaActores,
+#territorialDashboard{
+  scroll-margin-top: 1rem;
+}
+
 body.dashboard-superadmin-body{
   min-height: 100vh;
   overflow-x: hidden;
