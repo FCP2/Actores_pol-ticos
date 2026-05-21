@@ -121,27 +121,27 @@
       </div>
 
       <nav class="sidebar-nav" aria-label="Navegación principal">
-        <a href="#" class="sidebar-link active" aria-current="page">
-          <i class="bi bi-grid-1x2-fill"></i>
-          <span>Resumen Ejecutivo</span>
+        <a href="#inicioDashboard" class="sidebar-link active" aria-current="page">
+          <i class="bi bi-funnel-fill"></i>
+          <span>Filtros y Reportes</span>
         </a>
-        <a href="#" class="sidebar-link">
+        <a href="#territorialDashboard" class="sidebar-link">
           <i class="bi bi-geo-alt-fill"></i>
           <span>Territorial</span>
         </a>
-        <a href="#" class="sidebar-link">
+        <a href="#bandejaActores" class="sidebar-link">
           <i class="bi bi-people-fill"></i>
           <span>Actores</span>
         </a>
-        <a href="#" class="sidebar-link">
+        <a href="#territorialDashboard" class="sidebar-link">
           <i class="bi bi-exclamation-triangle-fill"></i>
           <span>Alertas</span>
         </a>
-        <a href="#" class="sidebar-link">
+        <a href="#" class="sidebar-link d-none">
           <i class="bi bi-patch-check-fill"></i>
           <span>Verificación Final</span>
         </a>
-        <a href="#" class="sidebar-link">
+        <a href="#" class="sidebar-link d-none">
           <i class="bi bi-file-earmark-bar-graph-fill"></i>
           <span>Reportes</span>
         </a>
@@ -152,7 +152,7 @@
     <main class="dashboard-main">
 
       <!-- TOPBAR -->
-      <header class="topbar">
+      <header class="topbar" id="inicioDashboard">
         <div class="topbar-left">
           <button
             class="btn btn-light d-lg-none"
@@ -321,7 +321,7 @@
       </section>
 
       <!-- KPIs -->
-      <section class="kpi-section mb-4">
+      <section class="kpi-section mb-4" id="resumenEjecutivo">
         <div class="row g-3">
           <div class="col-6 col-md-4 col-xl-2">
             <div class="card kpi-card h-100">
@@ -406,7 +406,7 @@
       </section>
 
       <!-- BANDEJA MAESTRA -->
-      <section class="master-table-section mb-5">
+      <section class="master-table-section mb-5" id="bandejaActores">
         <div class="card dashboard-card">
           <div class="card-header dashboard-card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
             <div>
@@ -458,7 +458,7 @@
       </section>
 
       <!-- ZONA CENTRAL -->
-      <section class="main-analytics-section mb-4">
+      <section class="main-analytics-section mb-4" id="territorialDashboard">
         <div class="row g-4">
 
           <!-- MAPA -->
