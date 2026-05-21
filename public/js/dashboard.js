@@ -1991,9 +1991,11 @@ function openDetailPanel(row) {
           <div class="detail-control-section">
             <div class="detail-control-heading"><span>Gestion y Consulta</span></div>
             <div class="detail-action-grid detail-action-stack">
-              <button type="button" class="btn btn-outline-secondary" id="btnEditarCapturaDetalle">
-                <i class="bi bi-pencil-square me-1"></i>Editar Captura
-              </button>
+              ${canVerifyFinal() ? `
+                <button type="button" class="btn btn-outline-secondary" id="btnEditarCapturaDetalle">
+                  <i class="bi bi-pencil-square me-1"></i>Editar Captura
+                </button>
+              ` : ""}
               <button type="button" class="btn detail-export-btn" id="btnExportarExpedienteDetalle">
                 <i class="bi bi-file-earmark-pdf me-1"></i>Exportar Expediente
               </button>
