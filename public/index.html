@@ -1420,7 +1420,7 @@
       </form>
     </div>
 
-    <!-- ================== PREVIEW ================== -->
+    <!-- ================== PREVIEW ==================
     <div class="col-lg-4">
       <div class="card">
         <div class="card-body">
@@ -1429,7 +1429,7 @@
           <pre id="payloadPreview" class="bg-light p-3 rounded" style="max-height: 75vh; overflow:auto; font-size: 12px;"></pre>
         </div>
       </div>
-    </div>
+    </div> -->
 
   </div>
 </div>
@@ -1865,9 +1865,79 @@ async function cargarEdicionDesdeUrl() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 //detele
-async function onDeletePersona(id_persona) {
-  const ok = confirm(`¿Eliminar el registro #${id_persona}? Esta acción no se puede deshacer.`);
-  if (!ok) return;
+function confirmDeletePersonaModal(id_persona, nombre = "") {
+  return new Promise((resolve) => {
+    let modal = document.getElementById("modalConfirmEliminarPersona");
+
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.className = "modal fade";
+      modal.id = "modalConfirmEliminarPersona";
+      modal.tabIndex = -1;
+      modal.setAttribute("aria-hidden", "true");
+      modal.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white">
+              <h5 class="modal-title">
+                <i class="bi bi-trash3 me-2"></i>Eliminar registro
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+              <p class="mb-2 fw-semibold" id="modalEliminarPersonaTitulo"></p>
+              <p class="text-muted small mb-0">
+                Esta acción no se puede deshacer. El registro se eliminará directamente sin cargarlo al formulario.
+              </p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="button" class="btn btn-danger" id="btnConfirmEliminarPersona">
+                <i class="bi bi-trash3 me-1"></i>Eliminar
+              </button>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+    }
+
+    const title = modal.querySelector("#modalEliminarPersonaTitulo");
+    if (title) {
+      title.textContent = nombre
+        ? `¿Eliminar a ${nombre}?`
+        : `¿Eliminar el registro #${id_persona}?`;
+    }
+
+    const instance = bootstrap.Modal.getOrCreateInstance(modal);
+    const btn = modal.querySelector("#btnConfirmEliminarPersona");
+    let decided = false;
+
+    const cleanup = () => {
+      btn?.removeEventListener("click", onConfirm);
+      modal.removeEventListener("hidden.bs.modal", onHidden);
+    };
+
+    const onConfirm = () => {
+      decided = true;
+      cleanup();
+      instance.hide();
+      resolve(true);
+    };
+
+    const onHidden = () => {
+      cleanup();
+      if (!decided) resolve(false);
+    };
+
+    btn?.addEventListener("click", onConfirm, { once: true });
+    modal.addEventListener("hidden.bs.modal", onHidden, { once: true });
+    instance.show();
+  });
+}
+
+async function onDeletePersona(id_persona, nombre = "") {
+  const ok = await confirmDeletePersonaModal(id_persona, nombre);
+  if (!ok) return false;
 
   try {
     await apiDelete(`/personas/${id_persona}`);
@@ -2201,6 +2271,7 @@ async function onDeletePersona(id_persona) {
       );
       if (radio) radio.checked = true;
     }
+    window.setConfiabilidadBadge?.(nc);
     // Helpers para reconstruir listas
     document.getElementById('chkSinControversias').checked =
       payload?.persona?.sin_controversias_publicas === true;
@@ -6158,6 +6229,9 @@ function initGrupoPostulacionMulti() {
         return el ? el.value : "";
       }
 
+      window.setConfiabilidadBadge = setBadge;
+      window.syncConfiabilidadUI = () => setBadge(getSelected());
+
       // Actualiza badge cuando cambien radios
       document.querySelectorAll('input[name="nivel_confiabilidad"]').forEach(r => {
         r.addEventListener("change", () => {
@@ -6198,15 +6272,27 @@ function initGrupoPostulacionMulti() {
     }
 
     items.forEach(p => {
-      const a = document.createElement("button");
-      a.type = "button";
-      a.className = "list-group-item list-group-item-action";
+      const nombreCompleto = [p.nombre, p.apellido_paterno, p.apellido_materno].filter(Boolean).join(" ").trim();
+      const a = document.createElement("div");
+      a.className = "list-group-item";
       a.innerHTML = `
-        <div class="fw-semibold">${p.nombre} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}</div>
-        <div class="small text-muted">ID: ${p.id_persona}</div>
+        <div class="d-flex align-items-center justify-content-between gap-2">
+          <button type="button" class="btn btn-link text-start p-0 text-decoration-none flex-grow-1 btnGestionarPersona">
+            <div class="fw-semibold text-dark">${escHtml(nombreCompleto || "Sin nombre")}</div>
+            <div class="small text-muted">ID: ${escHtml(p.id_persona)}</div>
+          </button>
+          <div class="d-flex gap-1 flex-shrink-0">
+            <button type="button" class="btn btn-sm btn-outline-primary btnGestionarPersona">
+              <i class="bi bi-pencil-square me-1"></i>Gestionar
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger btnEliminarPersonaLista">
+              <i class="bi bi-trash3"></i>
+            </button>
+          </div>
+        </div>
       `;
 
-      a.addEventListener("click", async () => {
+      const gestionar = async () => {
         try {
           const payload = await apiGet(`/personas/${p.id_persona}/payload`);
           applyPayloadToForm(payload);
@@ -6216,6 +6302,17 @@ function initGrupoPostulacionMulti() {
           console.error(e);
           showAlert("danger", "No pude cargar para edición: " + e.message);
         }
+      };
+
+      a.querySelectorAll(".btnGestionarPersona").forEach(btn => {
+        btn.addEventListener("click", gestionar);
+      });
+
+      a.querySelector(".btnEliminarPersonaLista")?.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const ok = await onDeletePersona(p.id_persona, nombreCompleto);
+        if (ok) await recargarLista();
       });
 
       cont.appendChild(a);
