@@ -7,6 +7,172 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .captura-spa-nav {
+      position: sticky;
+      top: 82px;
+      z-index: 5;
+      height: var(--captura-panel-height, 680px);
+      max-height: var(--captura-panel-height, 680px);
+      overflow: hidden;
+    }
+
+    .captura-spa-nav .card-body {
+      height: 100%;
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #capturaSpaNav {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .captura-spa-nav .list-group-item {
+      border: 0;
+      border-left: 4px solid transparent;
+      color: #2f3440;
+      font-weight: 600;
+      padding: .58rem .75rem;
+      font-size: .92rem;
+      transition: all .18s ease;
+    }
+
+    .captura-spa-nav .list-group-item:hover {
+      background: rgba(139, 33, 54, .06);
+      color: #8b2136;
+    }
+
+    .captura-spa-nav .list-group-item.active {
+      background: #fff;
+      border-left-color: #8b2136;
+      color: #8b2136;
+      box-shadow: inset 0 0 0 1px rgba(139, 33, 54, .12);
+    }
+
+    .captura-spa-section.d-none {
+      display: none !important;
+    }
+
+    .captura-spa-title {
+      color: #8b2136;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+
+    .captura-spa-global-actions {
+      position: sticky;
+      top: 82px;
+      z-index: 6;
+    }
+
+    #capturaSpaContent {
+      height: var(--captura-panel-height, 680px);
+      max-height: var(--captura-panel-height, 680px);
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    #capturaSpaContent > .card {
+      height: 100%;
+      max-height: 100%;
+      min-height: 0;
+      margin-bottom: 0 !important;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #capturaSpaContent > .card > .card-body {
+      flex: 1 1 auto;
+      height: auto;
+      max-height: 100%;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 1rem !important;
+      box-sizing: border-box;
+    }
+
+    @media (min-width: 1400px) {
+      .captura-spa-nav {
+        height: var(--captura-panel-height, 720px);
+        max-height: var(--captura-panel-height, 720px);
+      }
+
+      #capturaSpaContent {
+        height: var(--captura-panel-height, 720px);
+        max-height: var(--captura-panel-height, 720px);
+      }
+    }
+
+    .captura-spa-global-actions .captura-spa-actions {
+      justify-content: flex-end !important;
+      gap: .75rem !important;
+      margin-bottom: 0 !important;
+    }
+
+    .captura-spa-global-actions .btn[type="submit"] {
+      padding: .55rem 1.25rem !important;
+      font-size: 1rem !important;
+    }
+
+    #capturaTopActions .captura-spa-actions {
+      justify-content: flex-end !important;
+      gap: .5rem !important;
+      margin-bottom: 0 !important;
+    }
+
+    #capturaTopActions .captura-spa-actions .btn {
+      padding: .45rem 1rem !important;
+      font-size: .95rem !important;
+      white-space: nowrap;
+    }
+
+    #capturaTopActions .captura-spa-actions .btn[type="submit"] {
+      padding: .45rem 1rem !important;
+      font-size: .95rem !important;
+      box-shadow: none !important;
+    }
+
+    .action-cluster {
+      border: 1px solid rgba(139, 33, 54, .12);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .76);
+      padding: .5rem;
+    }
+
+    .action-cluster-label {
+      color: #6b7280;
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      line-height: 1;
+      text-transform: uppercase;
+      margin-bottom: .35rem;
+    }
+
+    @media (max-width: 991.98px) {
+      .captura-spa-nav,
+      .captura-spa-global-actions {
+        position: static;
+      }
+
+      .captura-spa-nav .card-body,
+      #capturaSpaNav,
+      #capturaSpaContent,
+      #capturaSpaContent > .card,
+      #capturaSpaContent > .card > .card-body {
+        height: auto;
+        min-height: 0;
+        max-height: none;
+        overflow: visible;
+      }
+    }
+  </style>
 </head>
 
 <body>
@@ -111,10 +277,10 @@
   </div>
 
   <div class="row g-4">
-    <div class="col-12 col-lg-10 mx-auto">
+    <div class="col-12">
       <!-- ================== GESTOR DE BORRADORES ================== -->
       <div class="card mb-4 border-institucional">
-        <div class="card-body bg-institucional-light p-4">
+        <div class="card-body bg-institucional-light">
           <div class="row g-3 align-items-end">
             <!-- SELECT DE BORRADORES -->
             <div class="col-lg-5 col-md-12">
@@ -122,7 +288,7 @@
                 <label class="form-label text-institucional mb-2">
                   <i class="bi bi-journal-text me-1"></i>Mis borradores
                 </label>
-                <select class="form-select form-control-institucional form-select-lg" id="selBorradores">
+                <select class="form-select form-control-institucional" id="selBorradores">
                   <option value="">(Cargar borrador...)</option>
                 </select>
                 <div class="small text-muted mt-2" id="lblBorradorActual">
@@ -133,31 +299,45 @@
 
             <!-- BOTONES PRINCIPALES -->
             <div class="col-lg-7 col-md-12">
-              <div class="d-flex flex-wrap gap-2 justify-content-lg-end justify-content-md-center">
-                
-                <!-- GUARDAR -->
-                <button type="button" class="btn btn-institucional btn-lg px-4 py-2 flex-fill flex-lg-auto" id="btnGuardarBorrador">
-                  <i class="bi bi-floppy-fill me-2"></i>
-                  Guardar borrador
-                </button>
+              <div class="d-flex flex-wrap gap-2 justify-content-lg-end justify-content-md-center align-items-stretch">
+                <div class="action-cluster">
+                  <div class="action-cluster-label">Borradores</div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <!-- GUARDAR -->
+                    <button type="button" class="btn btn-institucional px-3 flex-fill flex-lg-auto" id="btnGuardarBorrador">
+                      <i class="bi bi-floppy-fill me-2"></i>
+                      Guardar
+                    </button>
 
-                <!-- RECARGAR -->
-                <button type="button" class="btn btn-outline-secondary px-3 py-2" id="btnRecargarBorradores">
-                  <i class="bi bi-arrow-clockwise me-1"></i>
-                  Recargar
-                </button>
+                    <!-- RECARGAR -->
+                    <button type="button" class="btn btn-outline-secondary px-3" id="btnRecargarBorradores">
+                      <i class="bi bi-arrow-clockwise me-1"></i>
+                      Recargar
+                    </button>
 
-                <!-- ELIMINAR -->
-                <button type="button" class="btn btn-outline-danger px-3 py-2" id="btnEliminarBorrador" disabled>
-                  <i class="bi bi-trash-fill me-1"></i>
-                  Eliminar
-                </button>
+                    <!-- ELIMINAR -->
+                    <button type="button" class="btn btn-outline-danger px-3" id="btnEliminarBorrador" disabled>
+                      <i class="bi bi-trash-fill me-1"></i>
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
 
-                <!-- OFFCANVAS -->
-                <button type="button" class="btn btn-outline-gold btn-sm px-3" data-bs-toggle="offcanvas" data-bs-target="#offcanvasPersonas">
-                  <i class="bi bi-clipboard2-check me-1"></i>
-                  Gestión
-                </button>
+                <div class="action-cluster">
+                  <div class="action-cluster-label">Gestión</div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <!-- OFFCANVAS -->
+                    <button type="button" class="btn btn-outline-gold px-3" data-bs-toggle="offcanvas" data-bs-target="#offcanvasPersonas">
+                      <i class="bi bi-clipboard2-check me-1"></i>
+                      Personas
+                    </button>
+                  </div>
+                </div>
+
+                <div class="action-cluster">
+                  <div class="action-cluster-label">Expediente</div>
+                  <div id="capturaTopActions" class="d-flex flex-wrap gap-2 justify-content-lg-end"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -169,7 +349,7 @@
         <div class="card mb-4 border-institucional">
           <div class="card-body bg-institucional-light">
             <!-- Header -->
-            <h5 class="card-header-custom">
+            <h5 class="card-header-custom mb-4">
               <i class="bi bi-person-badge-fill me-2"></i>
               Información personal
             </h5>
@@ -308,7 +488,6 @@
                 </div>
                 <div id="familiaresContainer" class="border rounded p-3 bg-white"></div>
               </div>
-            </div>
             </div>
           </div>
         </div>
@@ -1420,7 +1599,7 @@
       </form>
     </div>
 
-    <!-- ================== PREVIEW ==================
+    <!-- ================== PREVIEW / PAYLOAD DEBUG ==================
     <div class="col-lg-4">
       <div class="card">
         <div class="card-body">
@@ -1429,12 +1608,14 @@
           <pre id="payloadPreview" class="bg-light p-3 rounded" style="max-height: 75vh; overflow:auto; font-size: 12px;"></pre>
         </div>
       </div>
-    </div> -->
+    </div>
+    ================== FIN PREVIEW / PAYLOAD DEBUG ================== -->
 
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
 
@@ -1697,8 +1878,14 @@ const ROLES_EMPRESA = [
     window.location.href = '/';
   }
 
-  document.getElementById('btnLogout')?.addEventListener('click', () => {
-    if (confirm('¿Deseas cerrar sesión?')) {
+  document.getElementById('btnLogout')?.addEventListener('click', async () => {
+    const ok = await confirmAction({
+      title: "Cerrar sesión",
+      text: "¿Deseas cerrar sesión?",
+      confirmButtonText: "Sí, salir",
+      icon: "question"
+    });
+    if (ok) {
       logout();
     }
   });
@@ -1726,11 +1913,8 @@ const ROLES_EMPRESA = [
   let editingId = null;
   let fotoUrlActual = null;
 
-function showAlert(a, b) {
-  const box = $('#alertBox');
-
+function normalizeAlertArgs(a, b) {
   const tipos = ["success", "warning", "danger", "info"];
-
   let type;
   let msg;
 
@@ -1745,6 +1929,41 @@ function showAlert(a, b) {
     type = b || "warning";
   }
 
+  return { type, msg };
+}
+
+function showAlert(a, b) {
+  const box = $('#alertBox');
+  const { type, msg } = normalizeAlertArgs(a, b);
+
+  if (window.Swal?.fire) {
+    const titleByType = {
+      success: "Listo",
+      warning: "Atención",
+      danger: "Ocurrió un problema",
+      info: "Información"
+    };
+    const iconByType = {
+      success: "success",
+      warning: "warning",
+      danger: "error",
+      info: "info"
+    };
+
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: iconByType[type] || "info",
+      title: titleByType[type] || "Aviso",
+      text: String(msg || ""),
+      showConfirmButton: false,
+      timer: type === "danger" ? 4600 : 3200,
+      timerProgressBar: true
+    });
+    return;
+  }
+
+  if (!box) return;
   box.className = `alert alert-${type}`;
   box.textContent = msg;
   box.classList.remove('d-none');
@@ -1753,6 +1972,249 @@ function showAlert(a, b) {
 }
 
   function hideAlert(){ $('#alertBox').classList.add('d-none'); }
+
+  async function confirmAction({
+    title = "Confirmar acción",
+    text = "¿Deseas continuar?",
+    confirmButtonText = "Aceptar",
+    cancelButtonText = "Cancelar",
+    icon = "warning",
+    confirmButtonColor = "#8b2136"
+  } = {}) {
+    if (!window.Swal?.fire) return window.confirm(text || title);
+
+    const result = await Swal.fire({
+      title,
+      text,
+      icon,
+      showCancelButton: true,
+      reverseButtons: true,
+      confirmButtonText,
+      cancelButtonText,
+      confirmButtonColor,
+      cancelButtonColor: "#6c757d"
+    });
+
+    return result.isConfirmed;
+  }
+
+  function showLoading(title = "Cargando información", text = "Por favor espera un momento...") {
+    if (!window.Swal?.fire) return;
+    Swal.fire({
+      title,
+      text,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => Swal.showLoading()
+    });
+  }
+
+  function closeLoading() {
+    if (window.Swal?.close) Swal.close();
+  }
+
+  function debounce(fn, wait = 300) {
+    let timer = null;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), wait);
+    };
+  }
+
+  function initFormSpaShell() {
+    const form = document.getElementById("personaForm");
+    if (!form || form.dataset.spaReady === "true") return;
+
+    const cards = Array.from(form.children)
+      .filter(el => el.matches?.(".card.border-institucional"));
+    if (cards.length < 2) return;
+
+    const actions = Array.from(form.children)
+      .find(el => el.querySelector?.("#btnReset"));
+
+    const titles = [
+      "Información personal",
+      "Ubicación y datos electorales",
+      "Liderazgo e influencia",
+      "Formación académica",
+      "Teléfonos",
+      "Parejas",
+      "Hijos",
+      "Redes",
+      "Trayectoria política",
+      "Militancia e ideología",
+      "Efectividad electoral",
+      "Equipos y referentes",
+      "Controversias",
+      "Fuentes de consulta",
+      "Nivel de confiabilidad"
+    ];
+
+    const icons = [
+      "bi-person-badge",
+      "bi-geo-alt",
+      "bi-award",
+      "bi-mortarboard",
+      "bi-telephone",
+      "bi-heart",
+      "bi-people",
+      "bi-share",
+      "bi-briefcase",
+      "bi-diagram-3",
+      "bi-ballot-check",
+      "bi-people-gear",
+      "bi-exclamation-triangle",
+      "bi-book",
+      "bi-traffic-light"
+    ];
+
+    const layout = document.createElement("div");
+    layout.className = "row g-4 align-items-start captura-spa-layout";
+
+    const sidebar = document.createElement("aside");
+    sidebar.className = "col-12 col-lg-3";
+    sidebar.innerHTML = `
+      <div class="card border-institucional captura-spa-nav">
+        <div class="card-body bg-institucional-light">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <div class="small text-muted fw-bold text-uppercase">Panel de captura</div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Navegación de secciones">
+              <button type="button" class="btn btn-outline-secondary" id="btnSpaPrev">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <button type="button" class="btn btn-outline-secondary" id="btnSpaNext">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+          <div class="list-group list-group-flush" id="capturaSpaNav"></div>
+        </div>
+      </div>
+    `;
+
+    const content = document.createElement("section");
+    content.className = "col-12 col-lg-9";
+    content.innerHTML = `
+      <div id="capturaSpaContent"></div>
+    `;
+
+    form.insertBefore(layout, cards[0]);
+    layout.appendChild(sidebar);
+    layout.appendChild(content);
+
+    const nav = sidebar.querySelector("#capturaSpaNav");
+    const navCard = sidebar.querySelector(".captura-spa-nav");
+    const outlet = content.querySelector("#capturaSpaContent");
+    const actionsSlot = document.getElementById("capturaTopActions");
+    const btnPrev = sidebar.querySelector("#btnSpaPrev");
+    const btnNext = sidebar.querySelector("#btnSpaNext");
+
+    const sectionItems = cards.map((card, index) => {
+      const key = `section-${index}`;
+      const title = titles[index] || card.querySelector("h5, h6")?.textContent?.trim() || `Sección ${index + 1}`;
+      const icon = icons[index] || "bi-circle";
+
+      card.dataset.formSection = key;
+      card.classList.add("captura-spa-section");
+      if (index !== 0) card.classList.add("d-none");
+      outlet.appendChild(card);
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `list-group-item list-group-item-action d-flex align-items-center gap-2 ${index === 0 ? "active" : ""}`;
+      btn.dataset.targetSection = key;
+      btn.innerHTML = `<i class="bi ${icon}"></i><span>${title}</span>`;
+      nav.appendChild(btn);
+
+      return { key, title, card, btn };
+    });
+
+    if (actions) {
+      actions.classList.add("captura-spa-actions");
+      actions.querySelector('button[type="submit"]')?.setAttribute("form", "personaForm");
+      actionsSlot?.appendChild(actions);
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      if (form.dataset.submitConfirmed === "true") {
+        delete form.dataset.submitConfirmed;
+        return;
+      }
+
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+
+      const ok = await confirmAction({
+        title: "Guardar expediente completo",
+        text: "Se guardará la información capturada en todas las secciones del formulario. Las secciones vacías se enviarán sin datos.",
+        confirmButtonText: "Guardar expediente",
+        icon: "question"
+      });
+
+      if (!ok) return;
+      form.dataset.submitConfirmed = "true";
+      form.requestSubmit();
+    }, true);
+
+    let currentIndex = 0;
+
+    function syncPanelHeights() {
+      if (window.matchMedia("(max-width: 991.98px)").matches) {
+        form.style.removeProperty("--captura-panel-height");
+        return;
+      }
+
+      const navHeight = Math.ceil(navCard?.getBoundingClientRect?.().height || 0);
+      const fallbackHeight = window.innerWidth >= 1400 ? 720 : 680;
+      const panelHeight = Math.max(navHeight, 520) || fallbackHeight;
+      form.style.setProperty("--captura-panel-height", `${panelHeight}px`);
+    }
+
+    function showSection(index, opts = {}) {
+      if (index < 0 || index >= sectionItems.length) return;
+      syncPanelHeights();
+      currentIndex = index;
+      sectionItems.forEach((item, itemIndex) => {
+        const active = itemIndex === index;
+        item.card.classList.toggle("d-none", !active);
+        item.btn.classList.toggle("active", active);
+      });
+      btnPrev.disabled = index === 0;
+      btnNext.disabled = index === sectionItems.length - 1;
+      if (opts.scroll) form.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    nav.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-target-section]");
+      if (!btn) return;
+      const index = sectionItems.findIndex(item => item.key === btn.dataset.targetSection);
+      showSection(index, { scroll: true });
+    });
+
+    btnPrev.addEventListener("click", () => showSection(currentIndex - 1, { scroll: true }));
+    btnNext.addEventListener("click", () => showSection(currentIndex + 1, { scroll: true }));
+
+    window.addEventListener("resize", syncPanelHeights);
+    if (window.ResizeObserver && navCard) {
+      const panelObserver = new ResizeObserver(syncPanelHeights);
+      panelObserver.observe(navCard);
+    }
+
+    syncPanelHeights();
+    showSection(0);
+    form.dataset.spaReady = "true";
+    window.FormCapturaSPA = {
+      showSection: (indexOrKey) => {
+        const index = Number.isInteger(indexOrKey)
+          ? indexOrKey
+          : sectionItems.findIndex(item => item.key === indexOrKey || item.title === indexOrKey);
+        showSection(index);
+      },
+      sections: sectionItems.map(({ key, title }) => ({ key, title }))
+    };
+  }
+
+  initFormSpaShell();
 
   async function apiGet(path) {
     const token = localStorage.getItem('token');
@@ -1833,7 +2295,7 @@ function showAlert(a, b) {
       if (hid) hid.value = editingId ? String(editingId) : '';
     }
 
-    function cancelEditing() {
+  function cancelEditing() {
       // deja tu estado de edición limpio
       activateEditing(null);
 
@@ -1843,11 +2305,14 @@ function showAlert(a, b) {
     }
   async function onEditPersona(id_persona) {
   try {
+    showLoading("Cargando registro", "Preparando la información para edición...");
     const payload = await apiGet(`/personas/${id_persona}/payload`);
     applyPayloadToForm(payload);     // 👈 tu función actual
     activateEditing(id_persona);          // 👈 activa modo edición
+    closeLoading();
     showAlert("info", `Editando registro #${id_persona}`);
   } catch (e) {
+    closeLoading();
     console.error(e);
     showAlert("danger", "No pude cargar el registro para editar: " + e.message);
   }
@@ -1864,74 +2329,14 @@ async function cargarEdicionDesdeUrl() {
   window.history.replaceState({}, "", cleanUrl);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
-//detele
-function confirmDeletePersonaModal(id_persona, nombre = "") {
-  return new Promise((resolve) => {
-    let modal = document.getElementById("modalConfirmEliminarPersona");
-
-    if (!modal) {
-      modal = document.createElement("div");
-      modal.className = "modal fade";
-      modal.id = "modalConfirmEliminarPersona";
-      modal.tabIndex = -1;
-      modal.setAttribute("aria-hidden", "true");
-      modal.innerHTML = `
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-danger text-white">
-              <h5 class="modal-title">
-                <i class="bi bi-trash3 me-2"></i>Eliminar registro
-              </h5>
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-            </div>
-            <div class="modal-body">
-              <p class="mb-2 fw-semibold" id="modalEliminarPersonaTitulo"></p>
-              <p class="text-muted small mb-0">
-                Esta acción no se puede deshacer. El registro se eliminará directamente sin cargarlo al formulario.
-              </p>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-              <button type="button" class="btn btn-danger" id="btnConfirmEliminarPersona">
-                <i class="bi bi-trash3 me-1"></i>Eliminar
-              </button>
-            </div>
-          </div>
-        </div>`;
-      document.body.appendChild(modal);
-    }
-
-    const title = modal.querySelector("#modalEliminarPersonaTitulo");
-    if (title) {
-      title.textContent = nombre
-        ? `¿Eliminar a ${nombre}?`
-        : `¿Eliminar el registro #${id_persona}?`;
-    }
-
-    const instance = bootstrap.Modal.getOrCreateInstance(modal);
-    const btn = modal.querySelector("#btnConfirmEliminarPersona");
-    let decided = false;
-
-    const cleanup = () => {
-      btn?.removeEventListener("click", onConfirm);
-      modal.removeEventListener("hidden.bs.modal", onHidden);
-    };
-
-    const onConfirm = () => {
-      decided = true;
-      cleanup();
-      instance.hide();
-      resolve(true);
-    };
-
-    const onHidden = () => {
-      cleanup();
-      if (!decided) resolve(false);
-    };
-
-    btn?.addEventListener("click", onConfirm, { once: true });
-    modal.addEventListener("hidden.bs.modal", onHidden, { once: true });
-    instance.show();
+// delete
+async function confirmDeletePersonaModal(id_persona, nombre = "") {
+  return confirmAction({
+    title: nombre ? `¿Eliminar a ${nombre}?` : `¿Eliminar el registro #${id_persona}?`,
+    text: "Esta acción no se puede deshacer. El registro se eliminará directamente sin cargarlo al formulario.",
+    confirmButtonText: "Sí, eliminar",
+    icon: "warning",
+    confirmButtonColor: "#dc3545"
   });
 }
 
@@ -1940,7 +2345,9 @@ async function onDeletePersona(id_persona, nombre = "") {
   if (!ok) return false;
 
   try {
+    showLoading("Eliminando registro", "Aplicando baja del expediente...");
     await apiDelete(`/personas/${id_persona}`);
+    closeLoading();
     showAlert("success", `Eliminado ✅ (#${id_persona})`);
 
     // si justo estabas editando ese registro
@@ -1949,6 +2356,7 @@ async function onDeletePersona(id_persona, nombre = "") {
     if (typeof reloadPanelPersonas === "function") await reloadPanelPersonas();
     return true;
   } catch (e) {
+    closeLoading();
     console.error(e);
     showAlert("danger", "No pude eliminar: " + e.message);
     return false;
@@ -1956,10 +2364,15 @@ async function onDeletePersona(id_persona, nombre = "") {
 }
 
   function generarTituloBorrador(payload) {
-    const nombre = payload?.persona?.nombre?.trim() || 'SIN NOMBRE';
-    const munId = payload?.persona?.municipio_trabajo_politico;
+    const p = payload?.persona || {};
+    const nombre = [p.nombre, p.apellido_paterno, p.apellido_materno]
+      .filter(Boolean)
+      .join(" ")
+      .trim()
+      .replace(/\s+/g, " ") || 'SIN NOMBRE';
+    const munId = p.municipio_trabajo_politico;
     const munNombre = munId ? (getMunicipioNombreById(munId) || `Municipio ${munId}`) : 'SIN MUNICIPIO';
-    return `${nombre} - ${munNombre}`;
+    return `${nombre} · ${munNombre}`;
   }
 
   async function apiPut(path, body) {
@@ -2004,12 +2417,26 @@ async function onDeletePersona(id_persona, nombre = "") {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return String(value);
     return d.toLocaleString("es-MX", {
+      timeZone: "America/Mexico_City",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit"
     });
+  }
+
+  function fmtFechaBorrador(value) {
+    if (!value) return "";
+
+    const raw = String(value);
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+    if (match) {
+      const [, yyyy, mm, dd, hh, min] = match;
+      return `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
+    }
+
+    return fmtFecha(value);
   }
 
   function actualizarBadgeNotificacionesCaptura(rows = []) {
@@ -2128,10 +2555,16 @@ async function onDeletePersona(id_persona, nombre = "") {
     borradores.forEach(b => {
       const opt = document.createElement('option');
       opt.value = b.id_borrador;
-      const fecha = (b.updated_at || b.created_at || '').toString().slice(0, 19).replace('T',' ');
-      opt.textContent = `${b.titulo || '(sin título)'}  —  ${fecha}`;
+      const fecha = fmtFechaBorrador(b.updated_at || b.created_at);
+      const titulo = (b.titulo || '(sin título)').toString().replace(/\s+/g, ' ').trim();
+      opt.textContent = `#${b.id_borrador} · ${titulo} · ${fecha || 'sin fecha'}`;
+      opt.title = opt.textContent;
       sel.appendChild(opt);
     });
+
+    if (borradorActualId) {
+      sel.value = String(borradorActualId);
+    }
   }
 
   function setBorradorActual(id) {
@@ -4041,7 +4474,7 @@ function refreshHijosParejasSelects() {
         return SOLO_LETRAS_RE.test(v);
       }
 
-      // submit: aquí sí pinta invalid/valid
+      // submit: solo pinta errores. Evitamos is-valid para no mostrar checks verdes permanentes.
       el.classList.remove("is-invalid", "is-valid");
 
       if (!v) {
@@ -4057,7 +4490,6 @@ function refreshHijosParejasSelects() {
         return false;
       }
 
-      el.classList.add("is-valid");
       return true;
     }
   // ---------- Build payload ---------- inserción en el formulario y validación
@@ -5186,7 +5618,7 @@ function refreshPreview() {
           const data = await resp.json().catch(() => ({}));
 
           if (!resp.ok) {
-            alert(data?.error || "Error al subir foto");
+            showAlert("danger", data?.error || "Error al subir foto");
             return;
           }
 
@@ -5310,45 +5742,27 @@ function initValidacionDuplicados() {
 }
   //FUNCION PARA EFECTO GUARDADO:
   function showSuccessCheckmark(idGuardado, isEdit) {
-  document.querySelector('.success-checkmark')?.remove();
+  const title = isEdit
+    ? "Expediente actualizado"
+    : "Expediente guardado";
+  const text = isEdit
+    ? `El registro #${idGuardado} se actualizó correctamente.`
+    : `El registro #${idGuardado} se guardó correctamente.`;
 
-  const texto = isEdit 
-    ? `<span>EDITADO</span><br><small>ID: ${idGuardado}</small>`
-    : `<span>GUARDADO</span><br><small>ID: ${idGuardado}</small>`;
+  if (window.Swal?.fire) {
+    Swal.fire({
+      icon: "success",
+      title,
+      text,
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#8b2136",
+      timer: 2200,
+      timerProgressBar: true
+    });
+    return;
+  }
 
-  const container = document.createElement('div');
-  container.className = 'success-checkmark';
-  container.innerHTML = `
-    <!-- ✅ ICONO SVG SIMPLE Y PERFECTO -->
-    <svg class="success-icon" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" fill="none"/>
-      <path d="M7 12l2.5 2.5L17 8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <div class="success-text">${texto}</div>
-  `;
-
-  container.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 9999;
-    text-align: center;
-  `;
-
-  document.body.appendChild(container);
-
-  setTimeout(() => {
-    showAlert('success', isEdit 
-      ? `Persona actualizada correctamente`
-      : `Nueva persona guardada correctamente`
-    );
-    
-    setTimeout(() => {
-      container.style.animation = 'fadeOut 0.5s ease-out forwards';
-      setTimeout(() => container.remove(), 500);
-    }, 2000);
-  }, 1000);
+  showAlert("success", text);
 }
 //GLOBAL FAMILIA
 
@@ -5937,7 +6351,7 @@ function initGrupoPostulacionMulti() {
           const legalFuera = document.getElementById("chkLegalFueraEdomex")?.checked === true;
 
             if (legalFuera && e.target.checked) {
-              alert("La residencia legal está fuera del Estado de México. Debe seleccionar manualmente el municipio de trabajo político dentro del EdoMéx.");
+              showAlert("warning", "La residencia legal está fuera del Estado de México. Debe seleccionar manualmente el municipio de trabajo político dentro del EdoMéx.");
               e.target.checked = false;
               munTrabajo.disabled = false;
               munTrabajo.focus();
@@ -6258,20 +6672,27 @@ function initGrupoPostulacionMulti() {
   function renderListaPersonas(items) {
     const cont = document.getElementById("listaPersonas");
     const badge = document.getElementById("badgeCount");
+    const rows = Array.from(
+      new Map(
+        (Array.isArray(items) ? items : [])
+          .filter(p => p?.id_persona != null)
+          .map(p => [Number(p.id_persona), p])
+      ).values()
+    );
 
     if (badge) {
-      badge.textContent = Array.isArray(items) ? items.length : 0;
+      badge.textContent = rows.length;
     }
 
     if (!cont) return;
     cont.innerHTML = "";
 
-    if (!items.length) {
+    if (!rows.length) {
       cont.innerHTML = `<div class="text-muted">Sin resultados</div>`;
       return;
     }
 
-    items.forEach(p => {
+    rows.forEach(p => {
       const nombreCompleto = [p.nombre, p.apellido_paterno, p.apellido_materno].filter(Boolean).join(" ").trim();
       const a = document.createElement("div");
       a.className = "list-group-item";
@@ -6294,11 +6715,14 @@ function initGrupoPostulacionMulti() {
 
       const gestionar = async () => {
         try {
+          showLoading("Cargando registro", "Pegando la información en el formulario...");
           const payload = await apiGet(`/personas/${p.id_persona}/payload`);
           applyPayloadToForm(payload);
           activateEditing(p.id_persona);
+          closeLoading();
           showAlert("info", `Modo edición: #${p.id_persona}`);
         } catch (e) {
+          closeLoading();
           console.error(e);
           showAlert("danger", "No pude cargar para edición: " + e.message);
         }
@@ -6320,11 +6744,16 @@ function initGrupoPostulacionMulti() {
   }
 
       function setupBuscadorIndex(){
-        document.getElementById("btnBuscarPersona")
-          ?.addEventListener("click", recargarLista);
+        const btnBuscar = document.getElementById("btnBuscarPersona");
+        const txtBuscar = document.getElementById("txtBuscarPersona");
+        if (!btnBuscar || !txtBuscar || btnBuscar.dataset.bound === "true") return;
 
-        document.getElementById("txtBuscarPersona")
-          ?.addEventListener("input", debounce(recargarLista, 400));
+        btnBuscar.dataset.bound = "true";
+        btnBuscar.addEventListener("click", recargarLista);
+        txtBuscar.addEventListener("input", debounce(recargarLista, 400));
+        txtBuscar.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") recargarLista();
+        });
       }
 
       async function recargarLista() {
@@ -6338,10 +6767,8 @@ function initGrupoPostulacionMulti() {
         }
       }
 
-      document.getElementById("btnBuscarPersona").addEventListener("click", recargarLista);
-      document.getElementById("txtBuscarPersona").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") recargarLista();
-      });
+      window.reloadPanelPersonas = recargarLista;
+      setupBuscadorIndex();
 
 
       // Botón recargar
@@ -6629,10 +7056,13 @@ function initGrupoPostulacionMulti() {
 
           const isEdit = !!editingId;
           const url = isEdit ? `/personas/${editingId}` : `/personas`;
+          showLoading(
+            isEdit ? "Actualizando expediente" : "Guardando expediente",
+            "Estamos enviando la información al servidor..."
+          );
           const resp = isEdit ? await apiPut(url, payload) : await apiPost(url, payload);
 
           const idGuardado = isEdit ? editingId : resp.id_persona;
-          showSuccessCheckmark(idGuardado, isEdit);
 
           if (borradorActualId) {
             try {
@@ -6641,6 +7071,9 @@ function initGrupoPostulacionMulti() {
             setBorradorActual(null);
             await cargarListaBorradores();
           }
+
+          closeLoading();
+          showSuccessCheckmark(idGuardado, isEdit);
 
           if (isEdit) {
             // Superadmin: volver al dashboard posicionado en el registro editado
@@ -6653,9 +7086,13 @@ function initGrupoPostulacionMulti() {
             }
             activateEditing(null);
           }
+          if (typeof reloadPanelPersonas === "function") {
+            await reloadPanelPersonas();
+          }
           clearAll();
 
         } catch (err) {
+          closeLoading();
           console.error(err);
           showAlert('danger', 'Error al guardar: ' + (err.message || err));
         } finally {
