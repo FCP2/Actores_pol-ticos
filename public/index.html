@@ -145,6 +145,17 @@
       padding: .5rem;
     }
 
+    .draft-actions-card,
+    .draft-actions-card > .card-body,
+    .draft-actions-card .form-group {
+      overflow: visible !important;
+    }
+
+    .draft-actions-card {
+      position: relative;
+      z-index: 20;
+    }
+
     .action-cluster-label {
       color: #6b7280;
       font-size: .68rem;
@@ -153,6 +164,61 @@
       line-height: 1;
       text-transform: uppercase;
       margin-bottom: .35rem;
+    }
+
+    .draft-combobox {
+      position: relative;
+      z-index: 30;
+    }
+
+    .draft-combobox-menu {
+      position: absolute;
+      top: calc(100% + .35rem);
+      left: 0;
+      right: 0;
+      z-index: 1050;
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid rgba(139, 33, 54, .18);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, .14);
+      padding: .35rem;
+    }
+
+    .draft-combobox-item {
+      width: 100%;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #2f3440;
+      padding: .55rem .65rem;
+      text-align: left;
+    }
+
+    .draft-combobox-item:hover,
+    .draft-combobox-item.active {
+      background: rgba(139, 33, 54, .08);
+      color: #8b2136;
+    }
+
+    .draft-combobox-item .draft-title {
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .draft-combobox-item .draft-meta {
+      color: #6b7280;
+      font-size: .75rem;
+      margin-top: .15rem;
+    }
+
+    body.swal2-shown .draft-actions-card {
+      z-index: 1;
+    }
+
+    body.swal2-shown .draft-combobox-menu {
+      display: none !important;
     }
 
     @media (max-width: 991.98px) {
@@ -279,7 +345,7 @@
   <div class="row g-4">
     <div class="col-12">
       <!-- ================== GESTOR DE BORRADORES ================== -->
-      <div class="card mb-4 border-institucional">
+      <div class="card mb-4 border-institucional draft-actions-card">
         <div class="card-body bg-institucional-light">
           <div class="row g-3 align-items-end">
             <!-- SELECT DE BORRADORES -->
@@ -288,7 +354,27 @@
                 <label class="form-label text-institucional mb-2">
                   <i class="bi bi-journal-text me-1"></i>Mis borradores
                 </label>
-                <select class="form-select form-control-institucional" id="selBorradores">
+                <div class="draft-combobox mb-2" id="draftCombobox">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white text-institucional">
+                      <i class="bi bi-search"></i>
+                    </span>
+                    <input
+                      type="search"
+                      class="form-control form-control-institucional"
+                      id="txtBuscarBorrador"
+                      placeholder="Buscar y cargar borrador..."
+                      autocomplete="off"
+                      aria-expanded="false"
+                      aria-controls="draftComboboxMenu"
+                    >
+                    <button class="btn btn-outline-secondary" type="button" id="btnToggleBorradores" aria-label="Mostrar borradores">
+                      <i class="bi bi-chevron-down"></i>
+                    </button>
+                  </div>
+                  <div class="draft-combobox-menu d-none" id="draftComboboxMenu"></div>
+                </div>
+                <select class="form-select form-control-institucional d-none" id="selBorradores">
                   <option value="">(Cargar borrador...)</option>
                 </select>
                 <div class="small text-muted mt-2" id="lblBorradorActual">
@@ -1909,6 +1995,7 @@ const ROLES_EMPRESA = [
   let redesCatalog = [];
   let controversiasCatalog = [];
   let borradorActualId = null;
+  let borradoresCache = [];
   let temasCatalog = [];
   let editingId = null;
   let fotoUrlActual = null;
@@ -1981,6 +2068,9 @@ function showAlert(a, b) {
     icon = "warning",
     confirmButtonColor = "#8b2136"
   } = {}) {
+    if (typeof cerrarBorradoresCombobox === "function") cerrarBorradoresCombobox();
+    document.activeElement?.blur?.();
+
     if (!window.Swal?.fire) return window.confirm(text || title);
 
     const result = await Swal.fire({
@@ -2013,12 +2103,61 @@ function showAlert(a, b) {
     if (window.Swal?.close) Swal.close();
   }
 
+  async function resolverBorradorPostEnvio(idBorrador) {
+    if (!idBorrador) return;
+
+    if (!window.Swal?.fire) {
+      return;
+    }
+
+    const result = await Swal.fire({
+      icon: "question",
+      title: "Expediente enviado",
+      text: "El registro ya fue guardado en la base de datos. ¿Qué deseas hacer con el borrador usado?",
+      showDenyButton: true,
+      showCancelButton: true,
+      confirmButtonText: "Eliminar borrador",
+      denyButtonText: "Conservar borrador",
+      cancelButtonText: "Decidir después",
+      confirmButtonColor: "#dc3545",
+      denyButtonColor: "#8b2136",
+      cancelButtonColor: "#6c757d",
+      reverseButtons: true
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await apiDelete(`/borradores/${idBorrador}`);
+        showAlert("success", `Borrador eliminado (#${idBorrador}).`);
+      } catch (e) {
+        console.error(e);
+        showAlert("warning", "El expediente se guardó correctamente, pero no se pudo limpiar el borrador. Puedes eliminarlo después desde Mis borradores.");
+      }
+      return;
+    }
+
+    if (result.isDenied) {
+      showAlert("info", `Borrador conservado (#${idBorrador}).`);
+    } else {
+      showAlert("info", `Borrador disponible para revisar después (#${idBorrador}).`);
+    }
+  }
+
   function debounce(fn, wait = 300) {
     let timer = null;
     return (...args) => {
       clearTimeout(timer);
       timer = setTimeout(() => fn(...args), wait);
     };
+  }
+
+  function normalizeName(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ");
   }
 
   function initFormSpaShell() {
@@ -2547,17 +2686,31 @@ async function onDeletePersona(id_persona, nombre = "") {
     }
   });
 
-  async function cargarListaBorradores() {
+  function getBorradorOptionText(b) {
+    const fecha = fmtFechaBorrador(b.updated_at || b.created_at);
+    const titulo = (b.titulo || '(sin título)').toString().replace(/\s+/g, ' ').trim();
+    return `#${b.id_borrador} · ${titulo} · ${fecha || 'sin fecha'}`;
+  }
+
+  function getBorradoresFiltrados(filtro = "") {
+    const q = normalizeName(filtro || "");
+    return (borradoresCache || []).filter(b => {
+      if (borradorActualId && Number(b.id_borrador) === Number(borradorActualId)) return true;
+      if (!q) return true;
+      return normalizeName(getBorradorOptionText(b)).includes(q);
+    });
+  }
+
+  function renderSelectBorradores(filtro = "") {
     const sel = document.getElementById('selBorradores');
+    if (!sel) return;
+
     sel.innerHTML = `<option value="">(Cargar borrador...)</option>`;
 
-    const borradores = await apiGet('/borradores/mios');
-    borradores.forEach(b => {
+    getBorradoresFiltrados(filtro).forEach(b => {
       const opt = document.createElement('option');
       opt.value = b.id_borrador;
-      const fecha = fmtFechaBorrador(b.updated_at || b.created_at);
-      const titulo = (b.titulo || '(sin título)').toString().replace(/\s+/g, ' ').trim();
-      opt.textContent = `#${b.id_borrador} · ${titulo} · ${fecha || 'sin fecha'}`;
+      opt.textContent = getBorradorOptionText(b);
       opt.title = opt.textContent;
       sel.appendChild(opt);
     });
@@ -2565,6 +2718,62 @@ async function onDeletePersona(id_persona, nombre = "") {
     if (borradorActualId) {
       sel.value = String(borradorActualId);
     }
+  }
+
+  function renderBorradoresCombobox(filtro = "") {
+    const menu = document.getElementById("draftComboboxMenu");
+    if (!menu) return;
+
+    const rows = getBorradoresFiltrados(filtro);
+    if (!rows.length) {
+      menu.innerHTML = `<div class="text-muted small px-2 py-2">Sin borradores coincidentes</div>`;
+      return;
+    }
+
+    menu.innerHTML = rows.map(b => {
+      const fecha = fmtFechaBorrador(b.updated_at || b.created_at) || "sin fecha";
+      const titulo = escHtml((b.titulo || "(sin título)").toString().replace(/\s+/g, " ").trim());
+      return `
+        <button type="button" class="draft-combobox-item" data-id="${escHtml(b.id_borrador)}">
+          <div class="draft-title">#${escHtml(b.id_borrador)} · ${titulo}</div>
+          <div class="draft-meta">${escHtml(fecha)}</div>
+        </button>
+      `;
+    }).join("");
+  }
+
+  function abrirBorradoresCombobox() {
+    const input = document.getElementById("txtBuscarBorrador");
+    const menu = document.getElementById("draftComboboxMenu");
+    if (!input || !menu) return;
+    renderBorradoresCombobox(input.value || "");
+    menu.classList.remove("d-none");
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function cerrarBorradoresCombobox() {
+    const input = document.getElementById("txtBuscarBorrador");
+    const menu = document.getElementById("draftComboboxMenu");
+    if (!input || !menu) return;
+    menu.classList.add("d-none");
+    input.setAttribute("aria-expanded", "false");
+  }
+
+  function limpiarComboBorradores() {
+    const input = document.getElementById("txtBuscarBorrador");
+    const sel = document.getElementById("selBorradores");
+    if (input) input.value = "";
+    if (sel) sel.value = "";
+    cerrarBorradoresCombobox();
+    renderSelectBorradores("");
+    renderBorradoresCombobox("");
+  }
+
+  async function cargarListaBorradores() {
+    borradoresCache = await apiGet('/borradores/mios');
+    const filtro = document.getElementById('txtBuscarBorrador')?.value || "";
+    renderSelectBorradores(filtro);
+    renderBorradoresCombobox(filtro);
   }
 
   function setBorradorActual(id) {
@@ -6776,6 +6985,49 @@ function initGrupoPostulacionMulti() {
         await cargarListaBorradores();
       });
 
+      document.getElementById('txtBuscarBorrador')?.addEventListener('input', (e) => {
+        renderSelectBorradores(e.target.value || "");
+        renderBorradoresCombobox(e.target.value || "");
+        abrirBorradoresCombobox();
+      });
+
+      document.getElementById('txtBuscarBorrador')?.addEventListener('focus', () => {
+        abrirBorradoresCombobox();
+      });
+
+      document.getElementById('btnToggleBorradores')?.addEventListener('click', () => {
+        const menu = document.getElementById("draftComboboxMenu");
+        if (menu?.classList.contains("d-none")) {
+          document.getElementById('txtBuscarBorrador')?.focus();
+          abrirBorradoresCombobox();
+        } else {
+          cerrarBorradoresCombobox();
+        }
+      });
+
+      document.getElementById('draftComboboxMenu')?.addEventListener('click', (e) => {
+        const item = e.target.closest("[data-id]");
+        if (!item) return;
+        const sel = document.getElementById('selBorradores');
+        const input = document.getElementById('txtBuscarBorrador');
+        const id = item.dataset.id;
+        if (sel) {
+          sel.value = id;
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        if (input) {
+          const b = (borradoresCache || []).find(x => Number(x.id_borrador) === Number(id));
+          input.value = b ? getBorradorOptionText(b) : "";
+        }
+        cerrarBorradoresCombobox();
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#draftCombobox")) {
+          cerrarBorradoresCombobox();
+        }
+      });
+
       // Guardar borrador (create o update)
       document.getElementById('btnGuardarBorrador').addEventListener('click', async () => {
         try {
@@ -6799,10 +7051,12 @@ function initGrupoPostulacionMulti() {
             const resp = await apiPost('/borradores', { titulo, payload });
             setBorradorActual(resp.id_borrador);
             await cargarListaBorradores();
+            limpiarComboBorradores();
             showAlert('success', `Borrador guardado ✅ (#${resp.id_borrador})`);
           } else {
             await apiPut(`/borradores/${borradorActualId}`, { titulo, payload, estatus: 'borrador' });
             await cargarListaBorradores();
+            limpiarComboBorradores();
             showAlert('success', `Borrador actualizado ✅ (#${borradorActualId})`);
           }
 
@@ -6817,6 +7071,7 @@ function initGrupoPostulacionMulti() {
       document.getElementById('selBorradores').addEventListener('change', async (e) => {
         const id = e.target.value;
         if (!id) return;
+        cerrarBorradoresCombobox();
 
         try {
           const b = await apiGet(`/borradores/${id}`);
@@ -6840,6 +7095,7 @@ function initGrupoPostulacionMulti() {
           showAlert('success', `Borrador eliminado ✅ (#${borradorActualId})`);
           setBorradorActual(null);
           await cargarListaBorradores();
+          limpiarComboBorradores();
         } catch (e) {
           console.error(e);
           showAlert('danger', 'No pude eliminar borrador: ' + e.message);
@@ -7060,19 +7316,28 @@ function initGrupoPostulacionMulti() {
             isEdit ? "Actualizando expediente" : "Guardando expediente",
             "Estamos enviando la información al servidor..."
           );
+
+          const borradorProcesadoId = borradorActualId;
+          if (borradorProcesadoId) {
+            const tituloBorrador = generarTituloBorrador(payload);
+            await apiPut(`/borradores/${borradorProcesadoId}`, {
+              titulo: tituloBorrador,
+              payload,
+              estatus: "borrador"
+            });
+          }
+
           const resp = isEdit ? await apiPut(url, payload) : await apiPost(url, payload);
 
           const idGuardado = isEdit ? editingId : resp.id_persona;
+          closeLoading();
 
-          if (borradorActualId) {
-            try {
-              await apiPut(`/borradores/${borradorActualId}`, { estatus: 'enviado' });
-            } catch (_) {}
+          if (borradorProcesadoId) {
+            await resolverBorradorPostEnvio(borradorProcesadoId);
             setBorradorActual(null);
             await cargarListaBorradores();
           }
 
-          closeLoading();
           showSuccessCheckmark(idGuardado, isEdit);
 
           if (isEdit) {
