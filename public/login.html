@@ -346,8 +346,15 @@
       font-size: 12px;
       color: #c4c9d4;
       margin-top: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 5px;
     }
-    .form-footer .dot { margin: 0 6px; }
+    .form-footer .dot { margin: 0 2px; }
+    .form-footer a { color: #8992a3; text-decoration: none; }
+    .form-footer a:hover { color: var(--guinda); text-decoration: underline; }
 
     /* ── Responsive ─────────────────────────────────────────── */
     @media (min-width: 900px) {
@@ -483,11 +490,16 @@
 
         </form>
 
-        <div class="form-footer">
-          © <span id="year"></span> ATI
-          <span class="dot">·</span>
-          Acceso restringido
-        </div>
+        <footer class="form-footer" aria-label="Información de soporte técnico">
+          <i class="bi bi-code-slash" aria-hidden="true"></i>
+          <span>@desarrollador by <strong>FranViG</strong></span>
+          <span class="dot" aria-hidden="true">·</span>
+          <span>Soporte técnico</span>
+          <span class="dot" aria-hidden="true">·</span>
+          <a href="tel:+527292251844" aria-label="Llamar a soporte técnico al 729 225 1844">
+            <i class="bi bi-telephone-fill" aria-hidden="true"></i> 729 225 1844
+          </a>
+        </footer>
 
       </div>
     </main>
@@ -785,7 +797,6 @@
       }
     });
 
-    document.getElementById("year").textContent = new Date().getFullYear();
   })();
   </script>
 
