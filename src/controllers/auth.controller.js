@@ -5,6 +5,16 @@ function signToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '8h' });
 }
 
+const INACTIVE_USER_ERROR = {
+  ok: false,
+  code: 'USER_INACTIVE',
+  error: 'Usuario dado de baja. Reporte a su dirección.'
+};
+
+function rejectInactiveUser(res, status = 403) {
+  return res.status(status).json(INACTIVE_USER_ERROR);
+}
+
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -26,7 +36,6 @@ exports.login = async (req, res) => {
       LEFT JOIN usuarios_roles ur ON ur.id_usuario = u.id_usuario
       LEFT JOIN roles r ON r.id_rol = ur.id_rol
       WHERE u.email = $1
-        AND u.activo = true
         AND u.password_hash = crypt($2, u.password_hash)
       GROUP BY u.id_usuario
       `,
@@ -38,6 +47,10 @@ exports.login = async (req, res) => {
     }
 
     const user = q.rows[0];
+    if (user.activo !== true) {
+      return rejectInactiveUser(res);
+    }
+
     const token = signToken({
       id_usuario: user.id_usuario,
       email: user.email,
@@ -104,6 +117,10 @@ exports.me = async (req, res) => {
     }
     
     const user = q.rows[0];
+    if (user.activo !== true) {
+      return rejectInactiveUser(res, 401);
+    }
+
     res.json({ 
       ok: true, 
       user: {
