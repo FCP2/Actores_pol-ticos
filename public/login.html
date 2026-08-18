@@ -64,10 +64,13 @@
     }
 
     .brand-logo-wrap img {
-      height: 56px;
+      max-width: 100%;
+      max-height: 72px;
       object-fit: contain;
-      filter: brightness(0) invert(1);
-      opacity: .92;
+      object-position: left center;
+      background: #fff;
+      border-radius: 8px;
+      padding: 8px 14px;
     }
 
     .brand-body { position: relative; z-index: 1; }
@@ -124,8 +127,10 @@
       margin-bottom: 32px;
     }
     .mobile-logo img {
-      height: 48px;
+      max-width: 100%;
+      max-height: 52px;
       object-fit: contain;
+      object-position: left center;
     }
     .mobile-logo-text .name {
       font-size: 15px;
@@ -382,7 +387,7 @@
     <aside class="brand-panel">
       <div class="brand-logo-wrap">
         <img
-          src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550"
+          src="/static/img/logos_gobierno.png"
           alt="Logo institucional"
           onerror="this.style.display='none'"
         >
@@ -409,7 +414,7 @@
         <!-- Logo móvil -->
         <div class="mobile-logo">
           <img
-            src="https://lh3.googleusercontent.com/d/18fNmkOjp0_asak96yPafw9ncyaEc7u6N=s550"
+            src="/static/img/logos_gobierno.png"
             alt="Logo"
             onerror="this.style.opacity='.4'"
           >
@@ -489,6 +494,7 @@
 
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script>
   (() => {
     "use strict";
@@ -519,6 +525,31 @@
     };
 
     function showToast(type, msg, duration = 5000) {
+      if (window.Swal?.fire) {
+        const iconByType = {
+          err: "error",
+          warn: "warning",
+          ok: "success"
+        };
+        const titleByType = {
+          err: "Acceso denegado",
+          warn: "Atención",
+          ok: "Listo"
+        };
+
+        Swal.fire({
+          toast: true,
+          position: "top-end",
+          icon: iconByType[type] || "info",
+          title: titleByType[type] || "Aviso",
+          text: msg,
+          showConfirmButton: false,
+          timer: duration,
+          timerProgressBar: true
+        });
+        return;
+      }
+
       clearTimeout(toastTimer);
       const cfg = TOAST_ICONS[type] || TOAST_ICONS.warn;
       toast.className = `toast ${type}`;
@@ -527,6 +558,39 @@
       toastMsg.textContent = msg;
       requestAnimationFrame(() => toast.classList.add("show"));
       toastTimer = setTimeout(() => toast.classList.remove("show"), duration);
+    }
+
+    function showLoginLoading() {
+      if (!window.Swal?.fire) return;
+      Swal.fire({
+        title: "Verificando acceso",
+        text: "Estamos validando tus credenciales...",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => Swal.showLoading()
+      });
+    }
+
+    function showInactiveUserAlert() {
+      const message = "Reporte a su dirección.";
+      if (!window.Swal?.fire) {
+        showToast("err", `Usuario dado de baja. ${message}`);
+        return;
+      }
+
+      Swal.fire({
+        icon: "warning",
+        title: "Usuario dado de baja",
+        text: message,
+        confirmButtonText: "Entendido",
+        allowOutsideClick: false
+      });
+    }
+
+    function clearSession() {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("loginTime");
     }
 
     // ── Validación en tiempo real ──────────────────────────────
@@ -620,12 +684,23 @@
       const userStr = localStorage.getItem("user");
       if (token && userStr) {
         try {
-          const user  = JSON.parse(userStr);
+          const response = await fetch(`${API_BASE}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            clearSession();
+            if (data.code === "USER_INACTIVE") showInactiveUserAlert();
+            return;
+          }
+
+          const user  = data.user || JSON.parse(userStr);
+          localStorage.setItem("user", JSON.stringify(user));
           const roles = Array.isArray(user.roles) ? user.roles : [user.rol || "capturista"];
           redirectByRole(roles);
         } catch {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
+          clearSession();
         }
       }
     });
@@ -650,6 +725,7 @@
       }
 
       setLoading(true);
+      showLoginLoading();
 
       try {
         const res = await fetch(`${API_BASE}/auth/login`, {
@@ -661,6 +737,15 @@
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
+          if (data.code === "USER_INACTIVE") {
+            clearSession();
+            showInactiveUserAlert();
+            pwInp.value = "";
+            validatePassword();
+            pwInp.focus();
+            return;
+          }
+
           // Mensaje genérico — no revela si falló email o contraseña
           const msg = res.status === 401 || res.status === 403
             ? "Credenciales incorrectas. Verifica tus datos e intenta de nuevo."
