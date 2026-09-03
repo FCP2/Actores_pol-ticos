@@ -493,10 +493,21 @@
               </div>
 
               <div class="card-body">
+                <div class="map-referente-filter mb-3">
+                  <div class="map-referente-filter-copy">
+                    <label class="form-label mb-1" for="mapReferente">
+                      <i class="bi bi-diagram-3-fill me-1"></i>Presencia por referente político
+                    </label>
+                    <div class="small text-muted">Colorea los municipios donde tienen actividad sus actores vinculados.</div>
+                  </div>
+                  <select class="form-select form-select-sm" id="mapReferente" aria-label="Filtrar mapa por referente político">
+                    <option value="">Todos los referentes</option>
+                  </select>
+                </div>
                 <div id="mapResumen" class="mini-summary mb-3">
                   Selecciona una capa para visualizar indicadores territoriales.
                 </div>
-                <div id="map" class="dashboard-map"></div>
+                <div id="map" class="dashboard-map" data-map-theme="dark"></div>
               </div>
             </div>
           </div>
