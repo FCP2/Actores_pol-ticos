@@ -3,9 +3,12 @@ let layersById        = {};
 let nombreMunicipioById = {};
 let _selectedLayerId  = null;
 let onMunicipioSelected = null;
+let _mapTheme = "dark";
 
 // Datos de todas las capas: id_municipio -> { total, verificados, confiabilidad_alta, partido_dominante }
 let _capasData   = new Map();
+let _baseCapasData = new Map();
+let _coverageContextLabel = "";
 let _currentLayer = "cobertura";
 
 let municipioCountById = new Map(); // para tooltip
@@ -16,12 +19,23 @@ let _legendControl = null; // Leaflet control (evita el clip de overflow:hidden)
 function setOnMunicipioSelected(fn) { onMunicipioSelected = fn; }
 
 function initMap() {
+  const mapEl = document.getElementById("map");
+  if (!mapEl) return;
+
+  _mapTheme = mapEl.dataset.mapTheme === "dark" ? "dark" : "light";
+  mapEl.classList.toggle("osm-dark-tiles", _mapTheme === "dark");
   map = L.map("map", { zoomControl: false }).setView([19.35, -99.5], 8);
 
-  L.tileLayer(
-    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    { attribution: "&copy; OpenStreetMap &copy; CARTO", subdomains: "abcd", maxZoom: 20 }
-  ).addTo(map);
+  // Proveedor sin API key. Puede sustituirse en runtime antes de cargar map.js.
+  const tileUrl = window.MAP_TILE_URL
+    || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+  L.tileLayer(tileUrl, {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+    updateWhenIdle: true,
+    keepBuffer: 2
+  }).addTo(map);
 
   L.control.zoom({ position: "bottomleft" }).addTo(map);
 }
@@ -40,7 +54,7 @@ function drawMunicipios(municipiosConPoligono) {
     if (!geo) return;
 
     const layer = L.geoJSON(geo, {
-      style: { color: "#0f172a", weight: 1.5, fillColor: "#374151", fillOpacity: 0.6 },
+      style: { color: _mapStrokeColor(), weight: 1.5, fillColor: _mapEmptyColor(), fillOpacity: 0.6 },
       onEachFeature: (f, l) => {
         f.properties = f.properties || {};
         f.properties.nombre      = m.nombre;
@@ -73,13 +87,36 @@ function drawMunicipios(municipiosConPoligono) {
 // ── Layer data ────────────────────────────────────────────────────────────────
 
 function setCapasMapa(dataArray) {
-  _capasData       = new Map();
-  municipioCountById = new Map();
+  _baseCapasData = _rowsToMap(dataArray);
+  _coverageContextLabel = "";
+  _setActiveCapasData(_baseCapasData);
+}
 
+function setFilteredCoverageData(dataArray, contextLabel = "") {
+  _coverageContextLabel = String(contextLabel || "").trim();
+  _currentLayer = "cobertura";
+  _setActiveCapasData(_rowsToMap(dataArray));
+}
+
+function restoreBaseCapasMapa() {
+  _coverageContextLabel = "";
+  _setActiveCapasData(_baseCapasData);
+}
+
+function _rowsToMap(dataArray) {
+  const result = new Map();
   (dataArray || []).forEach(row => {
     const id = Number(row.id_municipio);
-    if (!id) return;
-    _capasData.set(id, row);
+    if (id) result.set(id, row);
+  });
+  return result;
+}
+
+function _setActiveCapasData(dataMap) {
+  _capasData = new Map(dataMap || []);
+  municipioCountById = new Map();
+
+  _capasData.forEach((row, id) => {
     municipioCountById.set(id, Number(row.total || 0));
   });
 
@@ -120,11 +157,19 @@ function paintCurrentLayer() {
     const id   = Number(idStr);
     const data = _capasData.get(id) || {};
     const fill = _getLayerColor(_currentLayer, data);
-    const style = { color: "#0f172a", weight: 1.5, fillColor: fill, fillOpacity: fill === "#374151" ? 0.45 : 0.82 };
+    const style = { color: _mapStrokeColor(), weight: 1.5, fillColor: fill, fillOpacity: fill === _mapEmptyColor() ? 0.55 : 0.82 };
 
     if (group?.setStyle)    group.setStyle(style);
     else if (group?.getLayers) group.getLayers().forEach(sl => sl?.setStyle?.(style));
   });
+}
+
+function _mapStrokeColor() {
+  return _mapTheme === "light" ? "#ffffff" : "#0f172a";
+}
+
+function _mapEmptyColor() {
+  return _mapTheme === "light" ? "#cbd5e1" : "#374151";
 }
 
 function _getLayerColor(layer, data) {
@@ -133,13 +178,13 @@ function _getLayerColor(layer, data) {
     case "verificacion":  return _verificacionColor(Number(data.total || 0), Number(data.verificados || 0));
     case "confiabilidad": return _confiabilidadColor(Number(data.total || 0), Number(data.confiabilidad_alta || 0));
     case "partido":       return _partyColor(data.partido_dominante);
-    default:              return "#374151";
+    default:              return _mapEmptyColor();
   }
 }
 
 // Escala cobertura
 function _coberturaColor(n) {
-  if (n === 0)  return "#374151";
+  if (n === 0)  return _mapEmptyColor();
   if (n <= 10)  return "#ef4444";
   if (n <= 20)  return "#fb923c";
   if (n <= 30)  return "#facc15";
@@ -149,7 +194,7 @@ function _coberturaColor(n) {
 
 // Escala % verificados
 function _verificacionColor(total, verificados) {
-  if (!total) return "#374151";
+  if (!total) return _mapEmptyColor();
   const pct = (verificados / total) * 100;
   if (pct === 0)  return "#ef4444";
   if (pct <= 25)  return "#fb923c";
@@ -160,7 +205,7 @@ function _verificacionColor(total, verificados) {
 
 // Escala % confiabilidad alta
 function _confiabilidadColor(total, alta) {
-  if (!total) return "#374151";
+  if (!total) return _mapEmptyColor();
   const pct = (alta / total) * 100;
   if (pct === 0)  return "#ef4444";
   if (pct <= 25)  return "#fb923c";
@@ -186,7 +231,7 @@ const _PARTY_COLORS = {
 };
 
 function _partyColor(siglas) {
-  if (!siglas) return "#374151";
+  if (!siglas) return _mapEmptyColor();
   return _PARTY_COLORS[String(siglas).toUpperCase().trim()] || "#6366f1";
 }
 
@@ -210,17 +255,18 @@ function updateLayerLegend() {
   _legendControl = L.control({ position: "bottomright" });
   _legendControl.onAdd = function() {
     const div = L.DomUtil.create("div");
+    const isLight = _mapTheme === "light";
     div.style.cssText = [
-      "background:rgba(10,14,26,0.93)",
-      "border:1px solid rgba(255,255,255,0.07)",
+      isLight ? "background:rgba(255,255,255,0.94)" : "background:rgba(10,14,26,0.93)",
+      isLight ? "border:1px solid rgba(15,23,42,0.12)" : "border:1px solid rgba(255,255,255,0.07)",
       "border-radius:14px",
       "padding:13px 15px",
-      "box-shadow:0 8px 32px rgba(0,0,0,.65)",
+      isLight ? "box-shadow:0 10px 28px rgba(15,23,42,.16)" : "box-shadow:0 8px 32px rgba(0,0,0,.65)",
       "font-size:12px", "line-height:1.4",
       "font-family:inherit",
       "min-width:210px", "max-width:240px",
       "pointer-events:none",
-      "color:#f1f5f9"
+      isLight ? "color:#1f2937" : "color:#f1f5f9"
     ].join(";");
     div.innerHTML = content;
     return div;
@@ -229,28 +275,35 @@ function updateLayerLegend() {
 }
 
 function _buildPanelContent() {
+  const textColor = _mapTheme === "light" ? "#334155" : "#cbd5e1";
+  const mutedColor = _mapTheme === "light" ? "#64748b" : "#94a3b8";
+  const dividerColor = _mapTheme === "light" ? "rgba(15,23,42,.10)" : "rgba(255,255,255,.06)";
   const ROW = (color, label, stat) =>
     `<div style="display:flex;align-items:center;gap:9px;margin:5px 0">
       <span style="width:11px;height:11px;border-radius:3px;background:${color};
                    display:inline-block;flex-shrink:0;
                    box-shadow:0 0 0 1px rgba(255,255,255,.12)"></span>
-      <span style="color:#cbd5e1;font-weight:500;flex:1">${label}</span>
-      <span style="color:#94a3b8;font-size:11px;white-space:nowrap">${stat}</span>
+      <span style="color:${textColor};font-weight:500;flex:1">${label}</span>
+      <span style="color:${mutedColor};font-size:11px;white-space:nowrap">${stat}</span>
     </div>`;
+
+  const contextTitle = _coverageContextLabel
+    ? `Presencia: ${_escapeMapHtml(_coverageContextLabel)}`
+    : "Cobertura Territorial";
 
   const HEADER =
     `<div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:10px;
                  text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px">
       <i class="bi bi-bar-chart-fill" style="font-size:11px;color:#8b2136"></i>
-      Cobertura Territorial
+      ${contextTitle}
     </div>`;
 
-  const DIVIDER = `<div style="border-top:1px solid rgba(255,255,255,.06);margin:8px 0"></div>`;
+  const DIVIDER = `<div style="border-top:1px solid ${dividerColor};margin:8px 0"></div>`;
 
   // ── Sin datos: muestra solo la escala de colores ──────────────────────────
   if (!_capasData.size) {
     const staticBins = [
-      ["#374151", "Sin registros", ""],
+      [_mapEmptyColor(), "Sin registros", ""],
       ["#ef4444", "1 – 10",        ""],
       ["#fb923c", "11 – 20",       ""],
       ["#facc15", "21 – 30",       ""],
@@ -266,14 +319,24 @@ function _buildPanelContent() {
 
   const rows = stats.bins.map(b => ROW(b.color, b.label, b.stat)).join("");
   const footer = stats.footer
-    ? `<div style="color:#475569;font-size:11px;text-align:right">${stats.footer}</div>`
+    ? `<div style="color:${mutedColor};font-size:11px;text-align:right">${stats.footer}</div>`
     : "";
 
   return HEADER + rows + (footer ? DIVIDER + footer : "");
 }
 
+function _escapeMapHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
+
 function _buildPartidoPanel() {
   if (!_capasData.size) return null;
+  const textColor = _mapTheme === "light" ? "#334155" : "#cbd5e1";
+  const strongColor = _mapTheme === "light" ? "#0f172a" : "#e2e8f0";
+  const mutedColor = _mapTheme === "light" ? "#64748b" : "#475569";
+  const dividerColor = _mapTheme === "light" ? "rgba(15,23,42,.10)" : "rgba(255,255,255,.06)";
 
   const all = [..._capasData.values()];
 
@@ -295,14 +358,14 @@ function _buildPartidoPanel() {
       <span style="width:11px;height:11px;border-radius:3px;background:${color};
                    display:inline-block;flex-shrink:0;
                    box-shadow:0 0 0 1px rgba(255,255,255,.12)"></span>
-      <span style="color:#cbd5e1;font-weight:600;flex:1;font-size:12px">${label}</span>
-      <span style="color:#e2e8f0;font-weight:700;font-size:13px;min-width:22px;text-align:right">${count}</span>
-      <span style="color:#475569;font-size:10px;min-width:32px;text-align:right">${pct}%</span>
+      <span style="color:${textColor};font-weight:600;flex:1;font-size:12px">${label}</span>
+      <span style="color:${strongColor};font-weight:700;font-size:13px;min-width:22px;text-align:right">${count}</span>
+      <span style="color:${mutedColor};font-size:10px;min-width:32px;text-align:right">${pct}%</span>
     </div>`;
 
   const rows = sorted.map(([siglas, count]) => {
     const label = siglas === "__SIN__" ? "Sin partido" : siglas;
-    const color = siglas === "__SIN__" ? "#374151" : _partyColor(siglas);
+    const color = siglas === "__SIN__" ? _mapEmptyColor() : _partyColor(siglas);
     const pct   = totalMun ? Math.round(count / totalMun * 100) : 0;
     return ROW(color, label, count, pct);
   }).join("");
@@ -314,8 +377,8 @@ function _buildPartidoPanel() {
       Partido Dominante
     </div>
     ${rows}
-    <div style="border-top:1px solid rgba(255,255,255,.06);margin:8px 0"></div>
-    <div style="color:#475569;font-size:11px;text-align:right">
+    <div style="border-top:1px solid ${dividerColor};margin:8px 0"></div>
+    <div style="color:${mutedColor};font-size:11px;text-align:right">
       ${conPartido} de ${totalMun} municipios con partido
     </div>
   `;
@@ -329,7 +392,7 @@ function _computeLayerStats() {
   const totalAct = all.reduce((s, d) => s + Number(d.total || 0), 0);
 
   const tiers = [
-    { label: "Sin registros", color: "#374151", test: n => n === 0 },
+    { label: "Sin registros", color: _mapEmptyColor(), test: n => n === 0 },
     { label: "1 – 10",        color: "#ef4444", test: n => n >= 1  && n <= 10 },
     { label: "11 – 20",       color: "#fb923c", test: n => n >= 11 && n <= 20 },
     { label: "21 – 30",       color: "#facc15", test: n => n >= 21 && n <= 30 },
@@ -516,6 +579,8 @@ window.initMap                           = initMap;
 window.drawMunicipios                    = drawMunicipios;
 window.setOnMunicipioSelected            = setOnMunicipioSelected;
 window.setCapasMapa                      = setCapasMapa;
+window.setFilteredCoverageData           = setFilteredCoverageData;
+window.restoreBaseCapasMapa              = restoreBaseCapasMapa;
 window.setMunicipioCoverageCounts        = setMunicipioCoverageCounts;
 window.switchMapLayer                    = switchMapLayer;
 window.resaltarMunicipioById             = resaltarMunicipioById;
