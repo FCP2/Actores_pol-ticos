@@ -732,6 +732,28 @@ exports.kpiResumenEjecutivo = async (req, res) => {
     const capturistaId = req.query.capturistaId ? Number(req.query.capturistaId) : null;
     const idMunTrabajo = req.query.municipio_trabajo ? Number(req.query.municipio_trabajo) : null;
     const q = (req.query.q || "").trim();
+    const partidoIdRaw = String(req.query.partidoId || "").trim();
+    const confiabilidad = String(req.query.confiabilidad || "").trim().toLowerCase();
+    const liderazgo = String(req.query.liderazgo || "").trim().toLowerCase();
+    const controversias = ["1", "0"].includes(String(req.query.controversias))
+      ? String(req.query.controversias)
+      : null;
+    const referente = String(req.query.referente || "").trim();
+    const referenteCargo = String(req.query.referenteCargo || "").trim();
+    const refNivelRaw = String(req.query.refNivel || "").trim().toLowerCase();
+    const refNivel = ["municipal", "regional", "distrital", "estatal", "nacional"].includes(refNivelRaw)
+      ? refNivelRaw
+      : "";
+    const refMode = String(req.query.refMode || "").trim();
+    const fechaDesde = String(req.query.fechaDesde || "").trim();
+    const fechaHasta = String(req.query.fechaHasta || "").trim();
+    const verifLevel = String(req.query.verifLevel || "").trim().toLowerCase();
+    const verificado = ["1", "0"].includes(String(req.query.verificado))
+      ? String(req.query.verificado)
+      : null;
+    const multiplesMunicipios = ["1", "0"].includes(String(req.query.multiples_municipios))
+      ? String(req.query.multiples_municipios)
+      : null;
 
     if (oficinaId) {
       params.push(oficinaId);
@@ -761,6 +783,133 @@ exports.kpiResumenEjecutivo = async (req, res) => {
           OR COALESCE(p.clave_elector,'') ILIKE $${i}
         )
       `);
+    }
+
+    if (partidoIdRaw === "__OTRO__") {
+      where.push(`COALESCE(TRIM(p.partido_otro_texto), '') <> ''`);
+    } else {
+      const partidoId = Number(partidoIdRaw);
+      if (Number.isFinite(partidoId) && partidoId > 0) {
+        params.push(partidoId);
+        where.push(`p.id_partido_actual = $${params.length}`);
+      }
+    }
+
+    if (["alto", "medio", "bajo"].includes(confiabilidad)) {
+      params.push(confiabilidad);
+      where.push(`LOWER(COALESCE(p.nivel_confiabilidad, '')) = $${params.length}`);
+    }
+
+    if (["municipal", "regional", "distrital", "estatal", "nacional"].includes(liderazgo)) {
+      params.push(liderazgo);
+      where.push(`LOWER(COALESCE(p.escala_influencia, '')) = $${params.length}`);
+    }
+
+    if (controversias === "1") {
+      where.push(`EXISTS (
+        SELECT 1 FROM controversias_persona cp WHERE cp.id_persona = p.id_persona
+      )`);
+    }
+
+    if (controversias === "0") {
+      where.push(`NOT EXISTS (
+        SELECT 1 FROM controversias_persona cp WHERE cp.id_persona = p.id_persona
+      )`);
+    }
+
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      where.push(`p.created_at::date >= $${params.length}::date`);
+    }
+
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      where.push(`p.created_at::date <= $${params.length}::date`);
+    }
+
+    if (multiplesMunicipios === "1") {
+      where.push(`EXISTS (
+        SELECT 1
+        FROM personas_municipios_trabajo pmt
+        WHERE pmt.id_persona = p.id_persona
+        GROUP BY pmt.id_persona
+        HAVING COUNT(*) > 1
+      )`);
+    }
+
+    if (multiplesMunicipios === "0") {
+      where.push(`NOT EXISTS (
+        SELECT 1
+        FROM personas_municipios_trabajo pmt
+        WHERE pmt.id_persona = p.id_persona
+        GROUP BY pmt.id_persona
+        HAVING COUNT(*) > 1
+      )`);
+    }
+
+    if (req.query.sin_municipio_principal === "1") {
+      where.push(`NOT EXISTS (
+        SELECT 1
+        FROM personas_municipios_trabajo pmt
+        WHERE pmt.id_persona = p.id_persona
+          AND pmt.es_principal = true
+      )`);
+    }
+
+    if (referente || refNivel) {
+      const refParts = [];
+
+      if (referente) {
+        params.push(referente.toLowerCase());
+        const i = params.length;
+        refParts.push(refMode === "exact"
+          ? `rp.nombre_full = $${i}`
+          : `(
+              (length($${i}) < 6 AND rp.nombre_full LIKE ($${i} || '%'))
+              OR word_similarity(rp.nombre_full, $${i}) > 0.15
+              OR similarity(rp.nombre_full, $${i}) > 0.15
+            )`
+        );
+      }
+
+      if (referenteCargo) {
+        params.push(referenteCargo.toLowerCase());
+        refParts.push(`COALESCE(lower(trim(rp.cargo)), '') = $${params.length}`);
+      }
+
+      if (refNivel) {
+        params.push(refNivel);
+        refParts.push(`COALESCE(lower(trim(rp.nivel)), '') = $${params.length}`);
+      }
+
+      where.push(`EXISTS (
+        SELECT 1
+        FROM referentes_politicos rp
+        WHERE rp.id_persona = p.id_persona
+          AND ${refParts.join(" AND ")}
+      )`);
+    }
+
+    if (verificado === "1") where.push(`p.verificado_at IS NOT NULL`);
+    if (verificado === "0") where.push(`p.verificado_at IS NULL`);
+
+    if (verifLevel === "final") where.push(`p.verificado_at IS NOT NULL`);
+    if (verifLevel === "office") where.push(`p.verif_office_at IS NOT NULL`);
+    if (verifLevel === "area") where.push(`p.verif_area_at IS NOT NULL`);
+    if (verifLevel === "sin_verificar") {
+      where.push(`p.verif_area_at IS NULL AND p.verif_office_at IS NULL AND p.verificado_at IS NULL`);
+    }
+    if (verifLevel === "parcial") {
+      where.push(`(
+        p.verif_area_at IS NOT NULL OR p.verif_office_at IS NOT NULL
+      ) AND p.verificado_at IS NULL`);
+    }
+    if (verifLevel === "cualquiera_verificado") {
+      where.push(`(
+        p.verif_area_at IS NOT NULL
+        OR p.verif_office_at IS NOT NULL
+        OR p.verificado_at IS NOT NULL
+      )`);
     }
 
     const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -1100,7 +1249,9 @@ exports.listPersonasAdminGridMapaMunicipios = async (req, res) => {
       SELECT
         mu.id_municipio,
         m.nombre AS municipio,
-        COUNT(*)::int AS total
+        COUNT(*)::int AS total,
+        (SELECT COUNT(DISTINCT id_persona) FROM municipios_union)::int AS total_actores,
+        (SELECT COUNT(DISTINCT id_municipio) FROM municipios_union)::int AS total_municipios
       FROM municipios_union mu
       LEFT JOIN municipios m ON m.id_municipio = mu.id_municipio
       GROUP BY mu.id_municipio, m.nombre
