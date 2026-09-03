@@ -415,6 +415,10 @@ a{
   border-color: #9ca3af;
   color: #111827;
 }
+.map-layer-btn:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
 
 .dashboard-map{
   width: 100%;
@@ -425,9 +429,42 @@ a{
   background: #eef2f6;
 }
 
+.map-referente-filter {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 390px);
+  align-items: end;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+}
+
+.map-referente-filter .form-label {
+  color: #5a0f22;
+  font-size: .8rem;
+  font-weight: 800;
+}
+
+.map-referente-filter .form-select {
+  min-height: 38px;
+  border-color: #d6dae1;
+}
+
+@media (max-width: 767.98px) {
+  .map-referente-filter {
+    grid-template-columns: 1fr;
+  }
+}
+
 .leaflet-container{
   border-radius: 18px;
   font-family: inherit;
+}
+
+/* Variante oscura local para OpenStreetMap: no requiere otro proveedor. */
+.osm-dark-tiles .leaflet-tile-pane {
+  filter: invert(92%) hue-rotate(180deg) brightness(78%) contrast(92%) saturate(65%);
 }
 
 /* =========================
