@@ -426,6 +426,13 @@ function buildGridQuery(extra = {}) {
     $("fltReferente")?.addEventListener("input", debouncedReferentes);
 
     $("fltReferente")?.addEventListener("change", () => {
+      syncMapReferenteFromGlobal();
+      applyFiltersAndReload();
+    });
+
+    $("mapReferente")?.addEventListener("change", () => {
+      const referente = $("mapReferente").value || "";
+      if ($("fltReferente")) $("fltReferente").value = referente;
       applyFiltersAndReload();
     });
     setText("lblUsuario", user.nombre || user.email || "Usuario");
@@ -493,6 +500,22 @@ function buildGridQuery(extra = {}) {
     $("btnReporteMunicipios")?.addEventListener("click", () => {
       poblarSelectMunicipiosReporte();
       bootstrap.Modal.getOrCreateInstance($("modalReporteMunicipios")).show();
+    });
+
+    $("btnReporteSinMunicipio")?.addEventListener("click", async () => {
+      try {
+        const blob = await fetchBlob("/api/personas/reportes/sin-municipio-principal");
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `registros-sin-municipio-principal-${new Date().toISOString().slice(0, 10)}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (err) {
+        updateAlert(err.message || "No se pudo generar el reporte de registros sin municipio.", "danger");
+      }
     });
 
     $("chkTodosMunicipios")?.addEventListener("change", () => {
@@ -726,13 +749,17 @@ function buildGridQuery(extra = {}) {
     gridState.refMode = "exact";
     gridState.solo_pendientes_final = false;
 
+    if ($("mapReferente")) $("mapReferente").value = "";
+
     $("advancedFilters")?.classList.add("d-none");
     resetMapUI();
     applyFiltersAndReload();
   }
 
   function applyFiltersAndReload() {
+    clearMasterDetailSelection();
     collectGridFilters();
+    syncMapReferenteFromGlobal();
     reloadGrid();
     loadSummaryKpis().catch(console.error);
     loadAndPaintFilteredMunicipiosDashboard().catch(console.error);
@@ -815,6 +842,7 @@ function buildGridQuery(extra = {}) {
     }
 
     await loadCapasMapa();
+    await loadMapReferentesDashboard();
 
     if (typeof window.setOnMunicipioSelected === "function") {
       window.setOnMunicipioSelected((idMunicipio) => {
@@ -881,6 +909,8 @@ async function loadPersonaMunicipiosTrabajoDashboard(idPersona) {
 
     const resp = await apiGet(`/personas/${idPersona}/municipios-trabajo`);
 
+    if (String(selectedRowData?.id_persona || "") !== String(idPersona)) return;
+
     const rows = resp.data || [];
 
 
@@ -902,7 +932,7 @@ async function loadPersonaMunicipiosTrabajoDashboard(idPersona) {
 async function loadAndPaintFilteredMunicipiosDashboard() {
   try {
     // Si hay municipio seleccionado en el mapa, resaltarMunicipioById ya lo marcó — no pisar
-    if (gridState.municipio_trabajo) return;
+    if (gridState.municipio_trabajo && !gridState.referente) return;
 
     const hasRelevantFilter =
       !!gridState.referente ||
@@ -916,14 +946,38 @@ async function loadAndPaintFilteredMunicipiosDashboard() {
       !!gridState.q;
 
     if (!hasRelevantFilter) {
+      toggleMapLayerAvailability(false);
+      window.restoreBaseCapasMapa?.();
       window.resetMunicipiosHighlight?.();
       window.resetMapCoverageView?.();
+      setText("mapResumen", "Selecciona una capa para visualizar indicadores territoriales.", "");
       return;
     }
 
     const qs = buildGridQuery();
     const resp = await apiGet(`/personas/admin/grid/mapa-municipios?${qs.toString()}`);
     const rows = resp?.data || [];
+
+    if (gridState.referente) {
+      toggleMapLayerAvailability(true);
+      activateMapCoverageLayer();
+      window.setFilteredCoverageData?.(rows, gridState.referente);
+
+      const totalActores = Number(rows[0]?.total_actores || 0);
+      const totalMunicipios = Number(rows[0]?.total_municipios || rows.length || 0);
+      const totalPresencias = rows.reduce((sum, row) => sum + Number(row.total || 0), 0);
+
+      setText(
+        "mapResumen",
+        totalMunicipios
+          ? `${gridState.referente}: ${totalActores} actor(es), ${totalMunicipios} municipio(s) y ${totalPresencias} presencia(s) territorial(es).`
+          : `${gridState.referente}: sin presencia territorial registrada.`
+      );
+      return;
+    }
+
+    toggleMapLayerAvailability(false);
+    window.restoreBaseCapasMapa?.();
 
     const ids = [...new Set(
       rows.map(r => Number(r.id_municipio)).filter(Boolean)
@@ -946,6 +1000,21 @@ async function loadAndPaintFilteredMunicipiosDashboard() {
     window.resetMunicipiosHighlight?.();
     window.resetMapCoverageView?.();
   }
+}
+
+function activateMapCoverageLayer() {
+  document.querySelectorAll(".map-layer-btn[data-layer]").forEach(button => {
+    button.classList.toggle("active", button.dataset.layer === "cobertura");
+  });
+  window.switchMapLayer?.("cobertura");
+}
+
+function toggleMapLayerAvailability(referenteActive) {
+  document.querySelectorAll(".map-layer-btn[data-layer]").forEach(button => {
+    const disabled = referenteActive && button.dataset.layer !== "cobertura";
+    button.disabled = disabled;
+    button.setAttribute("aria-disabled", String(disabled));
+  });
 }
 
   /* =========================
@@ -1085,6 +1154,50 @@ async function loadReferentesDashboard() {
   } catch (e) {
     console.error("Error cargando referentes dashboard:", e);
   }
+}
+
+async function loadMapReferentesDashboard() {
+  try {
+    const qs = new URLSearchParams({
+      mode: "ref_list_dashboard",
+      refMode: "exact"
+    });
+
+    const resp = await fetchJson(`${GRID_DATA_URL}?${qs.toString()}`);
+    const rows = resp?.data || [];
+    const select = $("mapReferente");
+    if (!select) return;
+
+    const current = select.value || gridState.referente || "";
+    select.innerHTML = `<option value="">Todos los referentes</option>` + rows.map(row => {
+      const nombre = String(row.label || row.nombre || "").trim();
+      const menciones = Number(row.menciones || 0);
+      return `<option value="${esc(nombre)}">${esc(nombre)}${menciones ? ` (${menciones})` : ""}</option>`;
+    }).join("");
+
+    setMapReferenteValue(select, current);
+  } catch (e) {
+    console.error("Error cargando diccionario de referentes del mapa:", e);
+  }
+}
+
+function syncMapReferenteFromGlobal() {
+  const select = $("mapReferente");
+  if (!select) return;
+  const value = $("fltReferente")?.value?.trim() || "";
+  setMapReferenteValue(select, value);
+}
+
+function setMapReferenteValue(select, value) {
+  select.querySelectorAll("option[data-transient='true']").forEach(option => option.remove());
+
+  if (value && ![...select.options].some(option => option.value === value)) {
+    const option = new Option(value, value);
+    option.dataset.transient = "true";
+    select.add(option);
+  }
+
+  select.value = value;
 }
 
 function poblarSelectMunicipiosReporte() {
@@ -1595,6 +1708,23 @@ async function loadKpisResumenEjecutivo() {
   try {
     const qs = buildGridQuery();
     const data = await fetchJson(`${KPI_RESUMEN_EJECUTIVO_URL}?${qs.toString()}`);
+    const hasActiveFilters = [
+      gridState.q,
+      gridState.oficinaId,
+      gridState.capturistaId,
+      gridState.municipio_trabajo,
+      gridState.partidoId,
+      gridState.confiabilidad,
+      gridState.liderazgo,
+      gridState.controversias,
+      gridState.referente,
+      gridState.fechaDesde,
+      gridState.fechaHasta,
+      gridState.verifLevel,
+      gridState.verificado,
+      gridState.multiples_municipios,
+      gridState.sinMunicipioPrincipal ? "1" : ""
+    ].some(Boolean);
 
     setText("kpiTotalActores", fmtNum(data.total_actores || 0), "0");
     setText("kpiDireccion", fmtNum(data.verificados_direccion || 0), "0");
@@ -1604,7 +1734,9 @@ async function loadKpisResumenEjecutivo() {
     setText("kpiControversias", fmtNum(data.con_controversias || 0), "0");
     setText("kpiConfiabilidadAlta", fmtNum(data.confiabilidad_alta || 0), "0");
 
-    if ($("kpiTotalActoresMeta")) $("kpiTotalActoresMeta").textContent = "Registro general";
+    if ($("kpiTotalActoresMeta")) {
+      $("kpiTotalActoresMeta").textContent = hasActiveFilters ? "Resultado filtrado" : "Registro general";
+    }
     if ($("kpiDireccionMeta")) $("kpiDireccionMeta").textContent = "Primer nivel";
     if ($("kpiCoordinacionMeta")) $("kpiCoordinacionMeta").textContent = "Segundo nivel";
     if ($("kpiFinalMeta")) $("kpiFinalMeta").textContent = "Cierre institucional";
@@ -2113,11 +2245,36 @@ function openDetailPanel(row) {
 
   loadDetalleObservaciones(row.id_persona).catch(err => {
     console.error("Error cargando observaciones del detalle:", err);
+    if (String(selectedRowData?.id_persona || "") !== String(row.id_persona)) return;
     const box = $("detailObservacionesRegistro");
     if (box) {
       box.innerHTML = `<div class="text-danger small">No se pudieron cargar las observaciones.</div>`;
     }
   });
+}
+
+function clearMasterDetailSelection() {
+  _keepSelection = false;
+  selectedRowData = null;
+
+  try {
+    window.personasGrid?.deselectRow?.();
+  } catch (error) {
+    console.warn("No se pudo limpiar la selección de la bandeja:", error);
+  }
+
+  const preview = $("previewExpedientePanel");
+  const previewUrl = preview?.dataset?.previewUrl;
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+  const detail = $("contenedorFichaDetalle");
+  if (detail) {
+    detail.innerHTML = "";
+    detail.classList.add("d-none");
+  }
+
+  $("estadoVacioFicha")?.classList.remove("d-none");
+  window.clearActorFocusOnMap?.({ restoreCoverage: true });
 }
 
 async function loadDetalleObservaciones(idPersona) {
@@ -2182,6 +2339,7 @@ function setupDetailPreviewTabs(idPersona) {
         previewLoaded = true;
         loadExpedientePreviewPdf(idPersona).catch(err => {
           console.error("Error cargando preview expediente:", err);
+          if (String(selectedRowData?.id_persona || "") !== String(idPersona)) return;
           const box = $("previewExpedientePanel");
           if (box) {
             box.innerHTML = `
@@ -2225,6 +2383,14 @@ async function loadExpedientePreviewPdf(idPersona) {
 
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
+
+  if (
+    String(selectedRowData?.id_persona || "") !== String(idPersona) ||
+    box !== $("previewExpedientePanel")
+  ) {
+    URL.revokeObjectURL(url);
+    return;
+  }
 
   box.dataset.previewUrl = url;
   box.innerHTML = `
