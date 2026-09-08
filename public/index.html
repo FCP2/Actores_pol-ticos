@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -442,12 +442,13 @@
 
             <div class="row g-3">
               <!-- FOTO - Columna dedicada -->
-              <div class="col-md-3">
+              <div class="col-lg-3">
                 <div class="form-group position-relative hover-shadow rounded p-3">
                   <label class="form-label text-institucional mb-2">
                     <i class="bi bi-camera-fill me-1"></i>Foto
                   </label>
-                  <input class="form-control form-control-institucional" type="file" id="inpFoto" accept="image/*">
+                  <input class="form-control form-control-sm form-control-institucional foto-personal-input"
+                         type="file" id="inpFoto" accept="image/*">
                   <div class="form-text text-gold small">
                     <i class="bi bi-info-circle me-1"></i>JPG/PNG/WebP, máximo 3MB
                   </div>
@@ -458,10 +459,10 @@
               </div>
 
               <!-- CAMPOS PERSONALES -->
-              <div class="col-md-9">
-                <div class="row g-3">
+              <div class="col-lg-9">
+                <div class="row g-3 personal-info-grid">
                   <!-- NOMBRE -->
-                  <div class="col-md-4">
+                  <div class="col-12 col-md-4 personal-field">
                     <label class="form-label text-institucional required">
                       <i class="bi bi-person-fill me-1"></i>Nombre(s)
                     </label>
@@ -470,35 +471,37 @@
                   </div>
 
                   <!-- APELLIDOS -->
-                  <div class="col-md-4">
+                  <div class="col-12 col-md-4 personal-field">
                     <label class="form-label text-institucional">
-                      <i class="bi bi-person-badge me-1"></i>Apellido paterno <code class="optional">(Obligatorio)</code>
+                      <i class="bi bi-person-badge me-1"></i>Apellido paterno <code class="field-length">(apellido o X)</code>
                     </label>
                     <input class="form-control form-control-institucional" name="apellido_paterno">
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-12 col-md-4 personal-field">
                     <label class="form-label text-institucional">
-                      <i class="bi bi-person-badge-fill me-1"></i>Apellido materno <code class="optional">(Obligatorio)</code>
+                      <i class="bi bi-person-badge-fill me-1"></i>Apellido materno <code class="field-length">(apellido o X)</code>
                     </label>
                     <input class="form-control form-control-institucional" name="apellido_materno">
                   </div>
 
                   <!-- IDENTIFICACIONES -->
-                  <div class="col-md-4">
+                  <div class="col-12 col-md-4 personal-field personal-id-field">
                     <label class="form-label text-institucional">
                       <i class="bi bi-card-text me-1"></i>CURP <code class="field-length">(18 caracteres)</code>
                     </label>
                     <input class="form-control form-control-institucional" name="curp" maxlength="18">
                     <div class="form-text text-muted">Ingrese su CURP completa</div>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-12 col-md-4 personal-field personal-id-field">
                     <label class="form-label text-institucional">
-                      <i class="bi bi-file-earmark-person me-1"></i>RFC <code class="field-length">(13 caracteres)</code>
+                      <i class="bi bi-file-earmark-person me-1"></i>RFC <code class="field-length">(10 o 13 caracteres)</code>
                     </label>
-                    <input class="form-control form-control-institucional" name="rfc" maxlength="13">
-                    <div class="form-text text-muted">4 letras + 6 números + 3 homoclave</div>
+                    <input class="form-control form-control-institucional" name="rfc" maxlength="13"
+                           pattern="[A-Za-zÑñ&amp;]{4}[0-9]{6}([A-Za-z0-9]{3})?"
+                           title="Captura 10 caracteres sin homoclave o 13 caracteres con homoclave">
+                    <div class="form-text text-muted">4 letras + 6 números; la homoclave de 3 caracteres es opcional</div>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-12 col-md-4 personal-field personal-id-field">
                     <label class="form-label text-institucional">
                       <i class="bi bi-credit-card me-1"></i>Clave de elector <code class="field-length">(18 caracteres)</code>
                     </label>
@@ -507,7 +510,7 @@
                   </div>
 
                   <!-- SELECTS -->
-                  <div class="col-md-6">
+                  <div class="col-12 col-md-6 personal-field">
                     <label class="form-label text-institucional">
                       <i class="bi bi-heart-fill me-1"></i>Estado civil
                     </label>
@@ -519,11 +522,11 @@
                       <option value="Viudo(a)">Viudo(a)</option>
                       <option value="Concubinato(a)">Concubinato(a)</option>
                     </select>
+                    <div class="form-text text-muted">Situación civil actual</div>
                   </div>
-                                <!-- Edad -->
-                  <div class="col-md-4">
-                    <div class="form-group position-relative hover-shadow rounded p-3 h-100">
-                      <label class="form-label text-institucional mb-2">
+                  <!-- Edad -->
+                  <div class="col-12 col-md-6 personal-field">
+                      <label class="form-label text-institucional">
                         <i class="bi bi-hash me-1"></i>Edad
                       </label>
 
@@ -539,7 +542,6 @@
                       <div class="form-text text-muted">
                         Edad aproximada del actor político
                       </div>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -568,9 +570,15 @@
                   <h6 class="mb-0 text-institucional">
                     <i class="bi bi-people-fill me-2"></i>Familiares en política / administración pública
                   </h6>
-                  <button type="button" class="btn btn-outline-institucional btn-sm px-3" id="btnAddFamiliar">
-                    <i class="bi bi-plus-circle me-1"></i>+ Agregar
-                  </button>
+                  <div class="d-flex align-items-center flex-wrap gap-2">
+                    <button type="button" class="btn btn-outline-institucional btn-sm px-3" id="btnAddFamiliar">
+                      <i class="bi bi-plus-circle me-1"></i>+ Agregar
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveFamiliar"
+                            disabled title="Selecciona un familiar para eliminarlo">
+                      <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                    </button>
+                  </div>
                 </div>
                 <div id="familiaresContainer" class="border rounded p-3 bg-white"></div>
               </div>
@@ -1050,7 +1058,7 @@
                 <i class="bi bi-heart-fill me-2"></i>Parejas
               </h5>
 
-              <div class="d-flex align-items-center gap-3">
+              <div class="d-flex align-items-center flex-wrap gap-2">
                 <!-- ✅ Switch: No aplica / Sin parejas -->
                 <div class="form-check form-switch m-0">
                   <input class="form-check-input" type="checkbox" id="chkSinParejas">
@@ -1059,6 +1067,10 @@
 
                 <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddPareja">
                   <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemovePareja"
+                        disabled title="Selecciona una pareja para eliminarla">
+                  <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
                 </button>
               </div>
             </div>
@@ -1090,6 +1102,10 @@
                 <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddHijo">
                   <i class="bi bi-plus-circle me-1"></i>Agregar
                 </button>
+                <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveHijo"
+                        disabled title="Selecciona un hijo para eliminarlo">
+                  <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                </button>
               </div>
             </div>
 
@@ -1104,15 +1120,21 @@
               <h5 class="mb-0 card-header-custom d-inline-block">
                 <i class="bi bi-share-fill me-2"></i>Redes sociales
               </h5>
-              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddRed">
-                <i class="bi bi-plus-circle me-1"></i>Agregar
-              </button>
+              <div class="d-flex align-items-center flex-wrap gap-2">
+                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddRed">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveRed"
+                        disabled title="Selecciona una red social para eliminarla">
+                  <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                </button>
+              </div>
             </div>
             <div id="redesContainer" class="border rounded p-3 bg-white"></div>
           </div>
         </div>
 
-        <!-- ================== TRAYECTORIA POLÍTICA ================== -->
+        <!-- ============ TRAYECTORIA POLÍTICA, PÚBLICA Y PRIVADA ============ -->
         <div class="card mb-4 border-institucional">
           <div class="card-body bg-institucional-light">
             <!-- ===== ELECCIÓN POPULAR ===== -->
@@ -1134,9 +1156,15 @@
                   <h6 class="mb-0 text-institucional">
                     <i class="bi bi-list-ul me-2"></i>Detalle de cargos
                   </h6>
-                  <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddCargoEleccion">
-                    <i class="bi bi-plus-circle me-1"></i>Agregar
-                  </button>
+                  <div class="d-flex align-items-center flex-wrap gap-2">
+                    <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddCargoEleccion">
+                      <i class="bi bi-plus-circle me-1"></i>Agregar
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveCargoEleccion"
+                            disabled title="Selecciona un cargo de elección popular para eliminarlo">
+                      <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                    </button>
+                  </div>
                 </div>
                 <div class="small-muted mb-3">
                   <i class="bi bi-info-circle me-1"></i>
@@ -1162,9 +1190,15 @@
                 </div>
               </div>
 
-              <button type="button" class="btn btn-institucional btn-sm px-3 mb-3" id="btnAddServicio">
-                <i class="bi bi-plus-circle me-1"></i>Agregar
-              </button>
+              <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddServicio">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveServicio"
+                        disabled title="Selecciona un cargo de servicio público para eliminarlo">
+                  <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                </button>
+              </div>
 
               <div id="servicioPublicoSection">
                 <div class="small-muted mb-3">
@@ -1183,9 +1217,15 @@
                 <h5 class="mb-0 text-institucional">
                   <i class="bi bi-briefcase-fill me-2"></i>Experiencia laboral (fuera del servicio público)
                 </h5>
-                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddExpLab">
-                  <i class="bi bi-plus-circle me-1"></i>Agregar
-                </button>
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                  <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddExpLab">
+                    <i class="bi bi-plus-circle me-1"></i>Agregar
+                  </button>
+                  <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveExpLab"
+                          disabled title="Selecciona una experiencia laboral para eliminarla">
+                    <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                  </button>
+                </div>
               </div>
               <div class="small-muted mb-3">
                 <i class="bi bi-info-circle me-1"></i>
@@ -1197,7 +1237,7 @@
             <!-- ===== EMPRESAS ===== -->
             <hr class="my-4 border-institucional">
             <div class="row g-3 align-items-end">
-              <div class="col-md-9">
+              <div class="col-md-8">
                 <label class="form-label text-institucional mb-2">
                   <i class="bi bi-building-gear me-1"></i>¿Mantiene vínculo directo o indirecto con alguna empresa?
                 </label>
@@ -1207,10 +1247,16 @@
                   <option value="si">Sí</option>
                 </select>
               </div>
-              <div class="col-md-3">
-                <button type="button" class="btn btn-institucional btn-sm w-100 px-3" id="btnAddEmpresa" disabled>
-                  <i class="bi bi-plus-circle me-1"></i>Agregar
-                </button>
+              <div class="col-md-4">
+                <div class="d-flex align-items-center gap-2">
+                  <button type="button" class="btn btn-institucional btn-sm flex-fill px-3" id="btnAddEmpresa" disabled>
+                    <i class="bi bi-plus-circle me-1"></i>Agregar
+                  </button>
+                  <button type="button" class="btn btn-outline-danger btn-sm flex-fill px-3" id="btnRemoveEmpresa"
+                          disabled title="Selecciona una empresa para eliminarla">
+                    <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                  </button>
+                </div>
               </div>
             </div>
             <div id="empresasContainer" class="border rounded p-3 bg-white mt-3"></div>
@@ -1222,7 +1268,7 @@
             <!-- Header Principal -->
             <h5 class="card-header-custom mb-4">
               <i class="bi bi-shield-check me-2"></i>
-              Militancia e ideología / Trabajo político actual
+              Militancia e ideología
             </h5>
 
             <!-- CAMPOS PRINCIPALES -->
@@ -1334,9 +1380,15 @@
               <h6 class="mb-0 text-institucional">
                 <i class="bi bi-people-fill me-2"></i>Antecedentes de participación en otros partidos u organizaciones
               </h6>
-              <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddParticipacion">
-                <i class="bi bi-plus-circle me-1"></i>Agregar
-              </button>
+              <div class="d-flex align-items-center flex-wrap gap-2">
+                <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddParticipacion">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveParticipacion"
+                        disabled title="Selecciona un antecedente de participación para eliminarlo">
+                  <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                </button>
+              </div>
             </div>
             
             <div id="participacionContainer" class="border rounded p-3 bg-white"></div>
@@ -1375,9 +1427,15 @@
                     <i class="bi bi-list-check me-1"></i>Elecciones contendidas
                   </div>
                 </div>
-                <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddEleccion">
-                  <i class="bi bi-plus-circle me-1"></i>Agregar elección
-                </button>
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                  <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddEleccion">
+                    <i class="bi bi-plus-circle me-1"></i>Agregar
+                  </button>
+                  <button type="button" class="btn btn-outline-danger btn-sm px-4" id="btnRemoveEleccion"
+                          disabled title="Selecciona una elección para eliminarla">
+                    <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                  </button>
+                </div>
               </div>
 
               <div id="eleccionesContainer" class="border rounded p-4 bg-white mb-4"></div>
@@ -1395,9 +1453,15 @@
                   <i class="bi bi-calendar-event me-1"></i>Nombre, fecha y asistencia por evento
                 </div>
               </div>
-              <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddMovEvento">
-                <i class="bi bi-plus-circle me-1"></i>Agregar evento
-              </button>
+              <div class="d-flex align-items-center flex-wrap gap-2">
+                <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddMovEvento">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar evento
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm px-4" id="btnRemoveMovEvento"
+                        disabled title="Selecciona un evento de movilización para eliminarlo">
+                  <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                </button>
+              </div>
             </div>
 
             <div id="movEventosContainer" class="border rounded p-4 bg-white"></div>
@@ -1431,6 +1495,10 @@
                   <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddEquipo">
                     <i class="bi bi-plus-circle me-1"></i>Agregar equipo
                   </button>
+                  <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveEquipo"
+                          disabled title="Selecciona un equipo para eliminarlo">
+                    <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                  </button>
                 </div>
               </div>
 
@@ -1461,6 +1529,10 @@
                   <button type="button" class="btn btn-institucional btn-sm px-3" id="btnAddReferente">
                     <i class="bi bi-plus-circle me-1"></i>Agregar referente
                   </button>
+                  <button type="button" class="btn btn-outline-danger btn-sm px-3" id="btnRemoveReferente"
+                          disabled title="Selecciona un referente para eliminarlo">
+                    <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                  </button>
                 </div>
               </div>
 
@@ -1481,9 +1553,15 @@
                 <i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>
                 Controversias
               </h5>
-              <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddControversia">
-                <i class="bi bi-plus-circle me-1"></i>Agregar
-              </button>
+              <div class="d-flex align-items-center flex-wrap gap-2">
+                <button type="button" class="btn btn-institucional btn-sm px-4" id="btnAddControversia">
+                  <i class="bi bi-plus-circle me-1"></i>Agregar
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm px-4" id="btnRemoveControversia"
+                        disabled title="Selecciona una controversia para eliminarla">
+                  <i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar
+                </button>
+              </div>
             </div>
 
             <!-- Checkbox "sin controversias" - MEJORADO -->
@@ -1716,6 +1794,281 @@
 
 <script>
 
+  // Diccionario ortográfico para campos de palabras y texto libre.
+  const DICCIONARIO_EXCLUIR = /(?:^|_)(?:id|curp|rfc|clave|elector|telefono|tel|celular|correo|email|url|link|foto|fecha|anio|año|edad|periodo|votos|asistencia|numero|codigo|postal|cp|usuario|password)(?:_|$)/i;
+  const CORRECCIONES_ES_MX = Object.freeze({
+    mexico: "México", edomex: "EdoMéx", politico: "político", politica: "política",
+    politicos: "políticos", politicas: "políticas", administracion: "administración",
+    coordinacion: "coordinación", direccion: "dirección", organizacion: "organización",
+    participacion: "participación", informacion: "información", educacion: "educación",
+    gestion: "gestión", region: "región", profesion: "profesión", posicion: "posición",
+    comision: "comisión", comunicacion: "comunicación", relacion: "relación",
+    descripcion: "descripción", institucion: "institución", asociacion: "asociación",
+    poblacion: "población", movilizacion: "movilización", reunion: "reunión",
+    camara: "cámara", lider: "líder", analisis: "análisis", tecnico: "técnico",
+    tecnica: "técnica", economico: "económico", economica: "económica",
+    publico: "público", publica: "pública", publicos: "públicos", publicas: "públicas",
+    nacion: "nación", enlace: "enlace", enlase: "enlace", gobierno: "gobierno",
+    govierno: "gobierno", funcionario: "funcionario", funsionario: "funcionario",
+    dependencia: "dependencia", dependensia: "dependencia", dirigente: "dirigente",
+    dirijente: "dirigente", representante: "representante", representate: "representante",
+    ayuntamiento: "ayuntamiento", ayuntamineto: "ayuntamiento",
+    planeacion: "planeación", evaluacion: "evaluación", operacion: "operación",
+    supervision: "supervisión", legislacion: "legislación", diputacion: "diputación",
+    atencion: "atención", asesoria: "asesoría", juridico: "jurídico", juridica: "jurídica",
+    investigacion: "investigación", corrupcion: "corrupción", acusacion: "acusación",
+    sancion: "sanción", resolucion: "resolución", fiscalia: "fiscalía", ilicito: "ilícito",
+    senalamiento: "señalamiento", senalamientos: "señalamientos", despues: "después",
+    ocurrio: "ocurrió",
+    representacion: "representación", delegacion: "delegación", contraloria: "contraloría",
+    tesoreria: "tesorería", organisacion: "organización", coordinasion: "coordinación",
+    administrasion: "administración", institusion: "institución",
+    participasion: "participación", informasion: "información",
+    jose: "José", maria: "María", jesus: "Jesús", angel: "Ángel", raul: "Raúl",
+    hector: "Héctor", oscar: "Óscar", ramon: "Ramón", adrian: "Adrián",
+    julian: "Julián", sebastian: "Sebastián", nicolas: "Nicolás", martin: "Martín",
+    andres: "Andrés", joaquin: "Joaquín", victor: "Víctor", perez: "Pérez",
+    lopez: "López", gomez: "Gómez", diaz: "Díaz", munoz: "Muñoz",
+    sanchez: "Sánchez", ramirez: "Ramírez", martinez: "Martínez",
+    hernandez: "Hernández", gonzalez: "González", rodriguez: "Rodríguez",
+    jimenez: "Jiménez", gutierrez: "Gutiérrez", vazquez: "Vázquez",
+    dominguez: "Domínguez", alvarez: "Álvarez", avila: "Ávila", benitez: "Benítez",
+    cordova: "Córdova", cortes: "Cortés", fernandez: "Fernández", garcia: "García",
+    leon: "León", marquez: "Márquez", mendez: "Méndez", nunez: "Núñez",
+    ordonez: "Ordóñez", quinones: "Quiñones", rios: "Ríos", suarez: "Suárez",
+    velazquez: "Velázquez"
+  });
+  const CORRECCIONES_NOMBRES_PUBLICOS_ES_MX = Object.freeze({
+    "horacio duarte olivarez": "Horacio Duarte Olivares"
+  });
+  const PARTICULAS_NOMBRE = new Set(["de", "del", "la", "las", "los", "y"]);
+
+  function normalizarClaveNombre(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("es-MX")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function distanciaMaximaUno(a, b) {
+    if (Math.abs(a.length - b.length) > 1) return false;
+
+    let i = 0;
+    let j = 0;
+    let cambios = 0;
+
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) {
+        i += 1;
+        j += 1;
+        continue;
+      }
+
+      cambios += 1;
+      if (cambios > 1) return false;
+
+      if (a.length > b.length) i += 1;
+      else if (b.length > a.length) j += 1;
+      else {
+        i += 1;
+        j += 1;
+      }
+    }
+
+    if (i < a.length || j < b.length) cambios += 1;
+    return cambios <= 1;
+  }
+
+  function buscarCorreccionAproximada(palabra) {
+    if (palabra.length < 5) return "";
+
+    let encontrada = "";
+    for (const [base, correccion] of Object.entries(CORRECCIONES_ES_MX)) {
+      if (!distanciaMaximaUno(palabra, base)) continue;
+      if (encontrada && encontrada !== correccion) return "";
+      encontrada = correccion;
+    }
+    return encontrada;
+  }
+
+  function construirSugerenciaEsMx(field) {
+    const original = String(field.value || "");
+    const key = `${field.name || ""}_${field.id || ""}`;
+    const esNombrePersona = /(?:^|_)(?:nombre|nombres|apellido|titular)(?:_|$)/i.test(key);
+    const esApellido = /(?:^|_)apellido_(?:paterno|materno)(?:_|$)/i.test(key);
+
+    if (!original.trim()) return esApellido ? "X" : "";
+    if (original.trim().length < 3 && !esNombrePersona) return "";
+
+    const multilinea = field.tagName.toLowerCase() === "textarea";
+    let sugerencia = original
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .trim();
+
+    if (esNombrePersona) {
+      sugerencia = CORRECCIONES_NOMBRES_PUBLICOS_ES_MX[normalizarClaveNombre(sugerencia)] || sugerencia;
+    }
+
+    sugerencia = sugerencia.replace(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/g, palabra => {
+      const normalizada = palabra.toLocaleLowerCase("es-MX");
+      return CORRECCIONES_ES_MX[normalizada]
+        || (!esNombrePersona ? buscarCorreccionAproximada(normalizada) : "")
+        || palabra;
+    });
+
+    if (esNombrePersona) {
+      let indice = 0;
+      sugerencia = sugerencia.replace(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/g, palabra => {
+        const lower = palabra.toLocaleLowerCase("es-MX");
+        const resultado = indice > 0 && PARTICULAS_NOMBRE.has(lower)
+          ? lower
+          : lower.charAt(0).toLocaleUpperCase("es-MX") + lower.slice(1);
+        indice += 1;
+        return resultado;
+      });
+    } else {
+      sugerencia = sugerencia.replace(/^([\s\n]*)([a-záéíóúüñ])/u, (_m, espacios, letra) => {
+        return espacios + letra.toLocaleUpperCase("es-MX");
+      });
+    }
+
+    if (!multilinea) sugerencia = sugerencia.replace(/\s+/g, " ");
+    return sugerencia !== original ? sugerencia : "";
+  }
+
+  function ocultarSugerenciaEsMx(field) {
+    field.__diccionarioLeyenda?.classList.add("d-none");
+  }
+
+  function mostrarSugerenciaEsMx(field) {
+    if (!field.isConnected || field.disabled || field.readOnly) return;
+
+    const sugerencia = construirSugerenciaEsMx(field);
+    const sugerenciaIgnorada = Object.prototype.hasOwnProperty.call(field, "__diccionarioIgnorar")
+      && field.__diccionarioIgnorar === String(field.value || "");
+    if (!sugerencia || sugerenciaIgnorada) {
+      ocultarSugerenciaEsMx(field);
+      return;
+    }
+
+    let leyenda = field.__diccionarioLeyenda;
+    if (!leyenda) {
+      leyenda = document.createElement("div");
+      leyenda.className = "diccionario-sugerencia d-none";
+      leyenda.setAttribute("role", "status");
+      leyenda.setAttribute("aria-live", "polite");
+      leyenda.innerHTML = `
+        <i class="bi bi-lightbulb-fill" aria-hidden="true"></i>
+        <span>Sugerencia:</span>
+        <button type="button" class="diccionario-aplicar"></button>
+        <button type="button" class="diccionario-ignorar" aria-label="Ignorar sugerencia">×</button>
+      `;
+
+      const anchor = field.closest(".input-group") || field;
+      anchor.insertAdjacentElement("afterend", leyenda);
+      field.__diccionarioLeyenda = leyenda;
+
+      leyenda.querySelector(".diccionario-aplicar").addEventListener("click", () => {
+        const correccion = leyenda.dataset.sugerencia || "";
+        if (!correccion) return;
+        field.value = correccion;
+        delete field.__diccionarioIgnorar;
+        ocultarSugerenciaEsMx(field);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        field.focus();
+      });
+
+      leyenda.querySelector(".diccionario-ignorar").addEventListener("click", () => {
+        field.__diccionarioIgnorar = String(field.value || "");
+        ocultarSugerenciaEsMx(field);
+      });
+    }
+
+    leyenda.dataset.sugerencia = sugerencia;
+    leyenda.querySelector(".diccionario-aplicar").textContent = sugerencia;
+    leyenda.classList.remove("d-none");
+  }
+
+  function habilitarSugerenciaEsMx(field) {
+    field.addEventListener("input", () => {
+      clearTimeout(field.__diccionarioTimer);
+      if (
+        Object.prototype.hasOwnProperty.call(field, "__diccionarioIgnorar") &&
+        field.__diccionarioIgnorar !== String(field.value || "")
+      ) {
+        delete field.__diccionarioIgnorar;
+      }
+      ocultarSugerenciaEsMx(field);
+      field.__diccionarioTimer = setTimeout(() => mostrarSugerenciaEsMx(field), 750);
+    });
+    field.addEventListener("blur", () => {
+      clearTimeout(field.__diccionarioTimer);
+      field.__diccionarioTimer = setTimeout(() => mostrarSugerenciaEsMx(field), 120);
+    });
+  }
+
+  function configurarDiccionarioEsMx(root = document) {
+    const fields = [];
+
+    if (root.matches?.('input, textarea, [contenteditable="true"]')) fields.push(root);
+    root.querySelectorAll?.('input, textarea, [contenteditable="true"]').forEach(field => fields.push(field));
+
+    fields.forEach(field => {
+      if (field.dataset.diccionarioConfigurado === "1") return;
+
+      const tag = field.tagName.toLowerCase();
+      const type = tag === "input" ? String(field.type || "text").toLowerCase() : "";
+      const key = `${field.name || ""}_${field.id || ""}`;
+      const tipoTexto = tag === "textarea" || (tag === "input" && ["text", "search"].includes(type)) || field.isContentEditable;
+      const esIdentificador =
+        DICCIONARIO_EXCLUIR.test(key) ||
+        type === "search" ||
+        field.classList.contains("number-only") ||
+        String(field.inputMode || "").toLowerCase() === "numeric";
+
+      field.dataset.diccionarioConfigurado = "1";
+
+      if (!tipoTexto || esIdentificador) {
+        field.setAttribute("spellcheck", "false");
+        return;
+      }
+
+      field.setAttribute("lang", "es-MX");
+      field.setAttribute("spellcheck", "true");
+      field.setAttribute("autocorrect", "on");
+      field.setAttribute("autocapitalize", tag === "textarea" ? "sentences" : "words");
+      field.dataset.diccionario = "es-MX";
+      habilitarSugerenciaEsMx(field);
+    });
+  }
+
+  function initDiccionarioEsMx() {
+    const form = document.getElementById("personaForm");
+    if (!form || form.dataset.diccionarioActivo === "1") return;
+
+    form.dataset.diccionarioActivo = "1";
+    configurarDiccionarioEsMx(form);
+
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE) configurarDiccionarioEsMx(node);
+        });
+      });
+    });
+    observer.observe(form, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initDiccionarioEsMx, { once: true });
+  } else {
+    initDiccionarioEsMx();
+  }
+
   //cargar global
   //recalcular edad_año
   function clampInt(n, min, max){
@@ -1813,12 +2166,17 @@
 
           const hijosCont = document.getElementById('hijosContainer');
           const btnAddHijo = document.getElementById('btnAddHijo');
+          const btnRemoveHijo = document.getElementById('btnRemoveHijo');
 
           if (hijosCont) hijosCont.classList.toggle('d-none', sin);
 
           if (btnAddHijo) {
             btnAddHijo.disabled = sin;
             btnAddHijo.style.opacity = sin ? '0.65' : '1';
+          }
+
+          if (btnRemoveHijo) {
+            btnRemoveHijo.disabled = sin || !hijosCont?.querySelector('.hijo-item.is-selected');
           }
 
           if (sin && hijosCont) {
@@ -1837,6 +2195,7 @@
 
         const parejasCont = document.getElementById('parejasContainer');
         const btnAddPareja = document.getElementById('btnAddPareja');
+        const btnRemovePareja = document.getElementById('btnRemovePareja');
 
         // ✅ Ocultar SOLO contenedores (no el card)
         if (parejasCont) parejasCont.classList.toggle('d-none', sin);
@@ -1845,6 +2204,9 @@
         if (btnAddPareja) {
           btnAddPareja.disabled = sin;
           btnAddPareja.style.opacity = sin ? '0.65' : '1';
+        }
+        if (btnRemovePareja) {
+          btnRemovePareja.disabled = sin || !parejasCont?.querySelector('.pareja-item.is-selected');
         }
 
 
@@ -1869,6 +2231,7 @@
         const familiaresCard   = document.getElementById('familiaresCard');
         const familiaresCont   = document.getElementById('familiaresContainer');
         const btnAddFamiliar   = document.getElementById('btnAddFamiliar');
+        const btnRemoveFamiliar = document.getElementById('btnRemoveFamiliar');
 
         const sinFam = chkSinFamiliares?.checked === true;
 
@@ -1892,6 +2255,10 @@
           if (familiaresCont && !familiaresCont.children.length) {
             familiaresCont.appendChild(familiarBlock());
           }
+        }
+
+        if (btnRemoveFamiliar) {
+          btnRemoveFamiliar.disabled = sinFam || !familiaresCont?.querySelector('.familiar-politica-item.is-selected');
         }
       }
   // ✅ CONSTANTE BLINDA PARA FAMILIARES POLÍTICOS
@@ -1967,6 +2334,7 @@ const ROLES_EMPRESA = [
       const cont = document.getElementById('eleccionesContainer');
       if (cont) cont.innerHTML = '';
     }
+    actualizarBotonEliminarEleccion?.();
   }
 
   function logout() {
@@ -2191,7 +2559,7 @@ function showAlert(a, b) {
       "Parejas",
       "Hijos",
       "Redes",
-      "Trayectoria política",
+      "Trayectoria política, pública y privada",
       "Militancia e ideología",
       "Efectividad electoral",
       "Equipos y referentes",
@@ -3481,9 +3849,83 @@ async function onDeletePersona(id_persona, nombre = "") {
   const toBoolOrNull = (v) => (v === 'true') ? true : (v === 'false') ? false : null;
 
   // ---------- UI Blocks ----------
+  const LISTAS_TRAYECTORIA = {
+    cargoEleccion: {
+      containerId: 'cargosEleccionContainer',
+      buttonId: 'btnRemoveCargoEleccion',
+      disabled: () => document.getElementById('chkSinCargosEleccion')?.checked === true
+    },
+    servicio: {
+      containerId: 'servicioContainer',
+      buttonId: 'btnRemoveServicio',
+      disabled: () => document.getElementById('sin_sp')?.checked === true
+    },
+    expLab: {
+      containerId: 'expLabContainer',
+      buttonId: 'btnRemoveExpLab',
+      disabled: () => false
+    },
+    empresa: {
+      containerId: 'empresasContainer',
+      buttonId: 'btnRemoveEmpresa',
+      disabled: () => document.getElementById('selTieneEmpresa')?.value !== 'si'
+    }
+  };
+
+  function actualizarBotonEliminarTrayectoria(tipo) {
+    const config = LISTAS_TRAYECTORIA[tipo];
+    if (!config) return;
+
+    const container = document.getElementById(config.containerId);
+    const button = document.getElementById(config.buttonId);
+    if (!button) return;
+
+    button.disabled = config.disabled() || !container?.querySelector('.trayectoria-item.is-selected');
+  }
+
+  function seleccionarItemTrayectoria(tipo, block) {
+    const config = LISTAS_TRAYECTORIA[tipo];
+    const container = config && document.getElementById(config.containerId);
+    if (!container || !block || !container.contains(block)) return;
+
+    container.querySelectorAll('.trayectoria-item.is-selected').forEach(item => {
+      item.classList.remove('is-selected');
+    });
+    block.classList.add('is-selected');
+    actualizarBotonEliminarTrayectoria(tipo);
+  }
+
+  function eliminarItemTrayectoria(tipo) {
+    const config = LISTAS_TRAYECTORIA[tipo];
+    const container = config && document.getElementById(config.containerId);
+    const selected = container?.querySelector('.trayectoria-item.is-selected');
+    if (!selected) {
+      actualizarBotonEliminarTrayectoria(tipo);
+      return;
+    }
+
+    selected.remove();
+    actualizarBotonEliminarTrayectoria(tipo);
+    refreshPreview?.();
+  }
+
+  function inicializarEliminacionTrayectoria(tipo) {
+    const config = LISTAS_TRAYECTORIA[tipo];
+    if (!config) return;
+
+    const container = document.getElementById(config.containerId);
+    document.getElementById(config.buttonId)?.addEventListener('click', () => eliminarItemTrayectoria(tipo));
+    if (container) {
+      new MutationObserver(() => actualizarBotonEliminarTrayectoria(tipo)).observe(container, { childList: true });
+    }
+    actualizarBotonEliminarTrayectoria(tipo);
+  }
+
+  Object.keys(LISTAS_TRAYECTORIA).forEach(inicializarEliminacionTrayectoria);
+
     function empresaBlock() {
       const div = document.createElement('div');
-      div.className = 'list-item';
+      div.className = 'list-item trayectoria-item empresa-item';
 
       div.innerHTML = `
         <div class="row g-2 align-items-end">
@@ -3494,7 +3936,7 @@ async function onDeletePersona(id_persona, nombre = "") {
             <div class="invalid-feedback">Captura el nombre de la empresa.</div>
           </div>
 
-          <div class="col-md-3">
+          <div class="col-md-4">
             <label class="form-label">Tipo de vínculo</label>
             <select class="form-select" name="empresa_rol">
               <option value="">—</option>
@@ -3533,10 +3975,6 @@ async function onDeletePersona(id_persona, nombre = "") {
               maxlength="500"
               style="resize: vertical;"
             ></textarea>
-          </div>
-
-          <div class="col-md-1 text-end">
-            <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
           </div>
 
           <input type="hidden" name="id_empresa_persona">
@@ -3579,10 +4017,8 @@ async function onDeletePersona(id_persona, nombre = "") {
         });
       }
 
-      div.querySelector('.btnRemove')?.addEventListener('click', () => {
-        div.remove();
-        refreshPreview?.();
-      });
+      div.addEventListener('focusin', () => seleccionarItemTrayectoria('empresa', div));
+      div.addEventListener('click', () => seleccionarItemTrayectoria('empresa', div));
 
       // Estado inicial correcto
       toggleRolOtro();
@@ -3591,9 +4027,40 @@ async function onDeletePersona(id_persona, nombre = "") {
     }
   
 //eventos
+function actualizarBotonEliminarMovEvento() {
+  const container = document.getElementById('movEventosContainer');
+  const button = document.getElementById('btnRemoveMovEvento');
+  if (!button) return;
+
+  button.disabled = !container?.querySelector('.mov-evento-item.is-selected');
+}
+
+function seleccionarMovEvento(block) {
+  const container = document.getElementById('movEventosContainer');
+  if (!container || !block || !container.contains(block)) return;
+
+  container.querySelectorAll('.mov-evento-item.is-selected').forEach(item => {
+    item.classList.remove('is-selected');
+  });
+  block.classList.add('is-selected');
+  actualizarBotonEliminarMovEvento();
+}
+
+function eliminarMovEventoSeleccionado() {
+  const selected = document.querySelector('#movEventosContainer .mov-evento-item.is-selected');
+  if (!selected) {
+    actualizarBotonEliminarMovEvento();
+    return;
+  }
+
+  selected.remove();
+  actualizarBotonEliminarMovEvento();
+  refreshPreview?.();
+}
+
 function movEventoBlock() {
   const div = document.createElement('div');
-  div.className = 'list-item mb-2';
+  div.className = 'list-item mb-2 mov-evento-item';
 
   div.innerHTML = `
     <div class="row g-2 align-items-end">
@@ -3635,9 +4102,6 @@ function movEventoBlock() {
         <input type="number" min="0" class="form-control" name="mov_asistencia_evento" inputmode="numeric" placeholder="Ej. 220">
       </div>
 
-      <div class="col-12 col-md-1 text-md-end">
-        <button type="button" class="btn btn-outline-danger btn-sm w-100 btnRemove">X</button>
-      </div>
     </div>
   `;
 
@@ -3732,10 +4196,8 @@ function movEventoBlock() {
       }
     });
 
-  div.querySelector('.btnRemove').addEventListener('click', () => {
-    div.remove();
-    refreshPreview?.();
-  });
+  div.addEventListener('focusin', () => seleccionarMovEvento(div));
+  div.addEventListener('click', () => seleccionarMovEvento(div));
 
   div.addEventListener('input', () => refreshPreview?.());
   div.addEventListener('change', () => refreshPreview?.());
@@ -3820,9 +4282,40 @@ function movEventoBlock() {
       
       return div;
   }
+  function actualizarBotonEliminarParticipacion() {
+    const container = document.getElementById('participacionContainer');
+    const button = document.getElementById('btnRemoveParticipacion');
+    if (!button) return;
+
+    button.disabled = !container?.querySelector('.participacion-item.is-selected');
+  }
+
+  function seleccionarParticipacion(block) {
+    const container = document.getElementById('participacionContainer');
+    if (!container || !block || !container.contains(block)) return;
+
+    container.querySelectorAll('.participacion-item.is-selected').forEach(item => {
+      item.classList.remove('is-selected');
+    });
+    block.classList.add('is-selected');
+    actualizarBotonEliminarParticipacion();
+  }
+
+  function eliminarParticipacionSeleccionada() {
+    const selected = document.querySelector('#participacionContainer .participacion-item.is-selected');
+    if (!selected) {
+      actualizarBotonEliminarParticipacion();
+      return;
+    }
+
+    selected.remove();
+    actualizarBotonEliminarParticipacion();
+    refreshPreview?.();
+  }
+
   function participacionBlock() {
     const div = document.createElement('div');
-    div.className = 'list-item';
+    div.className = 'list-item participacion-item';
     div.innerHTML = `
       <div class="row g-2">
         <div class="col-12 col-md-3">
@@ -3856,21 +4349,16 @@ function movEventoBlock() {
           <input class="form-control" name="po_notas" placeholder="Opcional">
         </div>
 
-        <div class="col-12 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
-        </div>
       </div>
     `;
-    div.querySelector('.btnRemove').addEventListener('click', () => {
-      div.remove();
-      refreshPreview?.();
-    });
+    div.addEventListener('focusin', () => seleccionarParticipacion(div));
+    div.addEventListener('click', () => seleccionarParticipacion(div));
     return div;
   }
   //experiencia laboral 
   function expLabBlock() {
     const div = document.createElement('div');
-    div.className = 'list-item';
+    div.className = 'list-item trayectoria-item exp-lab-item';
     div.innerHTML = `
       <div class="row g-2 align-items-end">
         <div class="col-md-3">
@@ -3881,44 +4369,75 @@ function movEventoBlock() {
           <label class="form-label">Cargo</label>
           <input class="form-control" name="cargo" maxlength="120">
         </div>
-        <div class="col-md-4">
+        <div class="col-md-5">
           <label class="form-label">Organización o empresa</label>
           <input class="form-control" name="organizacion" maxlength="150">
         </div>
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-        </div>
       </div>
     `;
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    div.addEventListener('focusin', () => seleccionarItemTrayectoria('expLab', div));
+    div.addEventListener('click', () => seleccionarItemTrayectoria('expLab', div));
     return div;
   }
 
   document.getElementById("btnAddExpLab").addEventListener("click", () => {
-    document.getElementById("expLabContainer").appendChild(expLabBlock());
+    const nuevaExperiencia = expLabBlock();
+    document.getElementById("expLabContainer").appendChild(nuevaExperiencia);
+    seleccionarItemTrayectoria('expLab', nuevaExperiencia);
+    refreshPreview?.();
   });
 
 
   let parejaCounter = 0;
+
+  function actualizarBotonEliminarPareja() {
+    const container = document.getElementById('parejasContainer');
+    const button = document.getElementById('btnRemovePareja');
+    if (!button) return;
+    button.disabled = document.getElementById('chkSinParejas')?.checked === true
+      || !container?.querySelector('.pareja-item.is-selected');
+  }
+
+  function seleccionarPareja(block) {
+    const container = document.getElementById('parejasContainer');
+    if (!container || !block || !container.contains(block)) return;
+    container.querySelectorAll('.pareja-item.is-selected').forEach(item => {
+      item.classList.remove('is-selected');
+    });
+    block.classList.add('is-selected');
+    actualizarBotonEliminarPareja();
+  }
+
+  function eliminarParejaSeleccionada() {
+    const selected = document.querySelector('#parejasContainer .pareja-item.is-selected');
+    if (!selected) {
+      actualizarBotonEliminarPareja();
+      return;
+    }
+    selected.remove();
+    actualizarBotonEliminarPareja();
+    refreshHijosParejasSelects();
+    refreshPreview?.();
+  }
 
   function parejaBlock() {
     parejaCounter += 1;
     const tempId = `p_${parejaCounter}`;
 
     const div = document.createElement('div');
-    div.className = 'list-item';
+    div.className = 'list-item pareja-item';
     div.dataset.tempId = tempId;
 
     const rels = window.__relSentCatalog || [];
 
     div.innerHTML = `
-      <div class="row g-2 align-items-end">
-        <div class="col-md-4">
+      <div class="row gy-3 gx-3 pareja-grid">
+        <div class="col-12 col-md-6 col-xl-4 pareja-field">
           <label class="form-label">Nombre pareja</label>
           <input class="form-control" name="nombre_pareja" maxlength="150" autocomplete="off">
         </div>
 
-        <div class="col-md-2">
+        <div class="col-12 col-md-3 col-xl-2 pareja-field">
           <label class="form-label">Tipo relación</label>
           <select class="form-select" name="tipo_relacion">
             <option value="">Seleccione</option>
@@ -3928,7 +4447,7 @@ function movEventoBlock() {
         </div>
 
         <!-- ✅ NUEVO: relación sentimental (catálogo) -->
-        <div class="col-md-3">
+        <div class="col-12 col-md-3 col-xl-3 pareja-field">
           <label class="form-label">Relación sentimental</label>
           <select class="form-select" name="id_relacion_sentimental">
             <option value="">Seleccione</option>
@@ -3936,7 +4455,7 @@ function movEventoBlock() {
           </select>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-12 col-md-12 col-xl-3 pareja-field">
           <label class="form-label">Año o periodo</label>
           <input class="form-control" name="periodo"
                 placeholder="2025 o 2015-2025"
@@ -3946,16 +4465,11 @@ function movEventoBlock() {
           <div class="invalid-feedback">Usa 2025 o 2015-2025.</div>
         </div>
 
-        <div class="col-12 text-end mt-2">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
-        </div>
       </div>
     `;
 
-    div.querySelector('.btnRemove').addEventListener('click', () => {
-      div.remove();
-      refreshHijosParejasSelects();
-    });
+    div.addEventListener('focusin', () => seleccionarPareja(div));
+    div.addEventListener('click', () => seleccionarPareja(div));
 
     div.addEventListener('input', () => {
       const inp = div.querySelector('input[name="periodo"]');
@@ -3964,12 +4478,46 @@ function movEventoBlock() {
     });
     div.addEventListener('change', refreshHijosParejasSelects);
 
+    configurarDiccionarioEsMx(div);
+
     return div;
   }
   // hijos block (solo Edad -> anios)
+  function actualizarBotonEliminarHijo() {
+    const container = document.getElementById('hijosContainer');
+    const button = document.getElementById('btnRemoveHijo');
+    if (!button) return;
+
+    button.disabled = document.getElementById('chkSinHijos')?.checked === true
+      || !container?.querySelector('.hijo-item.is-selected');
+  }
+
+  function seleccionarHijo(block) {
+    const container = document.getElementById('hijosContainer');
+    if (!container || !block || !container.contains(block)) return;
+
+    container.querySelectorAll('.hijo-item.is-selected').forEach(item => {
+      item.classList.remove('is-selected');
+    });
+    block.classList.add('is-selected');
+    actualizarBotonEliminarHijo();
+  }
+
+  function eliminarHijoSeleccionado() {
+    const selected = document.querySelector('#hijosContainer .hijo-item.is-selected');
+    if (!selected) {
+      actualizarBotonEliminarHijo();
+      return;
+    }
+
+    selected.remove();
+    actualizarBotonEliminarHijo();
+    refreshPreview?.();
+  }
+
   function hijoBlock() {
     const div = document.createElement('div');
-    div.className = 'list-item';
+    div.className = 'list-item hijo-item';
     div.innerHTML = `
       <div class="row g-2 align-items-end">
         <div class="col-md-4">
@@ -3989,7 +4537,7 @@ function movEventoBlock() {
           <input type="number" class="form-control" name="anios" min="0" max="90" placeholder="Ej. 12">
         </div>
 
-        <div class="col-md-1">
+        <div class="col-md-2">
           <label class="form-label">Género</label>
           <select class="form-select" name="sexo">
             <option value="">—</option>
@@ -3998,13 +4546,11 @@ function movEventoBlock() {
           </select>
         </div>
 
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-        </div>
       </div>
     `;
 
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    div.addEventListener('focusin', () => seleccionarHijo(div));
+    div.addEventListener('click', () => seleccionarHijo(div));
 
     const sel = div.querySelector('select[name="pareja_temp_id"]');
     fillHijoParejaSelect(sel);
@@ -4052,51 +4598,77 @@ function refreshHijosParejasSelects() {
   });
 }
 
+  function actualizarBotonEliminarRed() {
+    const container = document.getElementById('redesContainer');
+    const button = document.getElementById('btnRemoveRed');
+    if (!button) return;
+
+    button.disabled = !container?.querySelector('.red-social-item.is-selected');
+  }
+
+  function seleccionarRed(block) {
+    const container = document.getElementById('redesContainer');
+    if (!container || !block || !container.contains(block)) return;
+
+    container.querySelectorAll('.red-social-item.is-selected').forEach(item => {
+      item.classList.remove('is-selected');
+    });
+    block.classList.add('is-selected');
+    actualizarBotonEliminarRed();
+  }
+
+  function eliminarRedSeleccionada() {
+    const selected = document.querySelector('#redesContainer .red-social-item.is-selected');
+    if (!selected) {
+      actualizarBotonEliminarRed();
+      return;
+    }
+
+    selected.remove();
+    actualizarBotonEliminarRed();
+    refreshPreview?.();
+  }
+
   function redBlock() {
     const div = document.createElement('div');
-    div.className = 'list-item';
+    div.className = 'list-item red-social-item';
     div.innerHTML = `
       <div class="row g-2 align-items-end">
         <div class="col-md-4">
           <label class="form-label">Red</label>
           <select class="form-select" name="id_red"></select>
         </div>
-        <div class="col-md-7">
+        <div class="col-md-8">
           <label class="form-label">URL</label>
           <input class="form-control" name="url" placeholder="https://...">
-        </div>
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
         </div>
       </div>
     `;
     fillSelect(div.querySelector('select[name="id_red"]'), redesCatalog, 'id_red', 'nombre');
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    div.addEventListener('focusin', () => seleccionarRed(div));
+    div.addEventListener('click', () => seleccionarRed(div));
     return div;
   }
 //servicio publico
   function servicioBlock() {
       const div = document.createElement('div');
-      div.className = 'list-item';
+      div.className = 'list-item trayectoria-item servicio-item';
 
       div.innerHTML = `
-        <div class="row g-2 align-items-end">
-          <div class="col-md-3">
+        <div class="row g-3 servicio-publico-grid">
+          <div class="col-12 col-md-3 servicio-publico-field">
             <label class="form-label">Periodo <code class="field-length">(AAAA o AAAA-AAAA)</code></label>
             <input class="form-control" name="periodo" placeholder="2018 o 2018-2021" maxlength="9">
             <div class="form-text">Formato: 2018 o 2018-2021</div>
             <div class="invalid-feedback">Usa formato correcto: 2018 o 2018-2021</div>
           </div>
-          <div class="col-md-4">
+          <div class="col-12 col-md-4 servicio-publico-field">
             <label class="form-label">Cargo</label>
             <input class="form-control" name="cargo">
           </div>
-          <div class="col-md-4">
+          <div class="col-12 col-md-5 servicio-publico-field">
             <label class="form-label">Dependencia</label>
             <input class="form-control" name="dependencia">
-          </div>
-          <div class="col-md-1 text-end">
-            <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
           </div>
         </div>
       `;
@@ -4132,26 +4704,57 @@ function refreshHijosParejasSelects() {
 
       inpPeriodo.addEventListener('blur', validatePeriodoUI);
 
-      div.querySelector('.btnRemove').addEventListener('click', () => {
-          div.remove();
-      });
+      div.addEventListener('focusin', () => seleccionarItemTrayectoria('servicio', div));
+      div.addEventListener('click', () => seleccionarItemTrayectoria('servicio', div));
 
       return div;
   }
   //elecciones block
+  function actualizarBotonEliminarEleccion() {
+    const container = document.getElementById('eleccionesContainer');
+    const button = document.getElementById('btnRemoveEleccion');
+    if (!button) return;
+
+    button.disabled = document.getElementById('selHaContendido')?.value !== 'true'
+      || !container?.querySelector('.eleccion-item.is-selected');
+  }
+
+  function seleccionarEleccion(block) {
+    const container = document.getElementById('eleccionesContainer');
+    if (!container || !block || !container.contains(block)) return;
+
+    container.querySelectorAll('.eleccion-item.is-selected').forEach(item => {
+      item.classList.remove('is-selected');
+    });
+    block.classList.add('is-selected');
+    actualizarBotonEliminarEleccion();
+  }
+
+  function eliminarEleccionSeleccionada() {
+    const selected = document.querySelector('#eleccionesContainer .eleccion-item.is-selected');
+    if (!selected) {
+      actualizarBotonEliminarEleccion();
+      return;
+    }
+
+    selected.remove();
+    actualizarBotonEliminarEleccion();
+    refreshPreview?.();
+  }
+
   function eleccionBlock() {
     const div = document.createElement('div');
-    div.className = 'list-item border rounded-3 p-3 mb-2';
+    div.className = 'list-item border rounded-3 p-3 mb-2 eleccion-item';
 
     div.innerHTML = `
-      <div class="row g-2">
+      <div class="row g-3 eleccion-grid">
         
-        <div class="col-12 col-md-3 col-lg-2">
+        <div class="col-12 col-md-3">
           <label class="form-label">Año</label>
           <input type="number" class="form-control" name="anio_eleccion" min="1900" max="2100" inputmode="numeric">
         </div>
 
-        <div class="col-12 col-md-3 col-lg-2">
+        <div class="col-12 col-md-3">
           <label class="form-label">Resultado</label>
           <select class="form-select" name="resultado">
             <option value="">Seleccione</option>
@@ -4160,22 +4763,22 @@ function refreshHijosParejasSelects() {
           </select>
         </div>
 
-        <div class="col-12 col-md-6 col-lg-4">
+        <div class="col-12 col-md-6">
           <label class="form-label">Candidatura</label>
           <input class="form-control" name="candidatura" placeholder="Ej. Presidencia municipal">
         </div>
 
-        <div class="col-12 col-md-3 col-lg-2">
+        <div class="col-12 col-md-6">
           <label class="form-label">Partido</label>
           <input class="form-control" name="partido_postulacion" placeholder="Ej. PAN / PRI / MORENA">
         </div>
 
-        <div class="col-6 col-md-3 col-lg-1">
+        <div class="col-12 col-md-3">
           <label class="form-label">Votos</label>
           <input type="number" class="form-control" name="diferencia_votos" min="0" inputmode="numeric">
         </div>
 
-        <div class="col-6 col-md-3 col-lg-1">
+        <div class="col-12 col-md-3">
           <label class="form-label">% Dif.</label>
           <div class="input-group">
             <input
@@ -4190,52 +4793,109 @@ function refreshHijosParejasSelects() {
           </div>
         </div>
 
-        <div class="col-12 d-flex justify-content-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">
-            Eliminar
-          </button>
-        </div>
-
       </div>
     `;
 
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    div.addEventListener('focusin', () => seleccionarEleccion(div));
+    div.addEventListener('click', () => seleccionarEleccion(div));
     return div;
   }
 
 
+  function actualizarBotonEliminarEquipo() {
+    const container = document.getElementById('equiposContainer');
+    const button = document.getElementById('btnRemoveEquipo');
+    if (!button) return;
+
+    button.disabled = document.getElementById('chkSinEquipos')?.checked === true
+      || !container?.querySelector('.equipo-item.is-selected');
+  }
+
+  function seleccionarEquipo(block) {
+    const container = document.getElementById('equiposContainer');
+    if (!container || !block || !container.contains(block)) return;
+
+    container.querySelectorAll('.equipo-item.is-selected').forEach(item => {
+      item.classList.remove('is-selected');
+    });
+    block.classList.add('is-selected');
+    actualizarBotonEliminarEquipo();
+  }
+
+  function eliminarEquipoSeleccionado() {
+    const selected = document.querySelector('#equiposContainer .equipo-item.is-selected');
+    if (!selected) {
+      actualizarBotonEliminarEquipo();
+      return;
+    }
+
+    selected.remove();
+    actualizarBotonEliminarEquipo();
+    refreshPreview?.();
+  }
+
   function equipoBlock() {
     const div = document.createElement('div');
-    div.className = 'list-item';
+    div.className = 'list-item equipo-item';
     div.innerHTML = `
       <div class="row g-2 align-items-end">
-        <div class="col-md-8">
+        <div class="col-12 col-md-9">
           <label class="form-label">Nombre del equipo</label>
           <input class="form-control" name="nombre_equipo">
         </div>
-        <div class="col-md-3">
+        <div class="col-12 col-md-3">
           <label class="form-label">Activo</label>
           <select class="form-select" name="activo">
             <option value="true">Si</option>
             <option value="false">No</option>
           </select>
         </div>
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-        </div>
       </div>
     `;
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    div.addEventListener('focusin', () => seleccionarEquipo(div));
+    div.addEventListener('click', () => seleccionarEquipo(div));
     return div;
+  }
+
+  function actualizarBotonEliminarReferente() {
+    const container = document.getElementById('referentesContainer');
+    const button = document.getElementById('btnRemoveReferente');
+    if (!button) return;
+
+    button.disabled = document.getElementById('chkSinReferentes')?.checked === true
+      || !container?.querySelector('.referente-item.is-selected');
+  }
+
+  function seleccionarReferente(block) {
+    const container = document.getElementById('referentesContainer');
+    if (!container || !block || !container.contains(block)) return;
+
+    container.querySelectorAll('.referente-item.is-selected').forEach(item => {
+      item.classList.remove('is-selected');
+    });
+    block.classList.add('is-selected');
+    actualizarBotonEliminarReferente();
+  }
+
+  function eliminarReferenteSeleccionado() {
+    const selected = document.querySelector('#referentesContainer .referente-item.is-selected');
+    if (!selected) {
+      actualizarBotonEliminarReferente();
+      return;
+    }
+
+    selected.remove();
+    actualizarBotonEliminarReferente();
+    refreshPreview?.();
   }
 
   function referenteBlock() {
     const div = document.createElement('div');
-    div.className = 'list-item';
+    div.className = 'list-item referente-item';
 
     div.innerHTML = `
       <div class="row g-2 align-items-end">
-        <div class="col-md-2">
+        <div class="col-12 col-md-2">
           <label class="form-label">Nivel</label>
           <select class="form-select" name="nivel">
             <option value="">Seleccione</option>
@@ -4247,33 +4907,31 @@ function refreshHijosParejasSelects() {
           </select>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-12 col-md-4">
           <label class="form-label">Cargo</label>
           <input class="form-control" name="cargo" autocomplete="off" placeholder="Ej. Líder social / Dirigente / ...">
         </div>
 
-        <div class="col-md-2">
+        <div class="col-12 col-md-2">
           <label class="form-label">Nombre(s)</label>
           <input class="form-control" name="nombres" autocomplete="off">
         </div>
 
-        <div class="col-md-2">
+        <div class="col-12 col-md-2">
           <label class="form-label">Apellido paterno</label>
           <input class="form-control" name="apellido_paterno" autocomplete="off">
         </div>
 
-        <div class="col-md-2">
+        <div class="col-12 col-md-2">
           <label class="form-label">Apellido materno</label>
           <input class="form-control" name="apellido_materno" autocomplete="off">
         </div>
 
-        <div class="col-md-1 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-        </div>
       </div>
     `;
 
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    div.addEventListener('focusin', () => seleccionarReferente(div));
+    div.addEventListener('click', () => seleccionarReferente(div));
     return div;
   }
 
@@ -4281,6 +4939,7 @@ function refreshHijosParejasSelects() {
     function setControversiasUIState() {
       const chk = document.getElementById('chkSinControversias');
       const btn = document.getElementById('btnAddControversia');
+      const btnRemove = document.getElementById('btnRemoveControversia');
       const cont = document.getElementById('controversiasContainer');
       const msg = document.getElementById('sinControversiasMsg');
 
@@ -4290,6 +4949,9 @@ function refreshHijosParejasSelects() {
 
       // Deshabilita botón y oculta contenedor
       btn.disabled = activo;
+      if (btnRemove) {
+        btnRemove.disabled = activo || !cont.querySelector('.controversia-item.is-selected');
+      }
       cont.classList.toggle('opacity-50', activo);
 
       // Opcional: esconder el contenedor completo cuando está activo
@@ -4322,18 +4984,75 @@ function refreshHijosParejasSelects() {
       return false;
     }
 
+    function actualizarBotonEliminarControversia() {
+      const container = document.getElementById('controversiasContainer');
+      const button = document.getElementById('btnRemoveControversia');
+      if (!button) return;
+
+      button.disabled = document.getElementById('chkSinControversias')?.checked === true
+        || !container?.querySelector('.controversia-item.is-selected');
+    }
+
+    function seleccionarControversia(block) {
+      const container = document.getElementById('controversiasContainer');
+      if (!container || !block || !container.contains(block)) return;
+
+      container.querySelectorAll('.controversia-item.is-selected').forEach(item => {
+        item.classList.remove('is-selected');
+      });
+      block.classList.add('is-selected');
+      actualizarBotonEliminarControversia();
+    }
+
+    function eliminarControversiaSeleccionada() {
+      const selected = document.querySelector('#controversiasContainer .controversia-item.is-selected');
+      if (!selected) {
+        actualizarBotonEliminarControversia();
+        return;
+      }
+
+      selected.remove();
+      actualizarBotonEliminarControversia();
+      refreshPreview?.();
+    }
+
+    function limpiarDescripcionControversia(value) {
+      return String(value || '')
+        .replace(/[^\p{L}\p{M}\s.,;:¡!¿?()'"«»\-–—]/gu, '')
+        .replace(/[ \t]{2,}/g, ' ');
+    }
+
+    function corregirDescripcionControversia(field) {
+      let correccion = limpiarDescripcionControversia(field.value)
+        .replace(/[ \t]+([,.;:!?])/g, '$1')
+        .replace(/([,;:])(?=[\p{L}\p{M}])/gu, '$1 ')
+        .replace(/([.!?])(?=[\p{L}\p{M}])/gu, '$1 ')
+        .trim();
+
+      field.value = correccion;
+      correccion = construirSugerenciaEsMx(field) || correccion;
+      correccion = correccion.replace(
+        /(^|[.!?]\s+|\n+)([¿¡'"«(\s]*)([\p{Ll}])/gu,
+        (_match, inicio, apertura, letra) => inicio + apertura + letra.toLocaleUpperCase('es-MX')
+      );
+
+      const cambio = field.value !== correccion;
+      field.value = correccion;
+      if (cambio) field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
     function controversiaBlock() {
       const div = document.createElement('div');
-      div.className = 'list-item';
+      div.className = 'list-item controversia-item';
 
       div.innerHTML = `
-      <div class="row g-2">
-        <div class="col-md-4">
+      <div class="row g-3 controversia-grid">
+        <div class="col-12 col-md-4 controversia-field">
           <label class="form-label">Tipo</label>
           <select class="form-select" name="id_tipo"></select>
         </div>
 
-        <div class="col-md-4">
+        <div class="col-12 col-md-4 controversia-field">
           <label class="form-label">Periodo</label>
           <input
             type="text"
@@ -4348,18 +5067,16 @@ function refreshHijosParejasSelects() {
           <div class="invalid-feedback">Usa 2025 o 2025-2026.</div>
         </div>
 
-        <div class="col-md-8">
+        <div class="col-12 col-md-8 controversia-field">
           <label class="form-label">Descripción</label>
-          <textarea class="form-control" name="descripcion" rows="2"></textarea>
+          <textarea class="form-control" name="descripcion" rows="2" lang="es-MX"
+                    autocomplete="off" autocapitalize="sentences"></textarea>
         </div>
-        <div class="col-md-4">
+        <div class="col-12 col-md-4 controversia-field">
           <label class="form-label">Fuente</label>
           <input class="form-control" name="fuente" placeholder="Medio / enlace / nota / Núm. de expte.">
         </div>
 
-        <div class="col-12 text-end">
-          <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
-        </div>
       </div>
     `;
 
@@ -4383,22 +5100,63 @@ function refreshHijosParejasSelects() {
           inp.classList.remove("is-invalid");
         }
       });
+    const descripcion = div.querySelector('textarea[name="descripcion"]');
+    descripcion.addEventListener('input', () => {
+      const limpia = limpiarDescripcionControversia(descripcion.value);
+      if (descripcion.value !== limpia) descripcion.value = limpia;
+    });
+    descripcion.addEventListener('blur', () => corregirDescripcionControversia(descripcion));
+
     fillSelect(div.querySelector('select[name="id_tipo"]'), controversiasCatalog, 'id_tipo', 'tipo');
-    div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+    div.addEventListener('focusin', () => seleccionarControversia(div));
+    div.addEventListener('click', () => seleccionarControversia(div));
+    configurarDiccionarioEsMx(div);
       return div;
+    }
+
+    function actualizarBotonEliminarFamiliar() {
+      const container = document.getElementById('familiaresContainer');
+      const button = document.getElementById('btnRemoveFamiliar');
+      if (!button) return;
+
+      button.disabled = document.getElementById('chkSinFamiliares')?.checked === true
+        || !container?.querySelector('.familiar-politica-item.is-selected');
+    }
+
+    function seleccionarFamiliar(block) {
+      const container = document.getElementById('familiaresContainer');
+      if (!container || !block || !container.contains(block)) return;
+
+      container.querySelectorAll('.familiar-politica-item.is-selected').forEach(item => {
+        item.classList.remove('is-selected');
+      });
+      block.classList.add('is-selected');
+      actualizarBotonEliminarFamiliar();
+    }
+
+    function eliminarFamiliarSeleccionado() {
+      const selected = document.querySelector('#familiaresContainer .familiar-politica-item.is-selected');
+      if (!selected) {
+        actualizarBotonEliminarFamiliar();
+        return;
+      }
+
+      selected.remove();
+      actualizarBotonEliminarFamiliar();
+      refreshPreview?.();
     }
 
     function familiarBlock() {
       const div = document.createElement('div');
-      div.className = 'list-item';
+      div.className = 'list-item familiar-politica-item';
       div.innerHTML = `
-        <div class="row g-2 align-items-end">
-          <div class="col-md-3">
+        <div class="row gy-3 gx-3 align-items-end">
+          <div class="col-12 col-md-8">
             <label class="form-label">Nombre Completo</label>
             <input class="form-control" name="nombre" placeholder="Ej. Juan Pérez Cruz">
           </div>
 
-          <div class="col-md-2">
+          <div class="col-12 col-md-4">
             <label class="form-label">Parentesco</label>
             <select class="form-control form-select" name="parentesco">
               <option value="">Selecciona...</option>
@@ -4408,31 +5166,28 @@ function refreshHijosParejasSelects() {
             </select>
           </div>
 
-          <div class="col-md-2">
+          <div class="col-12 col-md-6">
             <label class="form-label">Cargo</label>
-            <input class="form-control" name="cargo" placeholder="Ej. Diputado">
+            <input class="form-control" name="cargo" autocomplete="off" placeholder="Ej. Diputado local o titular de dependencia">
           </div>
 
-          <div class="col-md-2">
+          <div class="col-12 col-md-6">
             <label class="form-label">Institución</label>
-            <input class="form-control" name="institucion" placeholder="Ej. Congreso">
+            <input class="form-control" name="institucion" autocomplete="off" placeholder="Ej. Congreso del Estado de México">
           </div>
 
-          <div class="col-md-2">
+          <div class="col-12 col-md-6">
             <label class="form-label">Partido político</label>
             <select class="form-control form-select" name="id_partido_politico">
               ${getPartidosOptionsHtml()}
             </select>
           </div>
 
-          <div class="col-md-1 text-end">
-            <button type="button" class="btn btn-outline-danger btn-sm btnRemove">X</button>
-          </div>
-
-          <div class="col-md-4 wrap-otro-partido-familiar d-none">
+          <div class="col-12 col-md-6 wrap-otro-partido-familiar d-none">
             <label class="form-label">Otro partido</label>
             <input class="form-control" name="otro_partido_texto" placeholder="Especifique partido">
           </div>
+
         </div>
       `;
 
@@ -4450,7 +5205,11 @@ function refreshHijosParejasSelects() {
         }
       });
 
-      div.querySelector('.btnRemove').addEventListener('click', () => div.remove());
+      div.addEventListener('focusin', () => seleccionarFamiliar(div));
+      div.addEventListener('click', () => seleccionarFamiliar(div));
+
+      // El bloque se crea dinámicamente; activar de inmediato el diccionario visible.
+      configurarDiccionarioEsMx(div);
 
       return div;
     }
@@ -4463,7 +5222,7 @@ function refreshHijosParejasSelects() {
       cargoEleccionCounter += 1;
 
       const div = document.createElement("div");
-      div.className = "list-item";
+      div.className = "list-item trayectoria-item cargo-eleccion-item";
 
       const ordenes = window.__ordenGobCatalog || [];
       const partidos = window.__partidosCatalog || [];
@@ -4533,9 +5292,6 @@ function refreshHijosParejasSelects() {
           <input type="hidden" name="cargo">
           <input type="hidden" name="partido_postulante">
 
-          <div class="col-12 text-end mt-2">
-            <button type="button" class="btn btn-outline-danger btn-sm btnRemove">Eliminar</button>
-          </div>
         </div>
       `;
 
@@ -4583,13 +5339,17 @@ function refreshHijosParejasSelects() {
       chkSupl?.addEventListener("change", () => setSuplUI(chkSupl.checked));
       setSuplUI(false);
 
-      div.querySelector(".btnRemove")?.addEventListener("click", () => div.remove());
+      div.addEventListener('focusin', () => seleccionarItemTrayectoria('cargoEleccion', div));
+      div.addEventListener('click', () => seleccionarItemTrayectoria('cargoEleccion', div));
       return div;
     }
 
     document.getElementById("btnAddCargoEleccion")?.addEventListener("click", () => {
       if (document.getElementById("chkSinCargosEleccion")?.checked) return;
-      document.getElementById("cargosEleccionContainer")?.appendChild(cargoEleccionBlock());
+      const nuevoCargo = cargoEleccionBlock();
+      document.getElementById("cargosEleccionContainer")?.appendChild(nuevoCargo);
+      seleccionarItemTrayectoria('cargoEleccion', nuevoCargo);
+      refreshPreview?.();
     });
   //funcion para habilitar los grados academicos:
 
@@ -4930,14 +5690,29 @@ function refreshHijosParejasSelects() {
       return true;
     }
 
+    function validarRfcField(formEl) {
+      const el = formEl.querySelector('[name="rfc"]');
+      if (!el) return true;
+
+      const value = (el.value || "").trim().toUpperCase();
+      el.value = value;
+
+      if (validate) el.classList.remove("is-invalid");
+      if (!value) return true;
+
+      const valido = /^[A-ZÑ&]{4}\d{6}(?:[A-Z0-9]{3})?$/.test(value);
+      if (!valido && validate) el.classList.add("is-invalid");
+      return valido;
+    }
+
     const formEl = document.getElementById("personaForm");
 
     const okCurp  = validarLenField(formEl, "curp", 18, "CURP");
-    const okRfc   = validarLenField(formEl, "rfc", 13, "RFC");
+    const okRfc   = validarRfcField(formEl);
     const okClave = validarLenField(formEl, "clave_elector", 18, "Clave de elector");
 
     if ((!okCurp || !okRfc || !okClave)) {
-      if (validate) showAlert?.("Revisa CURP/RFC/Clave de elector: longitud inválida.", "warning");
+      if (validate) showAlert?.("Revisa CURP/RFC/Clave de elector. El RFC admite 10 caracteres sin homoclave o 13 con homoclave.", "warning");
       return null;
     }
 
@@ -4949,7 +5724,28 @@ function refreshHijosParejasSelects() {
 
     if (!okNombre || !okApPat || !okApMat) {
       if (validate) {
-        showAlert?.("Nombre y apellidos solo pueden contener letras (con acentos), espacios, guion o apóstrofe.", "warning");
+        const apPatEl = formEl.querySelector('[name="apellido_paterno"]');
+        const apMatEl = formEl.querySelector('[name="apellido_materno"]');
+        const faltaApellido = !apPatEl?.value.trim() || !apMatEl?.value.trim();
+
+        if (faltaApellido) {
+          if (apPatEl && !apPatEl.value.trim()) mostrarSugerenciaEsMx(apPatEl);
+          if (apMatEl && !apMatEl.value.trim()) mostrarSugerenciaEsMx(apMatEl);
+          showAlert?.("Captura al menos un apellido. Cuando uno no exista o no se conozca, usa la sugerencia X debajo del campo.", "warning");
+        } else {
+          showAlert?.("Nombre y apellidos solo pueden contener letras (con acentos), espacios, guion o apóstrofe.", "warning");
+        }
+      }
+      return null;
+    }
+
+    const apellidoPaternoValor = formEl.querySelector('[name="apellido_paterno"]')?.value.trim().toUpperCase() || "";
+    const apellidoMaternoValor = formEl.querySelector('[name="apellido_materno"]')?.value.trim().toUpperCase() || "";
+    if (apellidoPaternoValor === "X" && apellidoMaternoValor === "X") {
+      if (validate) {
+        formEl.querySelector('[name="apellido_paterno"]')?.classList.add("is-invalid");
+        formEl.querySelector('[name="apellido_materno"]')?.classList.add("is-invalid");
+        showAlert?.("Debe existir al menos un apellido real; utiliza X solamente en el apellido faltante.", "warning");
       }
       return null;
     }
@@ -5777,6 +6573,7 @@ function refreshPreview() {
             // Si vuelven a habilitar, quita estados raros
             clearValidationInside(section);
           }
+          actualizarBotonEliminarTrayectoria('cargoEleccion');
         }
 
         chk.addEventListener("change", setSinCargosUI);
@@ -5809,6 +6606,7 @@ function refreshPreview() {
           } else {
             clearValidationInside(section);
           }
+          actualizarBotonEliminarTrayectoria('servicio');
         }
 
         chk.addEventListener("change", setSinServicioUI);
@@ -6314,6 +7112,9 @@ function toggleModuloOptional({ chkId, wrapId, btnId, containerId }) {
   // 🔥 Limpia para evitar que buildPayload lea basura
   if (sin && container) container.innerHTML = "";
 
+  if (containerId === 'equiposContainer') actualizarBotonEliminarEquipo();
+  if (containerId === 'referentesContainer') actualizarBotonEliminarReferente();
+
   refreshPreview?.();
 }
       //proper guia de ayuda :)
@@ -6682,9 +7483,17 @@ function initGrupoPostulacionMulti() {
       setEleccionesUIState();
       //eventos
       document.getElementById('btnAddMovEvento')?.addEventListener('click', () => {
-        document.getElementById('movEventosContainer')?.appendChild(movEventoBlock());
+        const nuevoEvento = movEventoBlock();
+        document.getElementById('movEventosContainer')?.appendChild(nuevoEvento);
+        seleccionarMovEvento(nuevoEvento);
         refreshPreview?.();
       });
+      document.getElementById('btnRemoveMovEvento')?.addEventListener('click', eliminarMovEventoSeleccionado);
+
+      const movEventosContainer = document.getElementById('movEventosContainer');
+      if (movEventosContainer) {
+        new MutationObserver(actualizarBotonEliminarMovEvento).observe(movEventosContainer, { childList: true });
+      }
 
       document.getElementById('chkSinControversias')?.addEventListener('change', () => {
         setControversiasUIState();
@@ -6711,20 +7520,37 @@ function initGrupoPostulacionMulti() {
 
       document.getElementById('btnAddPareja')?.addEventListener('click', () => {
         if (document.getElementById('chkSinParejas')?.checked) return;
-        document.getElementById('parejasContainer')?.appendChild(parejaBlock());
+        const nuevaPareja = parejaBlock();
+        document.getElementById('parejasContainer')?.appendChild(nuevaPareja);
+        seleccionarPareja(nuevaPareja);
         refreshHijosParejasSelects();
         refreshPreview?.();
       });
 
+      document.getElementById('btnRemovePareja')?.addEventListener('click', eliminarParejaSeleccionada);
+
+      const parejasContainer = document.getElementById('parejasContainer');
+      if (parejasContainer) {
+        new MutationObserver(actualizarBotonEliminarPareja).observe(parejasContainer, { childList: true });
+      }
+
       $('#btnAddHijo').addEventListener('click', () => {
+        if (document.getElementById('chkSinHijos')?.checked) return;
         const hb = hijoBlock();
         $('#hijosContainer').appendChild(hb);
+        seleccionarHijo(hb);
 
         // opcional: por si quieres sincronizar todos siempre
         // refreshHijosParejasSelects();
 
         refreshPreview();
       });
+      document.getElementById('btnRemoveHijo')?.addEventListener('click', eliminarHijoSeleccionado);
+
+      const hijosContainer = document.getElementById('hijosContainer');
+      if (hijosContainer) {
+        new MutationObserver(actualizarBotonEliminarHijo).observe(hijosContainer, { childList: true });
+      }
       // Cargar lista al iniciar
       await cargarListaBorradores();
       setBorradorActual(null);
@@ -6791,13 +7617,16 @@ function initGrupoPostulacionMulti() {
           empresasContainer.appendChild(empresaBlock());
         }
       }
+      actualizarBotonEliminarTrayectoria('empresa');
       refreshPreview?.();
     }
 
     selTieneEmpresa?.addEventListener('change', setEmpresasUI);
 
     btnAddEmpresa?.addEventListener('click', () => {
-      empresasContainer.appendChild(empresaBlock());
+      const nuevaEmpresa = empresaBlock();
+      empresasContainer.appendChild(nuevaEmpresa);
+      seleccionarItemTrayectoria('empresa', nuevaEmpresa);
       refreshPreview?.();
     });
 
@@ -6821,9 +7650,17 @@ function initGrupoPostulacionMulti() {
     // ✅ Event listeners DIRECTAMENTE (NO DOMContentLoaded)
     document.getElementById('chkSinFamiliares')?.addEventListener('change', toggleFamiliares);
     document.getElementById('btnAddFamiliar')?.addEventListener('click', function() {
-      document.getElementById('familiaresContainer').appendChild(familiarBlock());
+      const nuevoFamiliar = familiarBlock();
+      document.getElementById('familiaresContainer').appendChild(nuevoFamiliar);
+      seleccionarFamiliar(nuevoFamiliar);
       refreshPreview();
     });
+    document.getElementById('btnRemoveFamiliar')?.addEventListener('click', eliminarFamiliarSeleccionado);
+
+    const familiaresContainer = document.getElementById('familiaresContainer');
+    if (familiaresContainer) {
+      new MutationObserver(actualizarBotonEliminarFamiliar).observe(familiaresContainer, { childList: true });
+    }
     
     // ✅ Llamar toggle inicial
     toggleFamiliares();
@@ -7123,17 +7960,79 @@ function initGrupoPostulacionMulti() {
         });
 
       document.getElementById('btnAddParticipacion')?.addEventListener('click', () => {
-        document.getElementById('participacionContainer')?.appendChild(participacionBlock());
+        const nuevaParticipacion = participacionBlock();
+        document.getElementById('participacionContainer')?.appendChild(nuevaParticipacion);
+        seleccionarParticipacion(nuevaParticipacion);
         refreshPreview?.();
       });
+      document.getElementById('btnRemoveParticipacion')?.addEventListener('click', eliminarParticipacionSeleccionada);
 
-      $('#btnAddRed').addEventListener('click', () => { $('#redesContainer').appendChild(redBlock()); refreshPreview(); });
+      const participacionContainer = document.getElementById('participacionContainer');
+      if (participacionContainer) {
+        new MutationObserver(actualizarBotonEliminarParticipacion).observe(participacionContainer, { childList: true });
+      }
 
-      $('#btnAddServicio').addEventListener('click', () => { $('#servicioContainer').appendChild(servicioBlock()); refreshPreview(); });
-      $('#btnAddEleccion').addEventListener('click', () => { $('#eleccionesContainer').appendChild(eleccionBlock()); refreshPreview(); });
+      $('#btnAddRed').addEventListener('click', () => {
+        const nuevaRed = redBlock();
+        $('#redesContainer').appendChild(nuevaRed);
+        seleccionarRed(nuevaRed);
+        refreshPreview();
+      });
+      document.getElementById('btnRemoveRed')?.addEventListener('click', eliminarRedSeleccionada);
 
-      $('#btnAddEquipo').addEventListener('click', () => { $('#equiposContainer').appendChild(equipoBlock()); refreshPreview(); });
-      $('#btnAddReferente').addEventListener('click', () => { $('#referentesContainer').appendChild(referenteBlock()); refreshPreview(); });
+      const redesContainer = document.getElementById('redesContainer');
+      if (redesContainer) {
+        new MutationObserver(actualizarBotonEliminarRed).observe(redesContainer, { childList: true });
+      }
+
+      $('#btnAddServicio').addEventListener('click', () => {
+        if (document.getElementById('sin_sp')?.checked) return;
+        const nuevoServicio = servicioBlock();
+        $('#servicioContainer').appendChild(nuevoServicio);
+        seleccionarItemTrayectoria('servicio', nuevoServicio);
+        refreshPreview();
+      });
+      $('#btnAddEleccion').addEventListener('click', () => {
+        if (document.getElementById('selHaContendido')?.value !== 'true') return;
+        const nuevaEleccion = eleccionBlock();
+        $('#eleccionesContainer').appendChild(nuevaEleccion);
+        seleccionarEleccion(nuevaEleccion);
+        refreshPreview();
+      });
+      document.getElementById('btnRemoveEleccion')?.addEventListener('click', eliminarEleccionSeleccionada);
+
+      const eleccionesContainer = document.getElementById('eleccionesContainer');
+      if (eleccionesContainer) {
+        new MutationObserver(actualizarBotonEliminarEleccion).observe(eleccionesContainer, { childList: true });
+      }
+
+      $('#btnAddEquipo').addEventListener('click', () => {
+        if (document.getElementById('chkSinEquipos')?.checked) return;
+        const nuevoEquipo = equipoBlock();
+        $('#equiposContainer').appendChild(nuevoEquipo);
+        seleccionarEquipo(nuevoEquipo);
+        refreshPreview();
+      });
+      document.getElementById('btnRemoveEquipo')?.addEventListener('click', eliminarEquipoSeleccionado);
+
+      const equiposContainer = document.getElementById('equiposContainer');
+      if (equiposContainer) {
+        new MutationObserver(actualizarBotonEliminarEquipo).observe(equiposContainer, { childList: true });
+      }
+
+      $('#btnAddReferente').addEventListener('click', () => {
+        if (document.getElementById('chkSinReferentes')?.checked) return;
+        const nuevoReferente = referenteBlock();
+        $('#referentesContainer').appendChild(nuevoReferente);
+        seleccionarReferente(nuevoReferente);
+        refreshPreview();
+      });
+      document.getElementById('btnRemoveReferente')?.addEventListener('click', eliminarReferenteSeleccionado);
+
+      const referentesContainer = document.getElementById('referentesContainer');
+      if (referentesContainer) {
+        new MutationObserver(actualizarBotonEliminarReferente).observe(referentesContainer, { childList: true });
+      }
 
       $('#btnAddControversia').addEventListener('click', () => {
         const chk = document.getElementById('chkSinControversias');
@@ -7141,10 +8040,18 @@ function initGrupoPostulacionMulti() {
           showAlert('warning', 'Está activada la opción "No se detectaron controversias públicas". Desmárcala para agregar controversias.');
           return;
         }
-        $('#controversiasContainer').appendChild(controversiaBlock());
+        const nuevaControversia = controversiaBlock();
+        $('#controversiasContainer').appendChild(nuevaControversia);
+        seleccionarControversia(nuevaControversia);
         setControversiasUIState();
         refreshPreview();
       });
+      document.getElementById('btnRemoveControversia')?.addEventListener('click', eliminarControversiaSeleccionada);
+
+      const controversiasContainer = document.getElementById('controversiasContainer');
+      if (controversiasContainer) {
+        new MutationObserver(actualizarBotonEliminarControversia).observe(controversiasContainer, { childList: true });
+      }
 
       // live preview
       $('#personaForm').addEventListener('input', refreshPreview);
