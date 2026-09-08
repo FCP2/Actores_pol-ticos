@@ -474,6 +474,25 @@
             <div class="field-msg" id="msg-password"></div>
           </div>
 
+          <!-- Cloudflare Turnstile -->
+          <div class="field">
+            <div
+              class="cf-turnstile"
+              data-sitekey="0x4AAAAAACg8zHIw_zSbQvzr"
+              data-theme="light"
+              data-size="flexible"
+              data-action="login"
+              data-callback="onTurnstileSuccess"
+              data-expired-callback="onTurnstileExpired"
+              data-error-callback="onTurnstileError">
+            </div>
+
+            <div
+              class="field-msg"
+              id="msg-turnstile">
+            </div>
+          </div>
+
           <!-- Recordarme -->
           <div class="remember-row">
             <input type="checkbox" id="remember" name="remember">
@@ -507,6 +526,11 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script
+    src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+    async
+    defer>
+  </script>
   <script>
   (() => {
     "use strict";
@@ -528,7 +552,57 @@
     const toastMsg  = document.getElementById("toastMsg");
 
     let toastTimer = null;
+    let turnstileToken = null;
 
+    //TURNSTILE CALLBACKS
+    window.onTurnstileSuccess = function(token) {
+
+      turnstileToken = token;
+
+      const msg = document.getElementById("msg-turnstile");
+
+      if (msg) {
+        msg.className = "field-msg ok";
+        msg.innerHTML =
+          `<i class="bi bi-shield-check"></i> Verificación completada`;
+      }
+
+      checkCanSubmit();
+    };
+
+
+    window.onTurnstileExpired = function() {
+
+      turnstileToken = null;
+
+      const msg = document.getElementById("msg-turnstile");
+
+      if (msg) {
+        msg.className = "field-msg err";
+        msg.innerHTML =
+          `<i class="bi bi-exclamation-circle-fill"></i>
+          La verificación expiró. Intenta nuevamente.`;
+      }
+
+      checkCanSubmit();
+    };
+
+
+    window.onTurnstileError = function() {
+
+      turnstileToken = null;
+
+      const msg = document.getElementById("msg-turnstile");
+
+      if (msg) {
+        msg.className = "field-msg err";
+        msg.innerHTML =
+          `<i class="bi bi-exclamation-circle-fill"></i>
+          No se pudo completar la verificación.`;
+      }
+
+      checkCanSubmit();
+    };
     // ── Toast ─────────────────────────────────────────────────
     const TOAST_ICONS = {
       err:  { icon: "bi-x-circle-fill",            title: "Acceso denegado" },
@@ -605,6 +679,29 @@
       localStorage.removeItem("loginTime");
     }
 
+    //turnstile
+    function resetTurnstile() {
+
+      turnstileToken = null;
+
+      if (
+        window.turnstile &&
+        typeof window.turnstile.reset === "function"
+      ) {
+        window.turnstile.reset();
+      }
+
+      const msg =
+        document.getElementById("msg-turnstile");
+
+      if (msg) {
+        msg.className = "field-msg";
+        msg.innerHTML = "";
+      }
+
+      checkCanSubmit();
+    }
+
     // ── Validación en tiempo real ──────────────────────────────
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -649,9 +746,18 @@
     }
 
     function checkCanSubmit() {
-      const emailOk = EMAIL_RE.test(emailInp.value.trim());
-      const pwOk    = pwInp.value.length >= 4;
-      btn.disabled  = !(emailOk && pwOk);
+
+      const emailOk =
+        EMAIL_RE.test(emailInp.value.trim());
+
+      const pwOk =
+        pwInp.value.length >= 4;
+
+      const turnstileOk =
+        !!turnstileToken;
+
+      btn.disabled =
+        !(emailOk && pwOk && turnstileOk);
     }
 
     emailInp.addEventListener("input", validateEmail);
@@ -743,7 +849,11 @@
         const res = await fetch(`${API_BASE}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({
+            email,
+            password,
+            turnstileToken
+          })
         });
 
         const data = await res.json().catch(() => ({}));
@@ -754,7 +864,19 @@
             showInactiveUserAlert();
             pwInp.value = "";
             validatePassword();
+            resetTurnstile();
             pwInp.focus();
+            return;
+          }
+          if (data.code === "TURNSTILE_FAILED") {
+
+            resetTurnstile();
+
+            showToast(
+              "warn",
+              "La verificación de seguridad expiró o no fue válida. Intenta nuevamente."
+            );
+
             return;
           }
 
@@ -762,11 +884,17 @@
           const msg = res.status === 401 || res.status === 403
             ? "Credenciales incorrectas. Verifica tus datos e intenta de nuevo."
             : (data.error || "No se pudo completar el acceso. Intenta más tarde.");
-          showToast("err", msg);
-          pwInp.value = "";
-          validatePassword();
-          pwInp.focus();
-          return;
+            showToast("err", msg);
+
+            pwInp.value = "";
+
+            validatePassword();
+
+            resetTurnstile();
+
+            pwInp.focus();
+
+            return;
         }
 
         // Recordarme
