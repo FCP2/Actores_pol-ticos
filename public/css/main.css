@@ -1,5 +1,5 @@
 #map {
-  height: 100vh;
+  height: 380px;
 }
 
 /* Quita el borde/rectángulo de focus al interactuar con el mapa */
@@ -1957,4 +1957,201 @@ canvas {
   font-size: 11px;
   color: #6b7280;
   margin-top: 2px;
+}
+
+.diccionario-sugerencia {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .35rem;
+  padding: .35rem .5rem;
+  border: 1px solid #dbe7dc;
+  border-radius: .55rem;
+  background: #f6fbf7;
+  color: #52615a;
+  font-size: .76rem;
+  line-height: 1.25;
+}
+
+.diccionario-sugerencia > i {
+  color: #8b6f24;
+}
+
+.diccionario-aplicar {
+  max-width: min(100%, 34rem);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #17653a;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.diccionario-aplicar:hover,
+.diccionario-aplicar:focus-visible {
+  color: #0f4728;
+  text-decoration-style: solid;
+}
+
+.diccionario-ignorar {
+  margin-left: auto;
+  padding: 0 .2rem;
+  border: 0;
+  background: transparent;
+  color: #7b8781;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.familiar-politica-item input[name="nombre"],
+.familiar-politica-item input[name="cargo"],
+.familiar-politica-item input[name="institucion"] {
+  min-height: 42px;
+}
+
+#inpFoto.foto-personal-input {
+  width: 100%;
+  height: auto;
+  min-height: 2.15rem;
+  padding: .25rem .35rem;
+  font-size: .72rem;
+  line-height: 1.25;
+}
+
+#inpFoto.foto-personal-input::file-selector-button {
+  padding: .32rem .48rem;
+  margin: -.25rem .45rem -.25rem -.35rem;
+  font-size: .72rem;
+  white-space: nowrap;
+}
+
+.personal-info-grid > .personal-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.personal-info-grid > .personal-field > .form-label {
+  display: flex;
+  align-items: flex-end;
+  min-height: 2.6rem;
+  margin-bottom: .45rem;
+}
+
+.personal-info-grid > .personal-field > .form-control,
+.personal-info-grid > .personal-field > .form-select {
+  min-height: 42px;
+}
+
+.personal-info-grid > .personal-id-field > .form-text {
+  min-height: 2.5rem;
+}
+
+@media (max-width: 767.98px) {
+  .personal-info-grid > .personal-field > .form-label,
+  .personal-info-grid > .personal-id-field > .form-text {
+    min-height: auto;
+  }
+}
+
+.pareja-grid > .pareja-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.pareja-grid {
+  align-items: flex-start !important;
+}
+
+.pareja-grid > .pareja-field > .form-label {
+  display: flex;
+  align-items: flex-end;
+  min-height: 2.6rem;
+  margin-bottom: .45rem;
+}
+
+.pareja-grid > .pareja-field > .form-control,
+.pareja-grid > .pareja-field > .form-select {
+  min-height: 42px;
+}
+
+.list-item .servicio-publico-grid {
+  align-items: flex-start;
+}
+
+.servicio-publico-grid > .servicio-publico-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.servicio-publico-grid > .servicio-publico-field > .form-label {
+  min-height: 2.6rem;
+  margin-bottom: .45rem;
+}
+
+.servicio-publico-grid > .servicio-publico-field > .form-control,
+.servicio-publico-grid > .servicio-publico-field > .form-select {
+  min-height: 42px;
+}
+
+.list-item .controversia-grid {
+  align-items: flex-start;
+}
+
+.controversia-grid > .controversia-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.controversia-grid > .controversia-field > .form-label {
+  min-height: 2.6rem;
+  margin-bottom: .45rem;
+}
+
+.controversia-grid > .controversia-field > .form-control,
+.controversia-grid > .controversia-field > .form-select {
+  min-height: 42px;
+}
+
+.pareja-item,
+.familiar-politica-item,
+.hijo-item,
+.red-social-item,
+.participacion-item,
+.eleccion-item,
+.mov-evento-item,
+.equipo-item,
+.referente-item,
+.controversia-item,
+.trayectoria-item {
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+
+.pareja-item.is-selected,
+.familiar-politica-item.is-selected,
+.hijo-item.is-selected,
+.red-social-item.is-selected,
+.participacion-item.is-selected,
+.eleccion-item.is-selected,
+.mov-evento-item.is-selected,
+.equipo-item.is-selected,
+.referente-item.is-selected,
+.controversia-item.is-selected,
+.trayectoria-item.is-selected {
+  border-color: rgba(139, 33, 54, .55);
+  background: #fffafb;
+  box-shadow: 0 0 0 3px rgba(139, 33, 54, .08);
+}
+
+@media (max-width: 767.98px) {
+  .pareja-grid > .pareja-field > .form-label,
+  .servicio-publico-grid > .servicio-publico-field > .form-label,
+  .controversia-grid > .controversia-field > .form-label {
+    min-height: auto;
+  }
 }
